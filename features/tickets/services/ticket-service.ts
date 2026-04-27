@@ -80,3 +80,31 @@ export async function updateTicketStatus(
 
   return ticket;
 }
+
+type AssignTicketInput = {
+  ticketId: string;
+  assigneeName: string;
+  assigneeEmail: string;
+};
+
+export async function assignTicket(input: AssignTicketInput) {
+  const ticket = await prisma.ticket.update({
+    where: {
+      id: input.ticketId,
+    },
+    data: {
+      assigneeName: input.assigneeName,
+      assigneeEmail: input.assigneeEmail,
+    },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      ticketId: input.ticketId,
+      type: "ticket_assigned",
+      message: `Ticket assigned to ${input.assigneeName}.`,
+    },
+  });
+
+  return ticket;
+}
