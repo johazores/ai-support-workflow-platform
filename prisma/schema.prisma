@@ -6,3 +6,44 @@ datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
 }
+
+model Customer {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String   @unique
+  tickets   Ticket[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ticket {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  subject    String
+  status     String    @default("open")
+  priority   String    @default("normal")
+  customerId String    @db.ObjectId
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  messages   Message[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Message {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId  String   @db.ObjectId
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  author    String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model WorkflowRule {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  trigger     String
+  actions     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
