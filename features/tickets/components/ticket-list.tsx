@@ -3,76 +3,85 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { TicketSummary } from "@/features/tickets/types/ticket";
+import type {
+  TicketStatus,
+  TicketSummary,
+} from "@/features/tickets/types/ticket";
+
+const ticketStatuses: TicketStatus[] = ["open", "pending", "closed"];
 
 export function TicketList() {
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<TicketStatus | "">("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    async function fetchTickets() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const params = new URLSearchParams();
+
+        if (search) params.append("search", search);
+        if (status) params.append("status", status);
+
+        const response = await fetch(`/api/tickets?${params.toString()}`);
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch tickets");
+        }
+
+        const result: { data: TicketSummary[] } = await response.json();
+
+        setTickets(result.data);
+      } catch (error) {
+        console.error(error);
+        setError("Failed to load tickets.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     const timeout = setTimeout(() => {
       fetchTickets();
-    }, 300); // debounce
+    }, 300);
 
     return () => clearTimeout(timeout);
   }, [search, status]);
 
-  async function fetchTickets() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const params = new URLSearchParams();
-
-      if (search) params.append("search", search);
-      if (status) params.append("status", status);
-
-      const res = await fetch(`/api/tickets?${params.toString()}`);
-
-      if (!res.ok) throw new Error("Failed to fetch tickets");
-
-      const data = await res.json();
-
-      setTickets(data.data);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load tickets.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex gap-3">
         <input
           placeholder="Search tickets..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(event) => setSearch(event.target.value)}
           className="w-full rounded-xl border px-3 py-2 text-sm"
         />
 
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(event) =>
+            setStatus(event.target.value as TicketStatus | "")
+          }
           className="rounded-xl border px-3 py-2 text-sm"
         >
           <option value="">All</option>
-          <option value="open">Open</option>
-          <option value="pending">Pending</option>
-          <option value="closed">Closed</option>
+
+          {ticketStatuses.map((ticketStatus) => (
+            <option key={ticketStatus} value={ticketStatus}>
+              {ticketStatus}
+            </option>
+          ))}
         </select>
       </div>
 
-      {/* States */}
       {loading && <p className="text-sm text-slate-500">Loading...</p>}
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {/* List */}
       <div className="divide-y rounded-2xl border bg-white">
         {tickets.map((ticket) => (
           <Link
@@ -80,11 +89,12 @@ export function TicketList() {
             href={`/inbox/${ticket.id}`}
             className="block p-4 hover:bg-slate-50"
           >
-            <div className="flex justify-between items-start">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-slate-900">
                   {ticket.subject}
                 </h3>
+
                 <p className="text-sm text-slate-500">
                   {ticket.customerName} · {ticket.customerEmail}
                 </p>

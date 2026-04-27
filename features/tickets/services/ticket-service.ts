@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { TicketSummary } from "@/features/tickets/types/ticket";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
+import type { Prisma } from "@prisma/client";
 export async function getTicketSummaries(): Promise<TicketSummary[]> {
   const tickets = await prisma.ticket.findMany({
     orderBy: {
@@ -111,11 +112,13 @@ export async function assignTicket(input: AssignTicketInput) {
 
 type GetTicketsInput = {
   search?: string;
-  status?: "open" | "pending" | "closed";
+  status?: TicketStatus;
 };
 
-export async function getTickets(input?: GetTicketsInput) {
-  const where: any = {};
+export async function getTickets(
+  input?: GetTicketsInput,
+): Promise<TicketSummary[]> {
+  const where: Prisma.TicketWhereInput = {};
 
   if (input?.status) {
     where.status = input.status;
@@ -131,17 +134,21 @@ export async function getTickets(input?: GetTicketsInput) {
       },
       {
         customer: {
-          name: {
-            contains: input.search,
-            mode: "insensitive",
+          is: {
+            name: {
+              contains: input.search,
+              mode: "insensitive",
+            },
           },
         },
       },
       {
         customer: {
-          email: {
-            contains: input.search,
-            mode: "insensitive",
+          is: {
+            email: {
+              contains: input.search,
+              mode: "insensitive",
+            },
           },
         },
       },
@@ -167,8 +174,8 @@ export async function getTickets(input?: GetTicketsInput) {
   return tickets.map((ticket) => ({
     id: ticket.id,
     subject: ticket.subject,
-    status: ticket.status,
-    priority: ticket.priority,
+    status: ticket.status as TicketStatus,
+    priority: ticket.priority as TicketSummary["priority"],
     customerName: ticket.customer.name,
     customerEmail: ticket.customer.email,
     preview: ticket.messages[0]?.body ?? "",

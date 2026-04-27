@@ -1,5 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getTickets } from "@/features/tickets/services/ticket-service";
+import type { TicketStatus } from "@/features/tickets/types/ticket";
+
+const validStatuses: TicketStatus[] = ["open", "pending", "closed"];
+
+function parseStatus(status: unknown): TicketStatus | undefined {
+  if (typeof status !== "string") return undefined;
+
+  return validStatuses.includes(status as TicketStatus)
+    ? (status as TicketStatus)
+    : undefined;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,7 +26,7 @@ export default async function handler(
 
     const tickets = await getTickets({
       search: typeof search === "string" ? search : undefined,
-      status: typeof status === "string" ? (status as any) : undefined,
+      status: parseStatus(status),
     });
 
     return res.status(200).json({ data: tickets });
