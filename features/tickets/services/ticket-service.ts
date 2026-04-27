@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import type { TicketSummary } from "@/features/tickets/types/ticket";
-import type { TicketStatus } from "@/features/tickets/types/ticket";
 import type { Prisma } from "@prisma/client";
+import type {
+  TicketStatus,
+  TicketSummary,
+} from "@/features/tickets/types/ticket";
+import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
+
 export async function getTicketSummaries(): Promise<TicketSummary[]> {
   const tickets = await prisma.ticket.findMany({
     orderBy: {
@@ -18,20 +22,11 @@ export async function getTicketSummaries(): Promise<TicketSummary[]> {
     },
   });
 
-  return tickets.map((ticket) => ({
-    id: ticket.id,
-    subject: ticket.subject,
-    status: ticket.status as TicketSummary["status"],
-    priority: ticket.priority as TicketSummary["priority"],
-    customerName: ticket.customer.name,
-    customerEmail: ticket.customer.email,
-    preview: ticket.messages[0]?.body ?? "No messages yet.",
-    updatedAt: ticket.updatedAt.toISOString(),
-  }));
+  return tickets.map((ticket) => mapTicketSummary(ticket));
 }
 
 export async function getTicketById(ticketId: string) {
-  const ticket = await prisma.ticket.findUnique({
+  return prisma.ticket.findUnique({
     where: {
       id: ticketId,
     },
@@ -54,8 +49,6 @@ export async function getTicketById(ticketId: string) {
       },
     },
   });
-
-  return ticket;
 }
 
 export async function updateTicketStatus(
@@ -78,6 +71,8 @@ export async function updateTicketStatus(
       message: `Ticket status changed to ${status}.`,
     },
   });
+
+  await executeWorkflowRules(ticketId);
 
   return ticket;
 }
@@ -106,6 +101,8 @@ export async function assignTicket(input: AssignTicketInput) {
       message: `Ticket assigned to ${input.assigneeName}.`,
     },
   });
+
+  await executeWorkflowRules(input.ticketId);
 
   return ticket;
 }
@@ -171,14 +168,25 @@ export async function getTickets(
     },
   });
 
-  return tickets.map((ticket) => ({
+  return tickets.map((ticket) => mapTicketSummary(ticket));
+}
+
+type TicketWithSummaryRelations = Prisma.TicketGetPayload<{
+  include: {
+    customer: true;
+    messages: true;
+  };
+}>;
+
+function mapTicketSummary(ticket: TicketWithSummaryRelations): TicketSummary {
+  return {
     id: ticket.id,
     subject: ticket.subject,
     status: ticket.status as TicketStatus,
     priority: ticket.priority as TicketSummary["priority"],
     customerName: ticket.customer.name,
     customerEmail: ticket.customer.email,
-    preview: ticket.messages[0]?.body ?? "",
+    preview: ticket.messages[0]?.body ?? "No messages yet.",
     updatedAt: ticket.updatedAt.toISOString(),
-  }));
+  };
 }

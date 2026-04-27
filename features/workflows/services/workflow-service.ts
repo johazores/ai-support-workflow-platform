@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { generateAiDraftReply } from "@/features/ai-drafts/services/draft-service";
+import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
 
 type WorkflowAction = {
   type: "change-status" | "assign-ticket" | "generate-draft";
