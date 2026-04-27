@@ -82,6 +82,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
         </aside>
 
         <AiDraftPanel
+          ticketId={ticket.id}
           subject={ticket.subject}
           customerName={ticket.customer.name}
           customerMessage={ticket.messages.at(-1)?.body ?? ""}
