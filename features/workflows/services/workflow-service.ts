@@ -7,6 +7,21 @@ type WorkflowAction = {
 
 type WorkflowRuleActions = WorkflowAction[];
 
+function shouldExecuteWorkflow(
+  trigger: string,
+  ticket: { subject: string; priority: string },
+) {
+  if (trigger === "ticket.priority is high") {
+    return ticket.priority === "high";
+  }
+
+  if (trigger === "ticket.subject contains account") {
+    return ticket.subject.toLowerCase().includes("account");
+  }
+
+  return false;
+}
+
 export async function executeWorkflowRules(ticketId: string) {
   const ticket = await prisma.ticket.findUnique({
     where: {
@@ -30,8 +45,7 @@ export async function executeWorkflowRules(ticketId: string) {
   const executedRules: string[] = [];
 
   for (const rule of rules) {
-    const shouldExecute =
-      rule.trigger === "ticket.priority is high" && ticket.priority === "high";
+    const shouldExecute = shouldExecuteWorkflow(rule.trigger, ticket);
 
     if (!shouldExecute) continue;
 
