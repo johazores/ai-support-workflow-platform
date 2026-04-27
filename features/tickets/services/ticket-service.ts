@@ -41,6 +41,11 @@ export async function getTicketById(ticketId: string) {
           createdAt: "asc",
         },
       },
+      drafts: {
+        orderBy: {
+          updatedAt: "desc",
+        },
+      },
     },
   });
 
