@@ -23,7 +23,17 @@ function shouldExecuteWorkflow(
   return false;
 }
 
-export async function executeWorkflowRules(ticketId: string) {
+export async function executeWorkflowRules(
+  ticketId: string,
+  context?: { skipWorkflow?: boolean },
+) {
+  if (context?.skipWorkflow) {
+    return {
+      executed: false,
+      message: "Skipped to prevent loop.",
+    };
+  }
+
   const ticket = await prisma.ticket.findUnique({
     where: {
       id: ticketId,
@@ -52,12 +62,25 @@ export async function executeWorkflowRules(ticketId: string) {
     },
   });
 
+  const existingWorkflowLogs = await prisma.activityLog.findMany({
+    where: {
+      ticketId,
+      type: "workflow_executed",
+    },
+  });
+
   const executedRules: string[] = [];
 
   for (const rule of rules) {
     const shouldExecute = shouldExecuteWorkflow(rule.trigger, ticket);
 
     if (!shouldExecute) continue;
+
+    const alreadyExecuted = existingWorkflowLogs.some((log) =>
+      log.message.includes(rule.name),
+    );
+
+    if (alreadyExecuted) continue;
 
     const actions = rule.actions as WorkflowRuleActions;
 
