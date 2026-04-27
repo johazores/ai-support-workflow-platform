@@ -15,3 +15,15 @@ export async function updateWorkflowStatus(input: UpdateWorkflowStatusInput) {
     },
   });
 }
+
+type DeleteWorkflowInput = {
+  workflowId: string;
+};
+
+export async function deleteWorkflowRule(input: DeleteWorkflowInput) {
+  return prisma.workflowRule.delete({
+    where: {
+      id: input.workflowId,
+    },
+  });
+}
