@@ -51,6 +51,28 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
             </article>
           ))}
         </div>
+        {ticket.drafts.length > 0 && (
+          <div className="border-t bg-slate-50 p-5">
+            <h2 className="font-semibold text-slate-950">Saved Drafts</h2>
+
+            <div className="mt-4 space-y-3">
+              {ticket.drafts.map((draft) => (
+                <article
+                  key={draft.id}
+                  className="rounded-xl border bg-white p-4 shadow-sm"
+                >
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {draft.body}
+                  </p>
+
+                  <p className="mt-3 text-xs text-slate-400">
+                    Saved {draft.updatedAt.toLocaleString()}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="space-y-6">
