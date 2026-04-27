@@ -1,6 +1,14 @@
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/features/auth/services/session-service";
 import { TicketList } from "@/features/tickets/components/ticket-list";
 
-export default function InboxPage() {
+export default async function InboxPage() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
       <section className="mx-auto max-w-6xl">
