@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getTicketSummaries } from "@/features/tickets/services/ticket-service";
+import { getTickets } from "@/features/tickets/services/ticket-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -7,19 +7,20 @@ export default async function handler(
 ) {
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
-    return res.status(405).json({
-      message: "Method not allowed",
-    });
+    return res.status(405).json({ message: "Method not allowed" });
   }
 
   try {
-    const tickets = await getTicketSummaries();
+    const { search, status } = req.query;
 
-    return res.status(200).json({
-      data: tickets,
+    const tickets = await getTickets({
+      search: typeof search === "string" ? search : undefined,
+      status: typeof status === "string" ? (status as any) : undefined,
     });
+
+    return res.status(200).json({ data: tickets });
   } catch (error) {
-    console.error("Failed to fetch tickets", error);
+    console.error(error);
 
     return res.status(500).json({
       message: "Failed to fetch tickets",
