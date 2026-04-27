@@ -1,7 +1,7 @@
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getTicketById } from "@/features/tickets/services/ticket-service";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
-
+import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -53,30 +53,40 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
         </div>
       </section>
 
-      <aside className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h2 className="font-semibold text-slate-950">Customer</h2>
+      <div className="space-y-6">
+        <aside className="rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="font-semibold text-slate-950">Customer</h2>
 
-        <div className="mt-4 space-y-3 text-sm">
-          <div>
-            <p className="text-slate-500">Name</p>
-            <p className="font-medium text-slate-900">{ticket.customer.name}</p>
-          </div>
+          <div className="mt-4 space-y-3 text-sm">
+            <div>
+              <p className="text-slate-500">Name</p>
+              <p className="font-medium text-slate-900">
+                {ticket.customer.name}
+              </p>
+            </div>
 
-          <div>
-            <p className="text-slate-500">Email</p>
-            <p className="font-medium text-slate-900">
-              {ticket.customer.email}
-            </p>
-          </div>
+            <div>
+              <p className="text-slate-500">Email</p>
+              <p className="font-medium text-slate-900">
+                {ticket.customer.email}
+              </p>
+            </div>
 
-          <div>
-            <p className="text-slate-500">Priority</p>
-            <p className="font-medium capitalize text-slate-900">
-              {ticket.priority}
-            </p>
+            <div>
+              <p className="text-slate-500">Priority</p>
+              <p className="font-medium capitalize text-slate-900">
+                {ticket.priority}
+              </p>
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+
+        <AiDraftPanel
+          subject={ticket.subject}
+          customerName={ticket.customer.name}
+          customerMessage={ticket.messages.at(-1)?.body ?? ""}
+        />
+      </div>
     </div>
   );
 }
