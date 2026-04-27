@@ -5,6 +5,8 @@ import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
 import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
 import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assignee-select";
 import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-button";
+import { SendDraftButton } from "@/features/ai-drafts/components/send-draft-button";
+
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -68,9 +70,13 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
                     {draft.body}
                   </p>
 
-                  <p className="mt-3 text-xs text-slate-400">
-                    Saved {draft.updatedAt.toLocaleString()}
-                  </p>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-400">
+                      Saved {draft.updatedAt.toLocaleString()}
+                    </p>
+
+                    <SendDraftButton draftId={draft.id} />
+                  </div>
                 </article>
               ))}
             </div>
