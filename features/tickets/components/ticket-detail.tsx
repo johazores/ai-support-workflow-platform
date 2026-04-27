@@ -114,6 +114,24 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           customerName={ticket.customer.name}
           customerMessage={ticket.messages.at(-1)?.body ?? ""}
         />
+        <aside className="rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="font-semibold text-slate-950">Activity</h2>
+
+          <div className="mt-4 space-y-3">
+            {ticket.activityLogs.length === 0 && (
+              <p className="text-sm text-slate-500">No activity yet.</p>
+            )}
+
+            {ticket.activityLogs.map((log) => (
+              <div key={log.id} className="border-l-2 border-slate-200 pl-3">
+                <p className="text-sm text-slate-700">{log.message}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {log.createdAt.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
   );
