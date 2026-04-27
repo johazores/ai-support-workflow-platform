@@ -108,3 +108,70 @@ export async function assignTicket(input: AssignTicketInput) {
 
   return ticket;
 }
+
+type GetTicketsInput = {
+  search?: string;
+  status?: "open" | "pending" | "closed";
+};
+
+export async function getTickets(input?: GetTicketsInput) {
+  const where: any = {};
+
+  if (input?.status) {
+    where.status = input.status;
+  }
+
+  if (input?.search) {
+    where.OR = [
+      {
+        subject: {
+          contains: input.search,
+          mode: "insensitive",
+        },
+      },
+      {
+        customer: {
+          name: {
+            contains: input.search,
+            mode: "insensitive",
+          },
+        },
+      },
+      {
+        customer: {
+          email: {
+            contains: input.search,
+            mode: "insensitive",
+          },
+        },
+      },
+    ];
+  }
+
+  const tickets = await prisma.ticket.findMany({
+    where,
+    orderBy: {
+      updatedAt: "desc",
+    },
+    include: {
+      customer: true,
+      messages: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+      },
+    },
+  });
+
+  return tickets.map((ticket) => ({
+    id: ticket.id,
+    subject: ticket.subject,
+    status: ticket.status,
+    priority: ticket.priority,
+    customerName: ticket.customer.name,
+    customerEmail: ticket.customer.email,
+    preview: ticket.messages[0]?.body ?? "",
+    updatedAt: ticket.updatedAt.toISOString(),
+  }));
+}
