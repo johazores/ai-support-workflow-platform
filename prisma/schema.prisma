@@ -24,6 +24,7 @@ model Ticket {
   customerId String    @db.ObjectId
   customer   Customer  @relation(fields: [customerId], references: [id])
   messages   Message[]
+  drafts     Draft[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
@@ -46,4 +47,13 @@ model WorkflowRule {
   actions     Json
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Draft {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId  String   @db.ObjectId
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
