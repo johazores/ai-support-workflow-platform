@@ -8,16 +8,37 @@ type WorkflowAction = {
 
 type WorkflowRuleActions = WorkflowAction[];
 
+type WorkflowTrigger = {
+  field: "subject" | "priority" | "status";
+  operator: "equals" | "contains";
+  value: string;
+};
+
+function parseWorkflowTrigger(trigger: string): WorkflowTrigger | null {
+  try {
+    return JSON.parse(trigger) as WorkflowTrigger;
+  } catch {
+    return null;
+  }
+}
+
 function shouldExecuteWorkflow(
-  trigger: string,
-  ticket: { subject: string; priority: string },
+  triggerValue: string,
+  ticket: { subject: string; priority: string; status: string },
 ) {
-  if (trigger === "ticket.priority is high") {
-    return ticket.priority === "high";
+  const trigger = parseWorkflowTrigger(triggerValue);
+
+  if (!trigger) return false;
+
+  const ticketValue = ticket[trigger.field]?.toLowerCase();
+  const expectedValue = trigger.value.toLowerCase();
+
+  if (trigger.operator === "equals") {
+    return ticketValue === expectedValue;
   }
 
-  if (trigger === "ticket.subject contains account") {
-    return ticket.subject.toLowerCase().includes("account");
+  if (trigger.operator === "contains") {
+    return ticketValue.includes(expectedValue);
   }
 
   return false;
