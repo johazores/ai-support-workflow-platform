@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/features/auth/services/session-service";
 import Link from "next/link";
 import { TicketDetail } from "@/features/tickets/components/ticket-detail";
 
@@ -8,6 +10,11 @@ type TicketPageProps = {
 };
 
 export default async function TicketPage({ params }: TicketPageProps) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
   const resolvedParams = await params;
 
   return (
