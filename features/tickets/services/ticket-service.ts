@@ -56,7 +56,7 @@ export async function updateTicketStatus(
   ticketId: string,
   status: TicketStatus,
 ) {
-  return prisma.ticket.update({
+  const ticket = await prisma.ticket.update({
     where: {
       id: ticketId,
     },
@@ -64,4 +64,14 @@ export async function updateTicketStatus(
       status,
     },
   });
+
+  await prisma.activityLog.create({
+    data: {
+      ticketId,
+      type: "status_changed",
+      message: `Ticket status changed to ${status}.`,
+    },
+  });
+
+  return ticket;
 }
