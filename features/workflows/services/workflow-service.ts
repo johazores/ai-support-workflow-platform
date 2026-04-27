@@ -14,14 +14,34 @@ type WorkflowTrigger = {
   value: string;
 };
 
+const validTriggerFields = ["subject", "priority", "status"] as const;
+const validTriggerOperators = ["equals", "contains"] as const;
+
+function isWorkflowTrigger(value: unknown): value is WorkflowTrigger {
+  if (!value || typeof value !== "object") return false;
+
+  const trigger = value as Record<string, unknown>;
+
+  return (
+    typeof trigger.field === "string" &&
+    typeof trigger.operator === "string" &&
+    typeof trigger.value === "string" &&
+    validTriggerFields.includes(trigger.field as WorkflowTrigger["field"]) &&
+    validTriggerOperators.includes(
+      trigger.operator as WorkflowTrigger["operator"],
+    )
+  );
+}
+
 function parseWorkflowTrigger(trigger: string): WorkflowTrigger | null {
   try {
-    return JSON.parse(trigger) as WorkflowTrigger;
+    const parsed = JSON.parse(trigger);
+
+    return isWorkflowTrigger(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
-
 function shouldExecuteWorkflow(
   triggerValue: string,
   ticket: { subject: string; priority: string; status: string },
