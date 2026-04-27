@@ -38,7 +38,11 @@ async function main() {
     data: {
       name: "Account access triage",
       description: "Prepare account access issues for support follow-up.",
-      trigger: "ticket.subject contains account",
+      trigger: JSON.stringify({
+        field: "subject",
+        operator: "contains",
+        value: "account",
+      }),
       actions: [
         {
           type: "change-status",
@@ -57,7 +61,11 @@ async function main() {
       name: "High priority ticket triage",
       description:
         "Moves high priority tickets to pending and assigns them to technical support.",
-      trigger: "ticket.priority is high",
+      trigger: JSON.stringify({
+        field: "priority",
+        operator: "equals",
+        value: "high",
+      }),
       actions: [
         {
           type: "change-status",
