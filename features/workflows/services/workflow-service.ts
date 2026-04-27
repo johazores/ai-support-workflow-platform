@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { generateAiDraftReply } from "@/features/ai-drafts/services/draft-service";
 
 type WorkflowAction = {
-  type: "change-status" | "assign-ticket";
+  type: "change-status" | "assign-ticket" | "generate-draft";
   value: string;
 };
 
@@ -26,6 +27,15 @@ export async function executeWorkflowRules(ticketId: string) {
   const ticket = await prisma.ticket.findUnique({
     where: {
       id: ticketId,
+    },
+    include: {
+      customer: true,
+      messages: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+      },
     },
   });
 
@@ -71,6 +81,21 @@ export async function executeWorkflowRules(ticketId: string) {
           data: {
             assigneeName: action.value,
             assigneeEmail: "technical@example.com",
+          },
+        });
+      }
+
+      if (action.type === "generate-draft") {
+        const result = await generateAiDraftReply({
+          subject: ticket.subject,
+          customerName: ticket.customer.name,
+          customerMessage: ticket.messages[0]?.body ?? "",
+        });
+
+        await prisma.draft.create({
+          data: {
+            ticketId,
+            body: result.draft,
           },
         });
       }

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
-import { generateAiDraftReply } from "@/features/tickets/services/ai-draft-service";
+import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
 
 const generateDraftSchema = z.object({
   subject: z.string().min(1),
