@@ -3,6 +3,7 @@ import { getTicketById } from "@/features/tickets/services/ticket-service";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
 import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
 import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
+import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assignee-select";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -104,6 +105,10 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
             <TicketStatusSelect
               ticketId={ticket.id}
               status={ticket.status as TicketStatus}
+            />
+            <TicketAssigneeSelect
+              ticketId={ticket.id}
+              assigneeEmail={ticket.assigneeEmail}
             />
           </div>
         </aside>
