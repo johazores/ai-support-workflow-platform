@@ -23,6 +23,8 @@ model Ticket {
   priority   String    @default("normal")
   customerId String    @db.ObjectId
   customer   Customer  @relation(fields: [customerId], references: [id])
+  assigneeName  String?
+  assigneeEmail String?
   messages   Message[]
   drafts     Draft[]
   activityLogs ActivityLog[]
