@@ -17,6 +17,12 @@ type WorkflowTrigger = {
 const validTriggerFields = ["subject", "priority", "status"] as const;
 const validTriggerOperators = ["equals", "contains"] as const;
 
+const validWorkflowActionTypes = [
+  "change-status",
+  "assign-ticket",
+  "generate-draft",
+] as const;
+
 function isWorkflowTrigger(value: unknown): value is WorkflowTrigger {
   if (!value || typeof value !== "object") return false;
 
@@ -42,6 +48,25 @@ function parseWorkflowTrigger(trigger: string): WorkflowTrigger | null {
     return null;
   }
 }
+
+function isWorkflowAction(value: unknown): value is WorkflowAction {
+  if (!value || typeof value !== "object") return false;
+
+  const action = value as Record<string, unknown>;
+
+  return (
+    typeof action.type === "string" &&
+    typeof action.value === "string" &&
+    validWorkflowActionTypes.includes(action.type as WorkflowAction["type"])
+  );
+}
+
+function parseWorkflowActions(actions: unknown): WorkflowRuleActions {
+  if (!Array.isArray(actions)) return [];
+
+  return actions.filter(isWorkflowAction);
+}
+
 function shouldExecuteWorkflow(
   triggerValue: string,
   ticket: { subject: string; priority: string; status: string },
@@ -50,7 +75,7 @@ function shouldExecuteWorkflow(
 
   if (!trigger) return false;
 
-  const ticketValue = ticket[trigger.field]?.toLowerCase();
+  const ticketValue = ticket[trigger.field].toLowerCase();
   const expectedValue = trigger.value.toLowerCase();
 
   if (trigger.operator === "equals") {
@@ -123,7 +148,9 @@ export async function executeWorkflowRules(
 
     if (alreadyExecuted) continue;
 
-    const actions = rule.actions as WorkflowRuleActions;
+    const actions = parseWorkflowActions(rule.actions);
+
+    if (actions.length === 0) continue;
 
     for (const action of actions) {
       if (action.type === "change-status") {
