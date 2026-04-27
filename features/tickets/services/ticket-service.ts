@@ -28,3 +28,21 @@ export async function getTicketSummaries(): Promise<TicketSummary[]> {
     updatedAt: ticket.updatedAt.toISOString(),
   }));
 }
+
+export async function getTicketById(ticketId: string) {
+  const ticket = await prisma.ticket.findUnique({
+    where: {
+      id: ticketId,
+    },
+    include: {
+      customer: true,
+      messages: {
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  });
+
+  return ticket;
+}
