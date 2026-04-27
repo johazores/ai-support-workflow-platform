@@ -4,6 +4,7 @@ import type { TicketStatus } from "@/features/tickets/types/ticket";
 import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
 import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
 import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assignee-select";
+import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-button";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -119,6 +120,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           customerName={ticket.customer.name}
           customerMessage={ticket.messages.at(-1)?.body ?? ""}
         />
+        <RunWorkflowButton ticketId={ticket.id} />
         <aside className="rounded-2xl border bg-white p-5 shadow-sm">
           <h2 className="font-semibold text-slate-950">Activity</h2>
 
