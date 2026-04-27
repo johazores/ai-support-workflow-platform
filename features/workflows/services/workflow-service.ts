@@ -136,6 +136,7 @@ export async function executeWorkflowRules(
   });
 
   const executedRules: string[] = [];
+  const executedActions: string[] = [];
 
   for (const rule of rules) {
     const shouldExecute = shouldExecuteWorkflow(rule.trigger, ticket);
@@ -162,6 +163,8 @@ export async function executeWorkflowRules(
             status: action.value,
           },
         });
+
+        executedActions.push(`Changed status to ${action.value}`);
       }
 
       if (action.type === "assign-ticket") {
@@ -174,6 +177,8 @@ export async function executeWorkflowRules(
             assigneeEmail: "technical@example.com",
           },
         });
+
+        executedActions.push(`Assigned ticket to ${action.value}`);
       }
 
       if (action.type === "generate-draft") {
@@ -189,6 +194,8 @@ export async function executeWorkflowRules(
             body: result.draft,
           },
         });
+
+        executedActions.push("Generated AI draft");
       }
     }
 
@@ -196,7 +203,7 @@ export async function executeWorkflowRules(
       data: {
         ticketId,
         type: "workflow_executed",
-        message: `Workflow executed: ${rule.name}.`,
+        message: `Workflow executed: ${rule.name}. Actions: ${executedActions.join(", ")}.`,
       },
     });
 
