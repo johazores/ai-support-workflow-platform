@@ -2,6 +2,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { getTicketById } from "@/features/tickets/services/ticket-service";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
 import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
+import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -100,6 +101,10 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
                 {ticket.priority}
               </p>
             </div>
+            <TicketStatusSelect
+              ticketId={ticket.id}
+              status={ticket.status as TicketStatus}
+            />
           </div>
         </aside>
 
