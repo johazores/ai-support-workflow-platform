@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { TicketSummary } from "@/features/tickets/types/ticket";
-
+import type { TicketStatus } from "@/features/tickets/types/ticket";
 export async function getTicketSummaries(): Promise<TicketSummary[]> {
   const tickets = await prisma.ticket.findMany({
     orderBy: {
@@ -50,4 +50,18 @@ export async function getTicketById(ticketId: string) {
   });
 
   return ticket;
+}
+
+export async function updateTicketStatus(
+  ticketId: string,
+  status: TicketStatus,
+) {
+  return prisma.ticket.update({
+    where: {
+      id: ticketId,
+    },
+    data: {
+      status,
+    },
+  });
 }
