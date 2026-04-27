@@ -1,6 +1,6 @@
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getTicketSummaries } from "@/features/tickets/services/ticket-service";
-
+import Link from "next/link";
 export async function TicketList() {
   const tickets = await getTicketSummaries();
 
@@ -15,7 +15,11 @@ export async function TicketList() {
 
       <div className="divide-y">
         {tickets.map((ticket) => (
-          <article key={ticket.id} className="p-5">
+          <Link
+            key={ticket.id}
+            href={`/inbox/${ticket.id}`}
+            className="block p-5 transition hover:bg-slate-50"
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-slate-950">
@@ -32,7 +36,7 @@ export async function TicketList() {
             <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">
               {ticket.preview}
             </p>
-          </article>
+          </Link>
         ))}
 
         {tickets.length === 0 && (
