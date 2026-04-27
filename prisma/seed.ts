@@ -3,6 +3,8 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.activityLog.deleteMany();
+  await prisma.draft.deleteMany();
   await prisma.message.deleteMany();
   await prisma.ticket.deleteMany();
   await prisma.customer.deleteMany();
@@ -45,6 +47,25 @@ async function main() {
         {
           type: "generate-draft",
           value: "account-access-reply",
+        },
+      ],
+    },
+  });
+
+  await prisma.workflowRule.create({
+    data: {
+      name: "High priority ticket triage",
+      description:
+        "Moves high priority tickets to pending and assigns them to technical support.",
+      trigger: "ticket.priority is high",
+      actions: [
+        {
+          type: "change-status",
+          value: "pending",
+        },
+        {
+          type: "assign-ticket",
+          value: "Technical Team",
         },
       ],
     },
