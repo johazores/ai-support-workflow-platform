@@ -1,14 +1,26 @@
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
-
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.user.deleteMany();
   await prisma.activityLog.deleteMany();
   await prisma.draft.deleteMany();
   await prisma.message.deleteMany();
   await prisma.ticket.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.workflowRule.deleteMany();
+
+  const passwordHash = await bcrypt.hash("admin123", 10);
+
+  await prisma.user.create({
+    data: {
+      name: "Admin User",
+      email: "admin@example.com",
+      passwordHash,
+      role: "admin",
+    },
+  });
 
   const customer = await prisma.customer.create({
     data: {
