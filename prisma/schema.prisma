@@ -25,6 +25,7 @@ model Ticket {
   customer   Customer  @relation(fields: [customerId], references: [id])
   messages   Message[]
   drafts     Draft[]
+  activityLogs ActivityLog[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
@@ -56,4 +57,13 @@ model Draft {
   body      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId  String   @db.ObjectId
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  type      String
+  message   String
+  createdAt DateTime @default(now())
 }
