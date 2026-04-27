@@ -1,5 +1,5 @@
 import { getWorkflowRules } from "@/features/workflows/services/workflow-query-service";
-
+import { WorkflowStatusToggle } from "@/features/workflows/components/workflow-status-toggle";
 export async function WorkflowList() {
   const workflows = await getWorkflowRules();
 
@@ -26,9 +26,10 @@ export async function WorkflowList() {
                 </p>
               </div>
 
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                {workflow.isActive ? "Active" : "Inactive"}
-              </span>
+              <WorkflowStatusToggle
+                workflowId={workflow.id}
+                isActive={workflow.isActive}
+              />
             </div>
 
             <div className="mt-4 rounded-xl bg-slate-50 p-3">
