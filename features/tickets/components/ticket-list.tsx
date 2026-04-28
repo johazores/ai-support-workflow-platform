@@ -97,6 +97,7 @@ export function TicketList() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           fullWidth
+          aria-label="Search tickets"
         />
 
         <Select
@@ -105,6 +106,7 @@ export function TicketList() {
             setStatus(event.target.value as TicketStatus | "")
           }
           className="w-32"
+          aria-label="Filter by status"
         >
           <option value="">All Status</option>
 
@@ -119,6 +121,7 @@ export function TicketList() {
             value={tagFilter}
             onChange={(event) => setTagFilter(event.target.value)}
             className="w-32"
+            aria-label="Filter by tag"
           >
             <option value="">All Tags</option>
             {allTags.map((tag) => (

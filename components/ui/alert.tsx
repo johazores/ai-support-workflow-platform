@@ -135,6 +135,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
           {dismissible && (
             <button
               onClick={handleDismiss}
+              aria-label="Dismiss alert"
               className={`shrink-0 ${styles.icon} hover:opacity-75 transition-opacity`}
             >
               <svg

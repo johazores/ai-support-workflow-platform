@@ -55,6 +55,7 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
           rows={6}
           placeholder="Write your reply..."
           fullWidth
+          aria-label="Reply message"
         />
 
         <Button

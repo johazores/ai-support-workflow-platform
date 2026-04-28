@@ -122,6 +122,7 @@ export function AiDraftPanel({
               onChange={(event) => setDraft(event.target.value)}
               rows={10}
               fullWidth
+              aria-label="AI-generated draft"
             />
 
             <Button

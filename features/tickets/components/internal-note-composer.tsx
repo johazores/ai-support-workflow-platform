@@ -51,6 +51,7 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
           rows={5}
           placeholder="Write an internal note..."
           fullWidth
+          aria-label="Internal note"
         />
 
         <Button
