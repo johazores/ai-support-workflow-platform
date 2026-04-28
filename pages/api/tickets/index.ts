@@ -22,14 +22,19 @@ export default async function handler(
   }
 
   try {
-    const { search, status } = req.query;
+    const { search, status, cursor, limit } = req.query;
 
-    const tickets = await getTickets({
+    const result = await getTickets({
       search: typeof search === "string" ? search : undefined,
       status: parseStatus(status),
+      cursor: typeof cursor === "string" ? cursor : undefined,
+      limit: typeof limit === "string" ? parseInt(limit, 10) : undefined,
     });
 
-    return res.status(200).json({ data: tickets });
+    return res.status(200).json({
+      data: result.tickets,
+      nextCursor: result.nextCursor,
+    });
   } catch (error) {
     console.error(error);
 

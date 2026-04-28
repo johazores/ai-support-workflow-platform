@@ -1,20 +1,30 @@
 import { apiClient } from "@/lib/api-client";
 import type { TicketStatus, TicketSummary } from "../types/ticket";
 
+type FetchTicketsResult = {
+  tickets: TicketSummary[];
+  nextCursor: string | null;
+};
+
 export async function fetchTickets(params: {
   search?: string;
   status?: string;
-}): Promise<TicketSummary[]> {
+  cursor?: string;
+  limit?: number;
+}): Promise<FetchTicketsResult> {
   const query = new URLSearchParams();
 
   if (params.search) query.append("search", params.search);
   if (params.status) query.append("status", params.status);
+  if (params.cursor) query.append("cursor", params.cursor);
+  if (params.limit) query.append("limit", String(params.limit));
 
-  const result = await apiClient<{ data: TicketSummary[] }>(
-    `/api/tickets?${query}`,
-  );
+  const result = await apiClient<{
+    data: TicketSummary[];
+    nextCursor: string | null;
+  }>(`/api/tickets?${query}`);
 
-  return result.data;
+  return { tickets: result.data, nextCursor: result.nextCursor };
 }
 
 export async function sendReply(ticketId: string, body: string) {

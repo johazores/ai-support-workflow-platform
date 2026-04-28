@@ -117,12 +117,22 @@ export async function assignTicket(input: AssignTicketInput) {
 type GetTicketsInput = {
   search?: string;
   status?: TicketStatus;
+  cursor?: string;
+  limit?: number;
 };
+
+type PaginatedTickets = {
+  tickets: TicketSummary[];
+  nextCursor: string | null;
+};
+
+const DEFAULT_PAGE_SIZE = 10;
 
 export async function getTickets(
   input?: GetTicketsInput,
-): Promise<TicketSummary[]> {
+): Promise<PaginatedTickets> {
   const where: Prisma.TicketWhereInput = {};
+  const limit = input?.limit ?? DEFAULT_PAGE_SIZE;
 
   if (input?.status) {
     where.status = input.status;
@@ -174,6 +184,13 @@ export async function getTickets(
     orderBy: {
       updatedAt: "desc",
     },
+    take: limit + 1,
+    ...(input?.cursor
+      ? {
+          skip: 1,
+          cursor: { id: input.cursor },
+        }
+      : {}),
     include: {
       customer: true,
       messages: {
@@ -185,7 +202,14 @@ export async function getTickets(
     },
   });
 
-  return tickets.map((ticket) => mapTicketSummary(ticket));
+  const hasMore = tickets.length > limit;
+  const page = hasMore ? tickets.slice(0, limit) : tickets;
+  const nextCursor = hasMore ? page[page.length - 1].id : null;
+
+  return {
+    tickets: page.map((ticket) => mapTicketSummary(ticket)),
+    nextCursor,
+  };
 }
 
 type TicketWithSummaryRelations = Prisma.TicketGetPayload<{

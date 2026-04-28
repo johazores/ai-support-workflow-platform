@@ -27,7 +27,9 @@ export function TicketList() {
   const [status, setStatus] = useState<TicketStatus | "">("");
   const [tagFilter, setTagFilter] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTags()
@@ -41,12 +43,13 @@ export function TicketList() {
       setError("");
 
       try {
-        const data = await fetchTickets({
+        const result = await fetchTickets({
           search: search || undefined,
           status: status || undefined,
         });
 
-        setTickets(data);
+        setTickets(result.tickets);
+        setNextCursor(result.nextCursor);
       } catch {
         setError("Failed to load tickets. Please try again.");
       } finally {
@@ -64,6 +67,26 @@ export function TicketList() {
     : tickets;
 
   const tagMap = new Map(allTags.map((t) => [t.id, t]));
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+
+    try {
+      const result = await fetchTickets({
+        search: search || undefined,
+        status: status || undefined,
+        cursor: nextCursor,
+      });
+
+      setTickets((prev) => [...prev, ...result.tickets]);
+      setNextCursor(result.nextCursor);
+    } catch {
+      setError("Failed to load more tickets.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -170,7 +193,20 @@ export function TicketList() {
         {!loading && filteredTickets.length > 0 && (
           <div className="px-4 py-3 text-center text-xs font-medium text-slate-500">
             {filteredTickets.length}{" "}
-            {filteredTickets.length === 1 ? "ticket" : "tickets"} found
+            {filteredTickets.length === 1 ? "ticket" : "tickets"} shown
+          </div>
+        )}
+
+        {!loading && nextCursor && !tagFilter && (
+          <div className="px-4 py-3 text-center">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading..." : "Load more"}
+            </Button>
           </div>
         )}
 
