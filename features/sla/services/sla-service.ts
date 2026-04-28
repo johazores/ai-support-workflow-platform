@@ -52,6 +52,16 @@ export async function getAllSlaPolicies() {
   });
 }
 
+export async function updateSlaPolicy(
+  id: string,
+  data: { firstResponseMinutes: number; resolutionMinutes: number },
+) {
+  return prisma.slaPolicy.update({
+    where: { id },
+    data,
+  });
+}
+
 export async function seedSlaPolicies() {
   const defaults = [
     {
