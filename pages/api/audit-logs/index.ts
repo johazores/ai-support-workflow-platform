@@ -3,8 +3,7 @@ import {
   getAuditLogs,
   getAuditLogTypes,
 } from "@/features/audit/services/audit-service";
-import { parseSessionValue } from "@/features/auth/services/session-service";
-import { isElevatedRole } from "@/features/auth/services/role-service";
+import { requireApiPermission } from "@/lib/api-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,12 +14,8 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  // Auth check — only supervisors and admins
-  const session = await parseSessionValue(req.cookies.support_session);
-
-  if (!session || !isElevatedRole(session.role)) {
-    return res.status(403).json({ message: "Forbidden" });
-  }
+  const auth = await requireApiPermission(req, res, "audit-logs:read");
+  if (!auth.ok) return;
 
   try {
     const { cursor, type, ticketId, meta } = req.query;

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { setTicketTags } from "@/features/tags/services/tag-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const setTagsSchema = z.object({
   tagIds: z.array(z.string().min(1)),
@@ -14,6 +15,9 @@ export default async function handler(
     res.setHeader("Allow", ["PUT"]);
     return res.status(405).json({ message: "Method not allowed" });
   }
+
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
 
   const ticketId = req.query["ticket-id"] as string;
 

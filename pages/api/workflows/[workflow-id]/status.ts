@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { updateWorkflowStatus } from "@/features/workflows/services/workflow-mutation-service";
+import { requireApiPermission } from "@/lib/api-auth";
 
 const updateWorkflowStatusSchema = z.object({
   isActive: z.boolean(),
@@ -14,6 +15,9 @@ export default async function handler(
     res.setHeader("Allow", ["PATCH"]);
     return res.status(405).json({ message: "Method not allowed" });
   }
+
+  const auth = await requireApiPermission(req, res, "workflows:manage");
+  if (!auth.ok) return;
 
   const workflowId = req.query["workflow-id"];
 

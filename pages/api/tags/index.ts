@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { getAllTags, createTag } from "@/features/tags/services/tag-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const createTagSchema = z.object({
   name: z.string().min(1).max(30),
@@ -11,6 +12,9 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
+
   if (req.method === "GET") {
     const tags = await getAllTags();
     return res.status(200).json({ data: tags });

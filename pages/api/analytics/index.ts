@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getAnalytics } from "@/features/analytics/services/analytics-service";
+import { requireApiPermission } from "@/lib/api-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -10,9 +11,15 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  const auth = await requireApiPermission(req, res, "analytics:read");
+  if (!auth.ok) return;
+
   try {
+    const daysParam = req.query.days;
     const days =
-      typeof req.query.days === "string" ? parseInt(req.query.days, 10) : 30;
+      typeof daysParam === "string"
+        ? Math.min(Math.max(parseInt(daysParam, 10) || 30, 1), 365)
+        : 30;
 
     const data = await getAnalytics(days);
 

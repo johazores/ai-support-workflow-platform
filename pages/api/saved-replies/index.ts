@@ -4,6 +4,7 @@ import {
   getAllSavedReplies,
   createSavedReply,
 } from "@/features/saved-replies/services/saved-reply-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const createSchema = z.object({
   title: z.string().min(1).max(100),
@@ -15,6 +16,9 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
+
   if (req.method === "GET") {
     const replies = await getAllSavedReplies();
     return res.status(200).json({ data: replies });

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const generateDraftSchema = z.object({
   subject: z.string().min(1),
@@ -21,6 +22,9 @@ export default async function handler(
       message: "Method not allowed",
     });
   }
+
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
 
   const result = generateDraftSchema.safeParse(req.body);
 

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getTickets } from "@/features/tickets/services/ticket-service";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const validStatuses: TicketStatus[] = ["open", "pending", "closed"];
 
@@ -22,6 +23,9 @@ export default async function handler(
   }
 
   try {
+    const auth = await requireApiAuth(req, res);
+    if (!auth.ok) return;
+
     const { search, status, cursor, limit } = req.query;
 
     const result = await getTickets({

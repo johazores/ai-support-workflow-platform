@@ -4,6 +4,7 @@ import {
   updateSavedReply,
   deleteSavedReply,
 } from "@/features/saved-replies/services/saved-reply-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(100),
@@ -15,6 +16,9 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
+
   const id = req.query.id as string;
 
   if (!id) {

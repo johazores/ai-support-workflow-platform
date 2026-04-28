@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { sendDraft } from "@/features/ai-drafts/services/send-draft-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,6 +10,9 @@ export default async function handler(
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ message: "Method not allowed" });
   }
+
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
 
   const draftId = req.query["draft-id"];
 

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { updateTicketStatus } from "@/features/tickets/services/ticket-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const updateStatusSchema = z.object({
   status: z.enum(["open", "pending", "closed"]),
@@ -14,6 +15,9 @@ export default async function handler(
     res.setHeader("Allow", ["PATCH"]);
     return res.status(405).json({ message: "Method not allowed" });
   }
+
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
 
   const ticketId = req.query["ticket-id"];
 

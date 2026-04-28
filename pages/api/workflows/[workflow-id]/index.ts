@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { deleteWorkflowRule } from "@/features/workflows/services/workflow-mutation-service";
+import { requireApiPermission } from "@/lib/api-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,6 +16,9 @@ export default async function handler(
     res.setHeader("Allow", ["DELETE"]);
     return res.status(405).json({ message: "Method not allowed" });
   }
+
+  const auth = await requireApiPermission(req, res, "workflows:manage");
+  if (!auth.ok) return;
 
   try {
     await deleteWorkflowRule({ workflowId });

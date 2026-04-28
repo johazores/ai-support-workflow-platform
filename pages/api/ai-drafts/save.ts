@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { saveDraft } from "@/features/ai-drafts/services/draft-service";
+import { requireApiAuth } from "@/lib/api-auth";
 
 const saveDraftSchema = z.object({
   ticketId: z.string().min(1),
@@ -15,6 +16,9 @@ export default async function handler(
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ message: "Method not allowed" });
   }
+
+  const auth = await requireApiAuth(req, res);
+  if (!auth.ok) return;
 
   const result = saveDraftSchema.safeParse(req.body);
 
