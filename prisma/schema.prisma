@@ -43,12 +43,14 @@ model Ticket {
 }
 
 model Message {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  ticketId  String   @db.ObjectId
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
-  author    String
-  body      String
-  createdAt DateTime @default(now())
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId          String   @db.ObjectId
+  ticket            Ticket   @relation(fields: [ticketId], references: [id])
+  author            String
+  body              String
+  externalMessageId String?
+  inReplyTo         String?
+  createdAt         DateTime @default(now())
 }
 
 model WorkflowRule {
