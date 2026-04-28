@@ -220,6 +220,33 @@ export default async function AdminPage() {
                 </p>
               </Link>
             )}
+
+            <Link
+              href="/admin/customers"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
+            >
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-600 transition-colors group-hover:bg-teal-100">
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+                  />
+                </svg>
+              </div>
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
+                Customers
+              </h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Browse and search the customer directory.
+              </p>
+            </Link>
           </div>
         </section>
       </main>
