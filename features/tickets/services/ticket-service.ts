@@ -149,6 +149,16 @@ export async function getTickets(
           },
         },
       },
+      {
+        messages: {
+          some: {
+            body: {
+              contains: input.search,
+              mode: "insensitive",
+            },
+          },
+        },
+      },
     ];
   }
 
