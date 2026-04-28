@@ -120,3 +120,12 @@ model Tag {
   color     String   @default("slate")
   createdAt DateTime @default(now())
 }
+
+model SavedReply {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  body      String
+  shortcut  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

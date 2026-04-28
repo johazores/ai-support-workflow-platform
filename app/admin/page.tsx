@@ -42,6 +42,18 @@ export default async function AdminPage() {
                 View AI usage, success rate, and errors.
               </p>
             </Link>
+
+            <Link
+              href="/admin/saved-replies"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+            >
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                Saved Replies
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Manage reusable reply templates.
+              </p>
+            </Link>
           </div>
         </section>
       </main>
