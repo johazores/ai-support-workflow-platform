@@ -1,34 +1,41 @@
 type StatusBadgeProps = {
-  status: "open" | "pending" | "closed";
+  status: string;
   showDot?: boolean;
 };
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   open: "Open",
   pending: "Pending",
   closed: "Closed",
 };
 
-const statusStyles = {
-  open: {
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    ring: "ring-emerald-200",
-  },
-  pending: {
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    ring: "ring-amber-200",
-  },
-  closed: {
-    bg: "bg-slate-100",
-    text: "text-slate-700",
-    ring: "ring-slate-200",
-  },
+const statusStyles: Record<string, { bg: string; text: string; ring: string }> =
+  {
+    open: {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      ring: "ring-emerald-200",
+    },
+    pending: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      ring: "ring-amber-200",
+    },
+    closed: {
+      bg: "bg-slate-100",
+      text: "text-slate-700",
+      ring: "ring-slate-200",
+    },
+  };
+
+const defaultStyle = {
+  bg: "bg-slate-100",
+  text: "text-slate-600",
+  ring: "ring-slate-200",
 };
 
 export function StatusBadge({ status, showDot = true }: StatusBadgeProps) {
-  const styles = statusStyles[status];
+  const styles = statusStyles[status] ?? defaultStyle;
 
   return (
     <span
@@ -37,7 +44,7 @@ export function StatusBadge({ status, showDot = true }: StatusBadgeProps) {
       {showDot && (
         <span className={`inline-block h-2 w-2 rounded-full bg-current`} />
       )}
-      {statusLabels[status]}
+      {statusLabels[status] ?? status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }
