@@ -51,11 +51,13 @@ export function LoginForm() {
 
   return (
     <Card className="w-full max-w-md">
-      <div className="mb-6">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+      <div className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
           Admin Access
         </p>
-        <h1 className="mt-2 text-3xl font-bold text-slate-950">Login</h1>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">
+          Login
+        </h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

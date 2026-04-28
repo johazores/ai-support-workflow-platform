@@ -10,18 +10,35 @@ export default async function AiLogsPage() {
     <>
       <AppHeader user={user} />
 
-      <main className="min-h-screen bg-slate-50 px-6 py-8">
+      <main className="min-h-screen bg-slate-50 px-6 py-10">
         <section className="mx-auto max-w-6xl">
           <Link
             href="/admin"
-            className="mb-6 inline-flex text-sm font-medium text-slate-600 hover:text-slate-950"
+            className="mb-8 inline-flex items-center gap-1 text-sm font-medium text-slate-500 transition-colors hover:text-slate-950"
           >
-            ← Back to admin
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.75 19.5L8.25 12l7.5-7.5"
+              />
+            </svg>
+            Back to admin
           </Link>
 
-          <div className="mb-6">
-            <p className="text-sm font-medium text-slate-500">Admin</p>
-            <h1 className="text-3xl font-bold text-slate-950">AI Logs</h1>
+          <div className="mb-8">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Admin
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">
+              AI Logs
+            </h1>
           </div>
 
           <AiUsageLogList />

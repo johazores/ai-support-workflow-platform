@@ -100,9 +100,9 @@ export function AiDraftPanel({
 
   return (
     <Card>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-950">AI Draft</h2>
-        <p className="mt-2 text-sm text-slate-600">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-slate-950">AI Draft</h2>
+        <p className="mt-1 text-xs text-slate-500">
           Generate, edit, and save a suggested support reply.
         </p>
       </div>

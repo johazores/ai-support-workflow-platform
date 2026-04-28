@@ -52,11 +52,11 @@ export function RunWorkflowButton({ ticketId }: RunWorkflowButtonProps) {
 
   return (
     <Card>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-950">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-slate-950">
           Workflow Automation
         </h2>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-1 text-xs text-slate-500">
           Run active workflow rules against this ticket.
         </p>
       </div>

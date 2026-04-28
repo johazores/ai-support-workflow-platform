@@ -60,10 +60,10 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
   }
 
   return (
-    <Card className="bg-amber-50">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-amber-900">Internal Note</h2>
-        <p className="mt-2 text-sm text-amber-800">
+    <Card className="bg-amber-50/60 ring-amber-100">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-amber-900">Internal Note</h2>
+        <p className="mt-1 text-xs text-amber-700">
           Add a private note for the support team.
         </p>
       </div>

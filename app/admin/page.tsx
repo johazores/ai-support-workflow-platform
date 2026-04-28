@@ -7,19 +7,25 @@ export default async function AdminPage() {
   return (
     <>
       <AppHeader user={user} />
-      <main className="min-h-screen bg-slate-50 px-6 py-8">
+      <main className="min-h-screen bg-slate-50 px-6 py-10">
         <section className="mx-auto max-w-6xl">
-          <div className="mb-6">
-            <p className="text-sm font-medium text-slate-500">Admin</p>
-            <h1 className="text-3xl font-bold text-slate-950">Dashboard</h1>
+          <div className="mb-8">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Admin
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">
+              Dashboard
+            </h1>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <Link
               href="/admin/workflows"
-              className="rounded-2xl bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
             >
-              <h2 className="font-semibold text-slate-950">Workflows</h2>
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                Workflows
+              </h2>
               <p className="mt-2 text-sm text-slate-500">
                 Manage workflow automation rules.
               </p>
@@ -27,9 +33,11 @@ export default async function AdminPage() {
 
             <Link
               href="/admin/ai-logs"
-              className="rounded-2xl bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
             >
-              <h2 className="font-semibold text-slate-950">AI Logs</h2>
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                AI Logs
+              </h2>
               <p className="mt-2 text-sm text-slate-500">
                 View AI usage, success rate, and errors.
               </p>

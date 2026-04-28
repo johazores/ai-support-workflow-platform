@@ -104,21 +104,22 @@ export function TicketList() {
         </Alert>
       )}
 
-      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
         {tickets.map((ticket) => (
           <Link
             key={ticket.id}
             href={`/inbox/${ticket.id}`}
-            className="block p-4 hover:bg-slate-50 transition-colors"
+            className="group block px-5 py-4 transition-colors hover:bg-slate-50/80"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <h3 className="font-semibold text-slate-900">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-slate-900 group-hover:text-slate-950">
                   {highlightText(ticket.subject, search)}
                 </h3>
 
-                <p className="mt-1 text-sm text-slate-600">
-                  {highlightText(ticket.customerName, search)} ·{" "}
+                <p className="mt-1 truncate text-sm text-slate-500">
+                  {highlightText(ticket.customerName, search)}
+                  <span className="mx-1.5 text-slate-300">&middot;</span>
                   {highlightText(ticket.customerEmail, search)}
                 </p>
               </div>
