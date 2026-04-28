@@ -58,17 +58,22 @@ export async function setSessionCookie(
   user: SessionUser,
 ) {
   const token = await createSessionValue(user);
+  const isProduction = process.env.NODE_ENV === "production";
+  const secure = isProduction ? "; Secure" : "";
 
   res.setHeader(
     "Set-Cookie",
-    `${sessionCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+    `${sessionCookieName}=${token}; Path=/; HttpOnly; SameSite=Strict${secure}; Max-Age=86400`,
   );
 }
 
 export function clearSessionCookie(res: NextApiResponse) {
+  const isProduction = process.env.NODE_ENV === "production";
+  const secure = isProduction ? "; Secure" : "";
+
   res.setHeader(
     "Set-Cookie",
-    `${sessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+    `${sessionCookieName}=; Path=/; HttpOnly; SameSite=Strict${secure}; Max-Age=0`,
   );
 }
 

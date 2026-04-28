@@ -28,8 +28,11 @@ export default async function handler(
 
     const { search, status, cursor, limit } = req.query;
 
+    const searchStr =
+      typeof search === "string" ? search.slice(0, 200) : undefined;
+
     const result = await getTickets({
-      search: typeof search === "string" ? search : undefined,
+      search: searchStr || undefined,
       status: parseStatus(status),
       cursor: typeof cursor === "string" ? cursor : undefined,
       limit: typeof limit === "string" ? parseInt(limit, 10) : undefined,

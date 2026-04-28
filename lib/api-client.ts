@@ -31,10 +31,21 @@ export async function apiClient<T = unknown>(
   });
 
   const text = await response.text();
-  const result = text ? JSON.parse(text) : {};
+  let result: Record<string, unknown> = {};
+
+  try {
+    result = text ? JSON.parse(text) : {};
+  } catch {
+    if (!response.ok) {
+      throw new ApiError(response.status, "Request failed");
+    }
+  }
 
   if (!response.ok) {
-    throw new ApiError(response.status, result.message ?? "Request failed");
+    throw new ApiError(
+      response.status,
+      (result.message as string) ?? "Request failed",
+    );
   }
 
   return result as T;

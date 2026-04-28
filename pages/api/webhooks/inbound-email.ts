@@ -26,7 +26,13 @@ function verifySignature(
     .update(payload)
     .digest("hex");
 
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  // Prevent timing attacks with length check + constant-time comparison
+  if (signature.length !== expected.length) return false;
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature, "utf8"),
+    Buffer.from(expected, "utf8"),
+  );
 }
 
 export default async function handler(
