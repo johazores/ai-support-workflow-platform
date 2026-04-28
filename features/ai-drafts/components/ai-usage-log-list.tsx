@@ -26,7 +26,13 @@ export async function AiUsageLogList() {
                 )}
               </div>
 
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                  log.success
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
                 {log.success ? "Success" : "Failed"}
               </span>
             </div>
