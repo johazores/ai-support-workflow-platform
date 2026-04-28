@@ -191,6 +191,35 @@ export default async function AdminPage() {
                 </p>
               </Link>
             )}
+
+            {hasPermission(user.role, "workflows:manage") && (
+              <Link
+                href="/admin/sla"
+                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
+              >
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-100">
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
+                  SLA Policies
+                </h2>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  Set response and resolution targets by priority.
+                </p>
+              </Link>
+            )}
           </div>
         </section>
       </main>
