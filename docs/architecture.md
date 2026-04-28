@@ -31,14 +31,15 @@ The application is a full-stack helpdesk built with Next.js 16. It uses the **Ap
 
 ## Directory Structure
 
-| Directory     | Purpose                                              | Runtime         |
-| ------------- | ---------------------------------------------------- | --------------- |
-| `app/`        | Page components, layouts, global styles              | Server + Client |
-| `pages/api/`  | REST API route handlers                              | Server only     |
-| `features/`   | Feature modules (components, services, types, utils) | Mixed           |
-| `components/` | Shared UI primitives (Button, Card, Input, etc.)     | Client          |
-| `lib/`        | Infrastructure (Prisma client, API client, hooks)    | Mixed           |
-| `prisma/`     | Database schema and seed script                      | Server only     |
+| Directory     | Purpose                                             | Runtime         |
+| ------------- | --------------------------------------------------- | --------------- |
+| `app/`        | Page components, layouts, loading/error states      | Server + Client |
+| `pages/api/`  | REST API route handlers (31 endpoints)              | Server only     |
+| `features/`   | Feature modules (10 modules, see below)             | Mixed           |
+| `components/` | Shared UI primitives (Button, Card, Skeleton, etc.) | Client          |
+| `lib/`        | Infrastructure (Prisma client, API client, auth)    | Mixed           |
+| `prisma/`     | Database schema (14 models) and seed script         | Server only     |
+| `.github/`    | CI pipeline (GitHub Actions)                        | CI              |
 
 ## Feature Module Convention
 
@@ -55,6 +56,21 @@ features/tickets/
   utils/
     highlight-text.tsx         → Pure functions (tested)
 ```
+
+### Feature Modules
+
+| Module           | Purpose                                       |
+| ---------------- | --------------------------------------------- |
+| `tickets/`       | Inbox, ticket detail, replies, internal notes |
+| `ai-drafts/`     | AI draft generation, provider chain, tones    |
+| `workflows/`     | Rule engine, triggers, actions                |
+| `auth/`          | Login, sessions, RBAC, permissions            |
+| `analytics/`     | Dashboard metrics and charts                  |
+| `audit/`         | Audit log viewer with filtering               |
+| `tags/`          | Ticket categorization                         |
+| `saved-replies/` | Response templates                            |
+| `sla/`           | SLA policy tracking and breach detection      |
+| `notifications/` | User notifications (stub)                     |
 
 **Rules:**
 
@@ -91,19 +107,49 @@ export default async function handler(req, res) {
 
 - Passwords are hashed with bcryptjs (10 rounds)
 - Sessions are signed JWTs created with `jose` (HS256, 24h expiry)
-- The JWT is stored in an `HttpOnly`, `SameSite=Lax` cookie
+- The JWT is stored in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` in production)
 - Server components read sessions via `cookies()` from `next/headers`
 - API routes receive the cookie automatically with each request
 - A `SESSION_SECRET` environment variable is required
 
+## Role-Based Access Control
+
+Three roles with hierarchical permissions:
+
+| Role         | Scope                                                               |
+| ------------ | ------------------------------------------------------------------- |
+| `admin`      | All permissions — user management, workflows, analytics, audit logs |
+| `supervisor` | Read-only analytics, audit logs, ticket assignment, saved replies   |
+| `agent`      | Ticket read/reply, AI draft generation                              |
+
+11 granular permissions are defined in `role-service.ts`: `tickets:read`, `tickets:assign`, `tickets:manage-tags`, `workflows:read`, `workflows:manage`, `saved-replies:read`, `saved-replies:manage`, `analytics:read`, `ai-logs:read`, `audit-logs:read`, `users:manage`.
+
+Server-side guards:
+
+- `requireUser()` — any authenticated user
+- `requireAdmin()` — admin only
+- `requireSupervisor()` — admin or supervisor
+- `requirePermission(permission)` — checks specific permission
+
+API routes use `requireApiAuth()` and `requireApiPermission()` from `lib/api-auth.ts`.
+
 ## AI Provider System
 
-The AI draft feature uses a provider interface (`AiDraftProvider`) so the implementation can be swapped via the `AI_PROVIDER` environment variable:
+The AI draft feature uses a provider interface (`AiDraftProvider`) with a fallback chain:
 
-- `mock` — returns a deterministic template response (default for development)
-- `openai` — calls the OpenAI Chat Completions API
+1. **OpenAI** — Chat Completions API (if `OPENAI_API_KEY` is set)
+2. **Anthropic** — Messages API via fetch (if `ANTHROPIC_API_KEY` is set)
+3. **Mock** — deterministic template responses (always available)
 
-Both providers implement the same interface, making it straightforward to add new providers (Claude, Gemini, etc.).
+The `AiProviderChain` in `ai-provider-chain.ts` tries each configured provider in order. If one fails, it falls back to the next. All attempts are logged to `AiUsageLog` with provider name, model, token counts, and success/error status.
+
+### Tone Support
+
+Drafts can be generated in four tones: `professional`, `friendly`, `concise`, `empathetic`. The tone is injected into the system prompt for real providers and drives template selection for the mock provider.
+
+### Ticket Classification
+
+`classification-service.ts` provides automatic ticket categorization using keyword-based rules with an optional OpenAI enhancement.
 
 ## Workflow Engine
 
@@ -112,7 +158,7 @@ Workflow rules are stored as database records with:
 - A **trigger** (JSON string): `{ field, operator, value }`
 - An **actions** array (JSON): `[{ type, value }]`
 
-The engine evaluates triggers against ticket data and executes matching actions. Workflows can run manually (per ticket) or automatically on trigger match. Results are logged as activity entries.
+The engine evaluates triggers against ticket data and executes matching actions. Supported actions: `change-status`, `assign-ticket`, `generate-draft`, `add-tag`. Workflows can run manually (per ticket) or automatically on trigger match. The engine includes loop prevention to avoid recursive execution. Results are logged as `ActivityLog` entries.
 
 ## Naming Conventions
 
@@ -121,3 +167,15 @@ The engine evaluates triggers against ticket data and executes matching actions.
 - **Services**: camelCase functions (`fetchTickets()`, `createWorkflowRule()`)
 - **Types**: PascalCase interfaces (`Ticket`, `WorkflowRule`)
 - **API routes**: kebab-case paths (`/api/tickets/[ticket-id]/status`)
+
+## Testing
+
+- **Framework:** Vitest 4 with path alias support
+- **Test files:** 6 suites covering role service, AI provider chain, mock AI provider, workflow utilities, API auth middleware, and API client
+- **Pattern:** Unit tests for pure logic and service layers; API route tests use mocked Prisma and session utilities
+
+## Infrastructure
+
+- **CI:** GitHub Actions pipeline (`.github/workflows/ci.yml`) runs lint, type-check, tests, and build on push/PR to master
+- **Docker:** Multi-stage `Dockerfile` (Alpine, non-root user) with `docker-compose.yml` for local development (MongoDB 7 + Next.js)
+- **Database indexes:** Optimized indexes on Ticket, Message, ActivityLog, Notification, Draft, and EmailLog for common query patterns

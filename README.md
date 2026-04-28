@@ -1,6 +1,6 @@
 # AI Support Workflow Platform
 
-A full-stack customer support application with AI-powered draft replies and configurable workflow automation. Built as a portfolio project to demonstrate production-level patterns: layered architecture, type-safe APIs, signed JWT sessions, and a provider-based AI integration.
+A full-stack customer support application with AI-powered draft replies, configurable workflow automation, and role-based access control. Built as a portfolio project to demonstrate production-level patterns: layered architecture, type-safe APIs, signed JWT sessions, RBAC, and a provider-based AI integration with fallback chain.
 
 **Live demo credentials** — after seeding, log in with `alex@company.com` / `admin123`.
 
@@ -30,9 +30,11 @@ Key engineering challenges addressed:
 | Styling          | Tailwind CSS 4                             |
 | Validation       | Zod 4                                      |
 | Auth             | Signed JWTs via `jose`                     |
-| AI               | OpenAI SDK 6 (provider pattern)            |
+| AI               | OpenAI SDK 6 + Anthropic (provider chain)  |
 | Testing          | Vitest 4                                   |
 | Password hashing | bcryptjs                                   |
+| CI               | GitHub Actions                             |
+| Containers       | Docker + Docker Compose                    |
 
 ---
 
@@ -49,15 +51,16 @@ Key engineering challenges addressed:
 
 ### AI Draft Replies
 
-- One-click AI draft generation from ticket context
-- Provider interface: swap between OpenAI and a mock provider via environment variable
+- One-click AI draft generation with tone selection (professional, friendly, concise, empathetic)
+- Provider chain: OpenAI → Anthropic → mock fallback with automatic failover
 - Save, edit, and send drafts as replies
 - AI usage logging for monitoring and cost tracking
+- Ticket classification service (keyword + AI-powered)
 
 ### Workflow Automation
 
 - Rule builder with structured triggers (field + operator + value)
-- Configurable actions: change status, assign ticket, generate AI draft
+- Configurable actions: change status, assign ticket, generate AI draft, add tag
 - Manual execution per ticket or automatic trigger on match
 - Enable/disable rules without deleting them
 - Execution results logged as activity
@@ -66,13 +69,32 @@ Key engineering challenges addressed:
 
 - Workflow rule management (create, toggle, delete)
 - AI usage log dashboard
-- Role-based access (admin vs. support)
+- Analytics dashboard (ticket volume, response time, status/priority breakdown)
+- Audit log viewer with type filtering and pagination
+- Saved reply template management
+- Role-based access (admin, supervisor, agent) with 11 granular permissions
 
-### Authentication
+### Authentication & Security
 
-- Signed JWT sessions with `SESSION_SECRET`
+- Signed JWT sessions with `SESSION_SECRET` (HS256, 24h expiry)
 - Login/logout with bcrypt password verification
 - Protected routes via server-side auth guard
+- RBAC middleware on all API routes (`requireApiAuth`, `requireApiPermission`)
+- Hardened cookies: HttpOnly, SameSite=Strict, Secure in production
+
+### Real-Time & Email
+
+- SSE endpoint for live ticket updates with heartbeat keepalive
+- Notification bell with unread count
+- Inbound email webhook with HMAC signature verification
+- Outbound email dispatch via provider interface
+
+### Production Polish
+
+- Loading skeletons and error boundaries on all major routes
+- Database indexes for common query patterns
+- GitHub Actions CI (lint, type-check, test, build)
+- Docker and Docker Compose for local development
 
 ---
 
@@ -80,17 +102,24 @@ Key engineering challenges addressed:
 
 ```
 app/                  → Pages (App Router, server components)
-pages/api/            → API routes (Pages Router, thin handlers)
+pages/api/            → API routes (Pages Router, 31 endpoints)
 features/
   tickets/            → Ticket components, services, types
-  ai-drafts/          → AI draft generation, saving, sending
+  ai-drafts/          → AI draft generation, provider chain, tones
   workflows/          → Workflow rules, engine, utilities
-  auth/               → Login, sessions, auth guard
+  auth/               → Login, sessions, RBAC, permissions
+  analytics/          → Metrics dashboard, chart components
+  audit/              → Audit log viewer
+  tags/               → Ticket tags (coming soon: UI wired)
+  saved-replies/      → Response templates
+  sla/                → SLA policy tracking
+  notifications/      → User notifications
 components/
   layout/             → App header, navigation
-  ui/                 → Reusable UI primitives (Button, Card, Input, etc.)
-lib/                  → Shared infrastructure (Prisma client, API client, hooks)
-prisma/               → Schema and seed data
+  ui/                 → Reusable UI primitives (Button, Card, Skeleton, etc.)
+lib/                  → Shared infrastructure (Prisma client, API client, auth)
+prisma/               → Schema (14 models) and seed data
+.github/workflows/    → CI pipeline
 docs/                 → Architecture docs, decisions, roadmap
 ```
 
@@ -129,9 +158,10 @@ Edit `.env`:
 ```env
 DATABASE_URL="mongodb+srv://..."
 SESSION_SECRET="generate-a-random-string-at-least-32-chars"
-AI_PROVIDER="mock"              # or "openai"
-OPENAI_API_KEY=""               # required if AI_PROVIDER=openai
+OPENAI_API_KEY=""               # optional, enables OpenAI provider
 OPENAI_MODEL="gpt-4.1-mini"
+ANTHROPIC_API_KEY=""            # optional, enables Anthropic provider
+ANTHROPIC_MODEL="claude-sonnet-4-20250514"
 ```
 
 ### 3. Set up database
@@ -150,10 +180,11 @@ npm run dev
 
 Open [http://localhost:3000/login](http://localhost:3000/login).
 
-| Account | Email              | Password   | Role    |
-| ------- | ------------------ | ---------- | ------- |
-| Admin   | alex@company.com   | admin123   | admin   |
-| Support | jordan@company.com | support123 | support |
+| Account    | Email              | Password   | Role       |
+| ---------- | ------------------ | ---------- | ---------- |
+| Admin      | alex@company.com   | admin123   | admin      |
+| Supervisor | sam@company.com    | super123   | supervisor |
+| Agent      | jordan@company.com | support123 | agent      |
 
 ---
 
@@ -168,27 +199,32 @@ npm run test:watch    # watch mode
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — system design, data flow, conventions
+- [Architecture](docs/architecture.md) — system design, data flow, RBAC, conventions
 - [Architecture Decisions](docs/architecture-decisions.md) — ADRs explaining key choices
-- [Roadmap](docs/roadmap.md) — planned features and priorities
+- [Roadmap](docs/roadmap.md) — completed features and future plans
 - [Case Study](docs/case-study.md) — project motivation and engineering tradeoffs
 
-Watch mode:
+---
+
+## Docker
+
+Run the full stack locally with Docker Compose:
 
 ```bash
-npm run test:watch
+docker compose up --build
 ```
+
+This starts MongoDB 7 and the Next.js app at [http://localhost:3000](http://localhost:3000).
 
 ---
 
 ## Future Improvements
 
-- Email ingestion (IMAP / webhook)
-- Real-time updates (WebSockets)
-- Attachments support
-- Pagination
-- Advanced analytics dashboard
-- Multi-user collaboration
+- Rate limiting on API routes
+- Server-side session revocation
+- File attachments on tickets
+- End-to-end tests (Playwright)
+- Customer-facing portal
 
 ---
 
@@ -196,12 +232,15 @@ npm run test:watch
 
 This project demonstrates:
 
-- Clean architecture (feature-based structure)
+- Clean architecture (feature-based structure with 10 modules)
 - Separation of concerns (API, services, UI)
-- Workflow engine design
-- AI integration with provider abstraction
-- Real-world support system features
-- Testing and maintainability
+- Workflow engine with loop prevention
+- AI integration with provider chain and fallback
+- RBAC with granular permissions
+- Real-time updates via SSE
+- Security hardening (OWASP-aligned)
+- CI/CD and containerization
+- Testing strategy (unit + integration)
 
 ---
 

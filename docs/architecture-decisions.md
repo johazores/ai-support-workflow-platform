@@ -108,4 +108,52 @@
 
 **Rationale:** An audit trail is essential for any support tool. Logging at the service layer (not the API layer) ensures consistency regardless of how the action is triggered.
 
-**Consequences:** Activity logs grow over time. Pagination or archival may be needed at scale.
+**Consequences:** Activity logs grow over time. Cursor-based pagination is used to handle large volumes.
+
+---
+
+## ADR-10: Three-tier RBAC with granular permissions
+
+**Context:** The initial role model had only "admin" and "support" roles. As the feature set grew (analytics, audit logs, saved replies), finer-grained access control was needed.
+
+**Decision:** Define three roles (admin, supervisor, agent) with 11 granular permissions managed in `role-service.ts`. Enforce permissions on both server-rendered pages (auth guards) and API routes (middleware).
+
+**Rationale:** A permission-based model decouples roles from capabilities. Adding a new feature only requires defining its permission and assigning it to roles — no code changes to existing guards.
+
+**Consequences:** Every new API route and admin page must declare its required permission. Forgetting to add a guard is a security risk, mitigated by the centralized `requireApiAuth`/`requireApiPermission` middleware pattern.
+
+---
+
+## ADR-11: AI provider chain with fallback
+
+**Context:** Relying on a single AI provider creates a single point of failure. Development and production may need different provider configurations.
+
+**Decision:** Implement `AiProviderChain` that tries providers in order (OpenAI → Anthropic → mock) based on which API keys are configured. Log all attempts to `AiUsageLog`.
+
+**Rationale:** Fallback chains improve resilience — if OpenAI is down, Anthropic serves as backup. The mock provider ensures development always works without API keys. Logging every attempt (including failures) enables cost monitoring and debugging.
+
+**Consequences:** Adds complexity over a single provider. Response quality may vary between providers for the same prompt.
+
+---
+
+## ADR-12: SSE for real-time updates instead of WebSockets
+
+**Context:** Ticket detail pages need live updates when new messages arrive or status changes.
+
+**Decision:** Use Server-Sent Events (SSE) via a `GET /api/tickets/[id]/events` endpoint with 30-second heartbeat keepalive.
+
+**Rationale:** SSE is simpler to implement than WebSockets — it uses standard HTTP, works through proxies, and doesn't require a persistent bidirectional connection. For this use case (server pushes updates to client), SSE is sufficient.
+
+**Consequences:** Unidirectional only (server → client). If bidirectional communication is needed later, WebSockets would need to be added separately.
+
+---
+
+## ADR-13: Hardened session cookies
+
+**Context:** A security audit revealed that session cookies used `SameSite=Lax` and lacked the `Secure` flag.
+
+**Decision:** Change session cookies to `SameSite=Strict` and add the `Secure` flag conditionally when `NODE_ENV === "production"`.
+
+**Rationale:** `SameSite=Strict` prevents the cookie from being sent on any cross-site request, reducing CSRF risk. The `Secure` flag ensures the cookie is only transmitted over HTTPS in production.
+
+**Consequences:** `SameSite=Strict` may cause the cookie to not be sent when navigating to the app from an external link (user must re-login). This is acceptable for an internal support tool.

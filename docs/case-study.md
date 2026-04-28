@@ -10,9 +10,13 @@ A full-stack helpdesk application where support agents can manage tickets, gener
 
 ### Key Capabilities
 
-- **AI Draft Generation** — agents click a button to generate a context-aware reply using the ticket's subject, customer name, and message history. The AI provider is swappable via environment variable.
-- **Workflow Automation** — admins define rules with structured triggers (`subject contains "billing"`) and actions (`assign to Jordan`, `change status to pending`). Rules execute manually or automatically.
-- **Ticket Management** — search across subjects, names, and message bodies with highlighted matches. Full conversation threads with support replies and internal-only notes.
+- **AI Draft Generation** — agents select a tone (professional, friendly, concise, empathetic) and generate a context-aware reply. A provider chain tries OpenAI → Anthropic → mock fallback, with all attempts logged for cost tracking.
+- **Workflow Automation** — admins define rules with structured triggers (`subject contains "billing"`) and actions (`assign to Jordan`, `change status to pending`, `add tag`, `generate draft`). Rules execute manually or automatically with loop prevention.
+- **Ticket Management** — search across subjects, names, and message bodies with highlighted matches. Full conversation threads with replies, internal notes, tags, and SLA tracking.
+- **RBAC** — three roles (admin, supervisor, agent) with 11 granular permissions enforced on every API route and admin page.
+- **Analytics** — dashboard with ticket volume trends, status/priority breakdowns, and response time metrics.
+- **Audit Trail** — filterable audit log viewer for all ticket activity with cursor-based pagination.
+- **Real-Time Updates** — SSE-powered live ticket updates and notification bell with unread count.
 
 ## Engineering Decisions
 
@@ -22,11 +26,15 @@ I split the codebase into three clear layers: client services (API calls), API r
 
 ### Provider Pattern for AI
 
-Rather than hardcoding OpenAI calls, I defined an `AiDraftProvider` interface. A mock provider returns deterministic responses during development; the OpenAI provider calls the Chat Completions API in production. Adding a new provider means implementing one function — no changes elsewhere.
+Rather than hardcoding a single AI API, I defined an `AiDraftProvider` interface and built a `AiProviderChain` that tries each configured provider in sequence. OpenAI and Anthropic are supported, with a mock fallback for development. All attempts are logged to `AiUsageLog` with provider, model, token counts, and error details. Adding a new provider means implementing one interface — no changes elsewhere.
 
 ### JWT Sessions Over Plain Cookies
 
-The initial prototype stored session data as Base64-encoded JSON in cookies — trivially forgeable. I replaced this with signed JWTs using `jose` (HS256, 24h expiry). The token is stored in an HttpOnly cookie, and a `SESSION_SECRET` environment variable is required to start the application.
+The initial prototype stored session data as Base64-encoded JSON in cookies — trivially forgeable. I replaced this with signed JWTs using `jose` (HS256, 24h expiry). The token is stored in an HttpOnly, SameSite=Strict cookie with the Secure flag in production. A `SESSION_SECRET` environment variable is required.
+
+### Role-Based Access Control
+
+I implemented a three-tier RBAC system (admin, supervisor, agent) with 11 granular permissions. Every API route validates authentication and authorization through reusable middleware (`requireApiAuth`, `requireApiPermission`). Server-rendered pages use auth guards (`requireUser`, `requireSupervisor`, `requirePermission`) that redirect unauthorized users.
 
 ### Thin API Handlers
 
@@ -44,14 +52,16 @@ All client-side API calls go through a single `apiClient<T>()` function that han
 | Pages Router for APIs   | Familiar, explicit handlers, but two routing systems coexist                       |
 | JWT without revocation  | Simple and stateless, but no server-side session invalidation without a blocklist  |
 | Feature folders         | Co-located code, but shared utilities must live outside `features/`                |
-| Mock AI provider        | Fast development without API costs, but doesn't test prompt quality                |
+| Provider chain fallback | Resilient AI generation, but adds complexity over a single-provider setup          |
+| SSE over WebSockets     | Simpler server implementation, but unidirectional (server → client only)           |
 
-## What I'd Do Differently
+## What I'd Do Next
 
-- **Start with integration tests** — the workflow engine and AI draft pipeline are complex enough to warrant test coverage from day one.
-- **Add SSE earlier** — real-time updates would have improved the development experience while building multi-agent ticket workflows.
-- **Use a monorepo tool** — as the codebase grows, separating the API and UI into packages would improve build times and dependency boundaries.
+- **Rate limiting** — protect API endpoints from abuse with per-user throttling.
+- **End-to-end tests** — add Playwright tests for critical user flows (login → triage → reply → resolve).
+- **Server-side session revocation** — add a blocklist to support forced logout.
+- **File attachments** — support image and document uploads on tickets.
 
 ## Stack
 
-Next.js 16 · TypeScript 5 · React 19 · MongoDB · Prisma 6 · Tailwind CSS 4 · Zod 4 · jose · OpenAI SDK 6 · Vitest 4
+Next.js 16 · TypeScript 5 · React 19 · MongoDB · Prisma 6 · Tailwind CSS 4 · Zod 4 · jose · bcryptjs · OpenAI SDK 6 · Vitest 4 · GitHub Actions · Docker
