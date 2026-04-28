@@ -105,6 +105,10 @@ export function TicketList() {
           </Link>
         ))}
 
+        <p className="text-sm text-slate-500">
+          {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} found
+        </p>
+
         {!loading && tickets.length === 0 && (
           <div className="p-6 text-center text-sm text-slate-500">
             No tickets found.
