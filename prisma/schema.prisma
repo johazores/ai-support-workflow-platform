@@ -79,3 +79,12 @@ model ActivityLog {
   message   String
   createdAt DateTime @default(now())
 }
+
+model AiUsageLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  provider  String
+  model     String
+  success   Boolean
+  error     String?
+  createdAt DateTime @default(now())
+}
