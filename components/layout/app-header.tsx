@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoutButton } from "@/features/auth/components/logout-button";
 import { CurrentUserBadge } from "@/features/auth/components/current-user-badge";
+import { NotificationBell } from "@/features/notifications/components/notification-bell";
 
 type AppHeaderProps = {
   user: {
@@ -46,6 +47,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
+          <NotificationBell />
           <CurrentUserBadge name={user.name} role={user.role} />
           <div className="h-5 w-px bg-slate-200" />
           <LogoutButton />
