@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { addInternalNote } from "@/features/tickets/services/ticket-client-service";
+import { MentionInput } from "@/features/tickets/components/mention-input";
 
 type InternalNoteComposerProps = {
   ticketId: string;
@@ -45,12 +45,11 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <TextArea
+        <MentionInput
           value={body}
-          onChange={(event) => setBody(event.target.value)}
+          onChange={setBody}
           rows={5}
-          placeholder="Write an internal note..."
-          fullWidth
+          placeholder="Write an internal note... use @ to mention teammates"
           aria-label="Internal note"
         />
 
