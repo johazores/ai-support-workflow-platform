@@ -32,7 +32,10 @@ export async function AiUsageLogList() {
             </div>
 
             <p className="mt-3 text-xs text-slate-400">
-              {log.createdAt.toLocaleString()}
+              {new Date(log.createdAt)
+                .toISOString()
+                .replace("T", " ")
+                .slice(0, 19)}
             </p>
           </article>
         ))}
