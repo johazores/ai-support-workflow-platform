@@ -40,7 +40,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
                 <h1 className="text-xl font-bold tracking-tight text-slate-950">
                   {ticket.subject}
                 </h1>
-                <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold uppercase text-slate-600">
                     {ticket.customer.name.charAt(0)}
                   </span>
@@ -48,6 +48,10 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
                   <span className="text-slate-300">&middot;</span>
                   <span className="text-slate-400">
                     {ticket.customer.email}
+                  </span>
+                  <span className="text-slate-300">&middot;</span>
+                  <span className="text-slate-400">
+                    {formatRelativeTime(String(ticket.createdAt))}
                   </span>
                 </div>
               </div>
@@ -169,9 +173,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
             <div className="flex items-center justify-between">
               <p className="text-slate-500">Priority</p>
-              <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize text-slate-700">
-                {ticket.priority}
-              </span>
+              <PriorityBadge priority={ticket.priority} />
             </div>
 
             <div className="border-t border-slate-100 pt-4">
@@ -218,11 +220,12 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
               <p className="text-sm text-slate-400">No activity yet.</p>
             )}
 
-            {ticket.activityLogs.map((log) => (
-              <div
-                key={log.id}
-                className="border-l-2 border-slate-200 pl-3 py-1"
-              >
+            {ticket.activityLogs.map((log, i) => (
+              <div key={log.id} className="relative pl-6 py-1">
+                <div className="absolute left-0 top-2.5 h-2 w-2 rounded-full bg-slate-300" />
+                {i < ticket.activityLogs.length - 1 && (
+                  <div className="absolute left-[3px] top-4.5 bottom-0 w-px bg-slate-200" />
+                )}
                 <p className="text-sm leading-snug text-slate-700">
                   {log.message}
                 </p>
@@ -235,5 +238,23 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
         </aside>
       </div>
     </div>
+  );
+}
+
+const priorityStyles: Record<string, string> = {
+  urgent: "bg-red-50 text-red-700 ring-red-200",
+  high: "bg-orange-50 text-orange-700 ring-orange-200",
+  normal: "bg-slate-100 text-slate-700 ring-slate-200",
+  low: "bg-slate-50 text-slate-500 ring-slate-200",
+};
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const style = priorityStyles[priority] ?? priorityStyles.normal;
+  return (
+    <span
+      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium capitalize ring-1 ${style}`}
+    >
+      {priority}
+    </span>
   );
 }
