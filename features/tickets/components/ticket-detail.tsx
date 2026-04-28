@@ -42,20 +42,43 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
         </div>
 
         <div className="divide-y">
-          {ticket.messages.map((message) => (
-            <article key={message.id} className="p-5">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium capitalize text-slate-700">
-                  {message.author}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {message.createdAt.toLocaleString()}
+          {ticket.messages.map((message) => {
+            const isCustomer = message.author === "customer";
+            const isSupport = message.author === "support";
+            const isNote = message.author === "note";
+
+            return (
+              <div
+                key={message.id}
+                className={`rounded-2xl border p-4 text-sm ${
+                  isCustomer
+                    ? "bg-white"
+                    : isSupport
+                      ? "bg-blue-50"
+                      : "bg-amber-50 border-amber-200"
+                }`}
+              >
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500">
+                    {isCustomer && "Customer"}
+                    {isSupport && "Support"}
+                    {isNote && "Internal Note"}
+                  </span>
+
+                  <span className="text-xs text-slate-400">
+                    {new Date(message.createdAt)
+                      .toISOString()
+                      .replace("T", " ")
+                      .slice(0, 19)}
+                  </span>
+                </div>
+
+                <p className="whitespace-pre-wrap text-slate-800">
+                  {message.body}
                 </p>
               </div>
-
-              <p className="text-sm leading-6 text-slate-700">{message.body}</p>
-            </article>
-          ))}
+            );
+          })}
         </div>
         {ticket.drafts.length > 0 && (
           <div className="border-t bg-slate-50 p-5">
