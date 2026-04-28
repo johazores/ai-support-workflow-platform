@@ -23,7 +23,9 @@ export async function addInternalNote(input: AddInternalNoteInput) {
     },
   });
 
-  broadcastTicketUpdate(input.ticketId, "message-created", { messageId: message.id });
+  broadcastTicketUpdate(input.ticketId, "message-created", {
+    messageId: message.id,
+  });
 
   return message;
 }

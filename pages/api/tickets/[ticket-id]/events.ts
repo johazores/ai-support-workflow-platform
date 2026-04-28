@@ -3,7 +3,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 // In-memory set of active SSE connections per ticket
 const ticketConnections = new Map<string, Set<NextApiResponse>>();
 
-export function broadcastTicketUpdate(ticketId: string, event: string, data: unknown) {
+export function broadcastTicketUpdate(
+  ticketId: string,
+  event: string,
+  data: unknown,
+) {
   const connections = ticketConnections.get(ticketId);
 
   if (!connections) return;

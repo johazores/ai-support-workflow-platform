@@ -38,13 +38,13 @@ All client-side API calls go through a single `apiClient<T>()` function that han
 
 ## Technical Tradeoffs
 
-| Decision | Tradeoff |
-|---|---|
+| Decision                | Tradeoff                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------- |
 | MongoDB over PostgreSQL | Flexible document model for JSON triggers/actions, but weaker relational integrity |
-| Pages Router for APIs | Familiar, explicit handlers, but two routing systems coexist |
-| JWT without revocation | Simple and stateless, but no server-side session invalidation without a blocklist |
-| Feature folders | Co-located code, but shared utilities must live outside `features/` |
-| Mock AI provider | Fast development without API costs, but doesn't test prompt quality |
+| Pages Router for APIs   | Familiar, explicit handlers, but two routing systems coexist                       |
+| JWT without revocation  | Simple and stateless, but no server-side session invalidation without a blocklist  |
+| Feature folders         | Co-located code, but shared utilities must live outside `features/`                |
+| Mock AI provider        | Fast development without API costs, but doesn't test prompt quality                |
 
 ## What I'd Do Differently
 

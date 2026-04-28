@@ -17,9 +17,7 @@ export function useTicketEvents({ ticketId, onEvent }: UseTicketEventsOptions) {
   onEventRef.current = onEvent;
 
   useEffect(() => {
-    const eventSource = new EventSource(
-      `/api/tickets/${ticketId}/events`,
-    );
+    const eventSource = new EventSource(`/api/tickets/${ticketId}/events`);
 
     eventSource.addEventListener("message-created", (e) => {
       onEventRef.current({ type: "message-created", data: JSON.parse(e.data) });

@@ -29,6 +29,7 @@
 **Context:** Components need data. API routes need business logic. We need to prevent tight coupling.
 
 **Decision:** Enforce three layers per feature:
+
 1. **Client services** — functions that call API endpoints via `apiClient()`
 2. **API route handlers** — validate input with Zod, call server services, return JSON
 3. **Server services** — execute business logic and Prisma queries

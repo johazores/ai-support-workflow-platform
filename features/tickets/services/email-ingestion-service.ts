@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
-import { notifyAssignee, notifyAdmins } from "@/features/notifications/services/notification-service";
+import {
+  notifyAssignee,
+  notifyAdmins,
+} from "@/features/notifications/services/notification-service";
 
 type InboundEmailInput = {
   from: string;

@@ -33,7 +33,9 @@ export async function sendManualReply(input: SendManualReplyInput) {
     },
   });
 
-  broadcastTicketUpdate(input.ticketId, "message-created", { messageId: message.id });
+  broadcastTicketUpdate(input.ticketId, "message-created", {
+    messageId: message.id,
+  });
 
   // Dispatch email to customer
   const ticket = await prisma.ticket.findUnique({

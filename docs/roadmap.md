@@ -23,18 +23,21 @@
 ## In Progress
 
 ### Email Integration (Track A)
+
 - [ ] Add email threading fields to message model
 - [ ] Inbound email webhook with HMAC signature verification
 - [ ] Outbound email via provider interface (console-log dev provider)
 - [ ] Wire replies to email sending pipeline
 
 ### Real-Time Updates (Track B)
+
 - [ ] SSE endpoint for live ticket updates
 - [ ] Client hook for auto-refresh on new messages
 - [ ] Notification model and service
 - [ ] Notification bell UI in header with unread count
 
 ### Ticket Management (Track C)
+
 - [ ] Tags model with ticket many-to-many relation
 - [ ] Tag CRUD API and picker UI
 - [ ] Tag filtering on ticket list
@@ -47,15 +50,18 @@
 ## Planned
 
 ### AI Enhancements
+
 - [ ] Multi-turn conversation context for draft generation
 - [ ] Sentiment analysis badge on tickets
 - [ ] AI confidence score display
 
 ### Analytics & Reporting
+
 - [ ] Dashboard with resolution time, ticket volume, agent performance metrics
 - [ ] Chart components for key metrics
 
 ### Production Readiness
+
 - [ ] Expanded test coverage (service + API route integration tests)
 - [ ] CI pipeline (GitHub Actions: lint, type-check, test)
 - [ ] Dockerfile and docker-compose for local development
