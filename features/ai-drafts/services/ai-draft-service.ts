@@ -44,6 +44,15 @@ export async function generateAiDraftReply(input: GenerateDraftInput) {
       },
     });
 
-    throw error;
+    return {
+      draft: `Hi ${input.customerName},
+
+Thanks for your message regarding "${input.subject}".
+
+We are currently reviewing your request and will get back to you shortly.
+
+Kind regards,
+Support Team`,
+    };
   }
 }
