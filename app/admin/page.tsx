@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/features/auth/services/auth-guard-service";
 import { LogoutButton } from "@/features/auth/components/logout-button";
-import { CurrentUserBadge } from "@/features/auth/components/current-user-badge";
+
 import { AppHeader } from "@/components/layout/app-header";
 export default async function AdminPage() {
   const user = await requireAdmin();
@@ -15,7 +15,7 @@ export default async function AdminPage() {
               <p className="text-sm font-medium text-slate-500">Admin</p>
               <h1 className="text-3xl font-bold text-slate-950">Dashboard</h1>
             </div>
-            <CurrentUserBadge name={user.name} role={user.role} />
+
             <LogoutButton />
           </div>
 
