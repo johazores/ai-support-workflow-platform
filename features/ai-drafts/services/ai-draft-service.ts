@@ -1,18 +1,6 @@
-type GenerateAiDraftInput = {
-  subject: string;
-  customerName: string;
-  customerMessage: string;
-};
+import { mockAiProvider } from "@/features/ai-drafts/services/mock-ai-provider";
+import type { GenerateDraftInput } from "@/features/ai-drafts/types/ai-provider";
 
-export async function generateAiDraftReply(input: GenerateAiDraftInput) {
-  return {
-    draft: `Hi ${input.customerName},
-
-Thanks for reaching out. I checked your message about "${input.subject}".
-
-I understand you are having trouble with this. I will review the account details and get back to you with the next steps shortly.
-
-Kind regards,
-Support Team`,
-  };
+export async function generateAiDraftReply(input: GenerateDraftInput) {
+  return mockAiProvider.generateDraft(input);
 }
