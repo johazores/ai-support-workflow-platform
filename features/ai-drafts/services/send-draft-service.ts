@@ -29,11 +29,28 @@ export async function sendDraft(input: SendDraftInput) {
     },
   });
 
+  await prisma.ticket.update({
+    where: {
+      id: draft.ticketId,
+    },
+    data: {
+      status: "pending",
+    },
+  });
+
   await prisma.activityLog.create({
     data: {
       ticketId: draft.ticketId,
       type: "reply_sent",
       message: "Support reply sent from saved draft.",
+    },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      ticketId: draft.ticketId,
+      type: "status_changed",
+      message: "Ticket status changed to pending after reply was sent.",
     },
   });
 
