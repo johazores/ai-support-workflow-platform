@@ -360,6 +360,44 @@ async function main() {
   console.log(
     "Seed complete: 2 users, 6 customers, 10 tickets, 3 workflow rules",
   );
+
+  // Seed SLA policies
+  const slaPolicies = [
+    {
+      name: "Urgent",
+      priority: "urgent",
+      firstResponseMinutes: 30,
+      resolutionMinutes: 240,
+    },
+    {
+      name: "High",
+      priority: "high",
+      firstResponseMinutes: 60,
+      resolutionMinutes: 480,
+    },
+    {
+      name: "Normal",
+      priority: "normal",
+      firstResponseMinutes: 240,
+      resolutionMinutes: 1440,
+    },
+    {
+      name: "Low",
+      priority: "low",
+      firstResponseMinutes: 480,
+      resolutionMinutes: 2880,
+    },
+  ];
+
+  for (const policy of slaPolicies) {
+    await prisma.slaPolicy.upsert({
+      where: { priority: policy.priority },
+      update: {},
+      create: policy,
+    });
+  }
+
+  console.log("Seed complete: 4 SLA policies");
 }
 
 main()

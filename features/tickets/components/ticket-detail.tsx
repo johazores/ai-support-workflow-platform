@@ -10,6 +10,7 @@ import { ReplyComposer } from "@/features/tickets/components/reply-composer";
 import { InternalNoteComposer } from "@/features/tickets/components/internal-note-composer";
 import { TicketLiveUpdates } from "@/features/tickets/components/ticket-live-updates";
 import { TagPicker } from "@/features/tags/components/tag-picker";
+import { SlaCountdown } from "@/features/sla/components/sla-countdown";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -191,6 +192,10 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
             <div className="border-t border-slate-100 pt-4">
               <TagPicker ticketId={ticket.id} initialTagIds={ticket.tagIds} />
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <SlaCountdown ticketId={ticket.id} />
             </div>
           </div>
         </aside>
