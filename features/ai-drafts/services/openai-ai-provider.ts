@@ -26,13 +26,24 @@ export const openAiProvider: AiDraftProvider = {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const response = await client.responses.create({
+    const response = await client.chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
-      input: buildPrompt(input),
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a helpful customer support assistant. Write concise, professional replies.",
+        },
+        { role: "user", content: buildPrompt(input) },
+      ],
     });
 
-    return {
-      draft: response.output_text,
-    };
+    const draft = response.choices[0]?.message?.content;
+
+    if (!draft) {
+      throw new Error("OpenAI returned an empty response");
+    }
+
+    return { draft };
   },
 };
