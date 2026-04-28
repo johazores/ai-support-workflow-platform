@@ -13,15 +13,27 @@ import type {
 } from "@/features/tickets/types/ticket";
 import { highlightText } from "@/features/tickets/utils/highlight-text";
 import { fetchTickets } from "@/features/tickets/services/ticket-client-service";
+import { fetchTags } from "@/features/tags/services/tag-client-service";
+import { TagBadge } from "@/features/tags/components/tag-badge";
+
+type Tag = { id: string; name: string; color: string };
 
 const ticketStatuses: TicketStatus[] = ["open", "pending", "closed"];
 
 export function TicketList() {
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<TicketStatus | "">("");
+  const [tagFilter, setTagFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchTags()
+      .then(setAllTags)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     async function loadTickets() {
@@ -46,6 +58,12 @@ export function TicketList() {
 
     return () => clearTimeout(timeout);
   }, [search, status]);
+
+  const filteredTickets = tagFilter
+    ? tickets.filter((t) => t.tagIds.includes(tagFilter))
+    : tickets;
+
+  const tagMap = new Map(allTags.map((t) => [t.id, t]));
 
   return (
     <div className="space-y-4">
@@ -72,11 +90,26 @@ export function TicketList() {
             </option>
           ))}
         </Select>
+        {allTags.length > 0 && (
+          <Select
+            value={tagFilter}
+            onChange={(event) => setTagFilter(event.target.value)}
+            className="w-32"
+          >
+            <option value="">All Tags</option>
+            {allTags.map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.name}
+              </option>
+            ))}
+          </Select>
+        )}
         <Button
           variant="secondary"
           onClick={() => {
             setSearch("");
             setStatus("");
+            setTagFilter("");
           }}
         >
           Clear
@@ -95,7 +128,7 @@ export function TicketList() {
       )}
 
       <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-        {tickets.map((ticket) => (
+        {filteredTickets.map((ticket) => (
           <Link
             key={ticket.id}
             href={`/inbox/${ticket.id}`}
@@ -112,6 +145,21 @@ export function TicketList() {
                   <span className="mx-1.5 text-slate-300">&middot;</span>
                   {highlightText(ticket.customerEmail, search)}
                 </p>
+
+                {ticket.tagIds.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {ticket.tagIds.map((tagId) => {
+                      const tag = tagMap.get(tagId);
+                      return tag ? (
+                        <TagBadge
+                          key={tagId}
+                          name={tag.name}
+                          color={tag.color}
+                        />
+                      ) : null;
+                    })}
+                  </div>
+                )}
               </div>
 
               <StatusBadge status={ticket.status} />
@@ -119,13 +167,14 @@ export function TicketList() {
           </Link>
         ))}
 
-        {!loading && tickets.length > 0 && (
+        {!loading && filteredTickets.length > 0 && (
           <div className="px-4 py-3 text-center text-xs font-medium text-slate-500">
-            {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} found
+            {filteredTickets.length}{" "}
+            {filteredTickets.length === 1 ? "ticket" : "tickets"} found
           </div>
         )}
 
-        {!loading && tickets.length === 0 && (
+        {!loading && filteredTickets.length === 0 && (
           <div className="p-8 text-center">
             <p className="text-sm text-slate-600">No tickets found.</p>
           </div>

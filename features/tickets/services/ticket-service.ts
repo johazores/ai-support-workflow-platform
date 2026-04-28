@@ -204,6 +204,7 @@ function mapTicketSummary(ticket: TicketWithSummaryRelations): TicketSummary {
     customerName: ticket.customer.name,
     customerEmail: ticket.customer.email,
     preview: ticket.messages[0]?.body ?? "No messages yet.",
+    tagIds: ticket.tagIds,
     updatedAt: ticket.updatedAt.toISOString(),
   };
 }

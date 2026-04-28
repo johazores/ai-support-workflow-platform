@@ -10,5 +10,6 @@ export type TicketSummary = {
   customerName: string;
   customerEmail: string;
   preview: string;
+  tagIds: string[];
   updatedAt: string;
 };
