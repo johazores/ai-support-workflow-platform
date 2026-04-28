@@ -4,6 +4,7 @@ import {
   notifyAssignee,
   notifyAdmins,
 } from "@/features/notifications/services/notification-service";
+import { classifyTicket } from "@/features/ai-drafts/services/classification-service";
 
 type InboundEmailInput = {
   from: string;
@@ -55,6 +56,9 @@ export async function processInboundEmail(input: InboundEmailInput) {
     });
 
     ticketId = ticket.id;
+
+    // Auto-classify new tickets by priority
+    await classifyTicket(ticketId, input.subject, input.body);
   }
 
   // Create the message
