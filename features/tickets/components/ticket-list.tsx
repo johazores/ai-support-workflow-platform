@@ -77,6 +77,16 @@ export function TicketList() {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => {
+            setSearch("");
+            setStatus("");
+          }}
+          className="rounded-xl border px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+        >
+          Clear
+        </button>
       </div>
 
       {loading && <p className="text-sm text-slate-500">Loading...</p>}
