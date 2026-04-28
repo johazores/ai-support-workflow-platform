@@ -25,10 +25,13 @@ jobs:
         run: npx prisma generate
 
       - name: Type Check
-        run: npx tsc --noEmit
+        run: npm run type-check
 
       - name: Lint
         run: npx eslint . --max-warnings 0
+
+      - name: Format Check
+        run: npm run format:check
 
   test:
     name: Tests
