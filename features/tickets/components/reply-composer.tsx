@@ -39,9 +39,7 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
     <Card>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-950">
-            Manual Reply
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-950">Manual Reply</h2>
           <p className="mt-1 text-xs text-slate-500">
             Write and send a support reply without using AI.
           </p>

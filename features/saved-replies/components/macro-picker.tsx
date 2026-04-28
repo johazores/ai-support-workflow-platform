@@ -37,7 +37,9 @@ export function MacroPicker({ onSelect, context }: MacroPickerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchSavedReplies().then(setReplies).catch(() => {});
+    fetchSavedReplies()
+      .then(setReplies)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

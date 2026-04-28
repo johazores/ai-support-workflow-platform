@@ -4,6 +4,7 @@ export async function generateDraft(params: {
   subject: string;
   customerName: string;
   customerMessage: string;
+  tone?: string;
 }): Promise<string> {
   const result = await apiClient<{ data: { draft: string } }>(
     "/api/ai-drafts/generate",

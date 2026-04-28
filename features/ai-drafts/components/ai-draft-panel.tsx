@@ -4,10 +4,13 @@ import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { Select } from "@/components/ui/select";
 import {
   generateDraft,
   saveDraft,
 } from "@/features/ai-drafts/services/ai-draft-client-service";
+
+type Tone = "professional" | "friendly" | "concise" | "empathetic";
 
 type AiDraftPanelProps = {
   ticketId: string;
@@ -23,6 +26,7 @@ export function AiDraftPanel({
   customerMessage,
 }: AiDraftPanelProps) {
   const [draft, setDraft] = useState("");
+  const [tone, setTone] = useState<Tone>("professional");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [messageType, setMessageType] = useState<"success" | "error" | null>(
@@ -44,6 +48,7 @@ export function AiDraftPanel({
         subject,
         customerName,
         customerMessage,
+        tone,
       });
 
       setDraft(result);
@@ -85,6 +90,22 @@ export function AiDraftPanel({
       </div>
 
       <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Tone
+          </label>
+          <Select
+            value={tone}
+            onChange={(e) => setTone(e.target.value as Tone)}
+            className="w-full"
+          >
+            <option value="professional">Professional</option>
+            <option value="friendly">Friendly</option>
+            <option value="concise">Concise</option>
+            <option value="empathetic">Empathetic</option>
+          </Select>
+        </div>
+
         <Button
           fullWidth
           disabled={isGenerating}

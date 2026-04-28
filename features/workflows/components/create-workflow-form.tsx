@@ -13,7 +13,11 @@ import { createWorkflow } from "@/features/workflows/services/workflow-client-se
 
 type WorkflowField = "subject" | "priority" | "status";
 type WorkflowOperator = "equals" | "contains";
-type WorkflowActionType = "change-status" | "assign-ticket" | "generate-draft" | "add-tag";
+type WorkflowActionType =
+  | "change-status"
+  | "assign-ticket"
+  | "generate-draft"
+  | "add-tag";
 
 export function CreateWorkflowForm() {
   const router = useRouter();

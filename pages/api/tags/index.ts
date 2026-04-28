@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
-import {
-  getAllTags,
-  createTag,
-} from "@/features/tags/services/tag-service";
+import { getAllTags, createTag } from "@/features/tags/services/tag-service";
 
 const createTagSchema = z.object({
   name: z.string().min(1).max(30),

@@ -6,6 +6,9 @@ const generateDraftSchema = z.object({
   subject: z.string().min(1),
   customerName: z.string().min(1),
   customerMessage: z.string().min(1),
+  tone: z
+    .enum(["professional", "friendly", "concise", "empathetic"])
+    .optional(),
 });
 
 export default async function handler(
