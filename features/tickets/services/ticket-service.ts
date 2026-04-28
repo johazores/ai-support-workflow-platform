@@ -117,6 +117,7 @@ export async function assignTicket(input: AssignTicketInput) {
 type GetTicketsInput = {
   search?: string;
   status?: TicketStatus;
+  priority?: string;
   cursor?: string;
   limit?: number;
 };
@@ -136,6 +137,10 @@ export async function getTickets(
 
   if (input?.status) {
     where.status = input.status;
+  }
+
+  if (input?.priority) {
+    where.priority = input.priority;
   }
 
   if (input?.search) {

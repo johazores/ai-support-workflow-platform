@@ -9,6 +9,7 @@ type FetchTicketsResult = {
 export async function fetchTickets(params: {
   search?: string;
   status?: string;
+  priority?: string;
   cursor?: string;
   limit?: number;
 }): Promise<FetchTicketsResult> {
@@ -16,6 +17,7 @@ export async function fetchTickets(params: {
 
   if (params.search) query.append("search", params.search);
   if (params.status) query.append("status", params.status);
+  if (params.priority) query.append("priority", params.priority);
   if (params.cursor) query.append("cursor", params.cursor);
   if (params.limit) query.append("limit", String(params.limit));
 

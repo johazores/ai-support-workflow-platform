@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { EmptyState } from "@/components/ui/empty-state";
 import type {
+  TicketPriority,
   TicketStatus,
   TicketSummary,
 } from "@/features/tickets/types/ticket";
@@ -20,12 +21,14 @@ import { TagBadge } from "@/features/tags/components/tag-badge";
 type Tag = { id: string; name: string; color: string };
 
 const ticketStatuses: TicketStatus[] = ["open", "pending", "closed"];
+const ticketPriorities: TicketPriority[] = ["low", "normal", "high"];
 
 export function TicketList() {
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<TicketStatus | "">("");
+  const [priority, setPriority] = useState<TicketPriority | "">("");
   const [tagFilter, setTagFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -47,6 +50,7 @@ export function TicketList() {
         const result = await fetchTickets({
           search: search || undefined,
           status: status || undefined,
+          priority: priority || undefined,
         });
 
         setTickets(result.tickets);
@@ -61,7 +65,7 @@ export function TicketList() {
     const timeout = setTimeout(loadTickets, 300);
 
     return () => clearTimeout(timeout);
-  }, [search, status]);
+  }, [search, status, priority]);
 
   const filteredTickets = tagFilter
     ? tickets.filter((t) => t.tagIds.includes(tagFilter))
@@ -77,6 +81,7 @@ export function TicketList() {
       const result = await fetchTickets({
         search: search || undefined,
         status: status || undefined,
+        priority: priority || undefined,
         cursor: nextCursor,
       });
 
@@ -116,6 +121,21 @@ export function TicketList() {
             </option>
           ))}
         </Select>
+        <Select
+          value={priority}
+          onChange={(event) =>
+            setPriority(event.target.value as TicketPriority | "")
+          }
+          className="w-32"
+          aria-label="Filter by priority"
+        >
+          <option value="">All Priority</option>
+          {ticketPriorities.map((p) => (
+            <option key={p} value={p}>
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </option>
+          ))}
+        </Select>
         {allTags.length > 0 && (
           <Select
             value={tagFilter}
@@ -136,6 +156,7 @@ export function TicketList() {
           onClick={() => {
             setSearch("");
             setStatus("");
+            setPriority("");
             setTagFilter("");
           }}
         >

@@ -26,14 +26,20 @@ export default async function handler(
     const auth = await requireApiAuth(req, res);
     if (!auth.ok) return;
 
-    const { search, status, cursor, limit } = req.query;
+    const { search, status, priority, cursor, limit } = req.query;
 
     const searchStr =
       typeof search === "string" ? search.slice(0, 200) : undefined;
+    const priorityStr =
+      typeof priority === "string" &&
+      ["low", "normal", "high"].includes(priority)
+        ? priority
+        : undefined;
 
     const result = await getTickets({
       search: searchStr || undefined,
       status: parseStatus(status),
+      priority: priorityStr,
       cursor: typeof cursor === "string" ? cursor : undefined,
       limit: typeof limit === "string" ? parseInt(limit, 10) : undefined,
     });
