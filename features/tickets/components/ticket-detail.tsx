@@ -3,6 +3,7 @@ import { getTicketById } from "@/features/tickets/services/ticket-service";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
 import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
 import { CustomerHistory } from "@/features/customers/components/customer-history";
+import { CsatWidget } from "@/features/csat/components/csat-widget";
 import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
 import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assignee-select";
 import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-button";
@@ -210,6 +211,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           customerMessage={ticket.messages.at(-1)?.body ?? ""}
         />
         <RunWorkflowButton ticketId={ticket.id} />
+        <CsatWidget ticketId={ticket.id} ticketStatus={ticket.status} />
         <CustomerHistory
           customerId={ticket.customerId}
           currentTicketId={ticket.id}

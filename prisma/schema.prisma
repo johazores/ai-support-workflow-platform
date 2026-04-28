@@ -159,3 +159,11 @@ model SlaPolicy {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
+
+model CsatRating {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId  String   @unique @db.ObjectId
+  score     Int
+  comment   String?
+  createdAt DateTime @default(now())
+}
