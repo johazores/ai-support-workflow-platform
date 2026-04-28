@@ -5,8 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Alert } from "@/components/ui/alert";
-import { useAsyncAction } from "@/lib/use-async-action";
+import { useToast } from "@/components/ui/toast";
 import { addInternalNote } from "@/features/tickets/services/ticket-client-service";
 
 type InternalNoteComposerProps = {
@@ -16,21 +15,23 @@ type InternalNoteComposerProps = {
 export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
-  const { isLoading, message, messageType, execute, clearMessage } =
-    useAsyncAction();
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!body.trim()) return;
 
-    const success = await execute(async () => {
+    setIsLoading(true);
+    try {
       await addInternalNote(ticketId, body);
-      return "Internal note added successfully.";
-    }, "Failed to add internal note. Please try again.");
-
-    if (success) {
+      toast("Internal note added.");
       setBody("");
       router.refresh();
+    } catch {
+      toast("Failed to add note. Please try again.", "error");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -51,12 +52,6 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
           placeholder="Write an internal note..."
           fullWidth
         />
-
-        {messageType && (
-          <Alert type={messageType} dismissible onDismiss={clearMessage}>
-            {message}
-          </Alert>
-        )}
 
         <Button
           type="submit"

@@ -5,8 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Alert } from "@/components/ui/alert";
-import { useAsyncAction } from "@/lib/use-async-action";
+import { useToast } from "@/components/ui/toast";
 import { sendReply } from "@/features/tickets/services/ticket-client-service";
 import { MacroPicker } from "@/features/saved-replies/components/macro-picker";
 
@@ -17,21 +16,23 @@ type ReplyComposerProps = {
 export function ReplyComposer({ ticketId }: ReplyComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
-  const { isLoading, message, messageType, execute, clearMessage } =
-    useAsyncAction();
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!body.trim()) return;
 
-    const success = await execute(async () => {
+    setIsLoading(true);
+    try {
       await sendReply(ticketId, body);
-      return "Reply sent successfully.";
-    }, "Failed to send reply. Please try again.");
-
-    if (success) {
+      toast("Reply sent successfully.");
       setBody("");
       router.refresh();
+    } catch {
+      toast("Failed to send reply. Please try again.", "error");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -55,12 +56,6 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
           placeholder="Write your reply..."
           fullWidth
         />
-
-        {messageType && (
-          <Alert type={messageType} dismissible onDismiss={clearMessage}>
-            {message}
-          </Alert>
-        )}
 
         <Button
           type="submit"

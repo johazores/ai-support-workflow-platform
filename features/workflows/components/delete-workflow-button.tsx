@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { deleteWorkflow } from "@/features/workflows/services/workflow-client-service";
 
 type DeleteWorkflowButtonProps = {
@@ -14,6 +15,7 @@ export function DeleteWorkflowButton({
 }: DeleteWorkflowButtonProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
 
   async function handleDelete() {
     if (!window.confirm("Are you sure you want to delete this workflow?"))
@@ -23,9 +25,10 @@ export function DeleteWorkflowButton({
 
     try {
       await deleteWorkflow(workflowId);
+      toast("Workflow deleted.");
       router.refresh();
     } catch {
-      alert("Failed to delete workflow.");
+      toast("Failed to delete workflow.", "error");
     } finally {
       setIsDeleting(false);
     }

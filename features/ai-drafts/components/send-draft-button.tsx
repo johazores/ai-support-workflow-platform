@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { sendDraft } from "@/features/ai-drafts/services/ai-draft-client-service";
 
 type SendDraftButtonProps = {
@@ -13,16 +14,17 @@ export function SendDraftButton({ draftId }: SendDraftButtonProps) {
   const router = useRouter();
   const [isSending, setIsSending] = useState(false);
 
-  async function handleSend() {
-    if (!window.confirm("Send this draft as a reply?")) return;
+  const { toast } = useToast();
 
+  async function handleSend() {
     setIsSending(true);
 
     try {
       await sendDraft(draftId);
+      toast("Draft sent as reply.");
       router.refresh();
     } catch {
-      alert("Failed to send draft. Please try again.");
+      toast("Failed to send draft. Please try again.", "error");
     } finally {
       setIsSending(false);
     }

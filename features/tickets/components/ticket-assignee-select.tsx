@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Select } from "@/components/ui/select";
-import { Alert } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/toast";
 import { assignTicket } from "@/features/tickets/services/ticket-client-service";
 
 const assignees = [
@@ -26,7 +26,7 @@ export function TicketAssigneeSelect({
     assigneeEmail ?? "",
   );
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function handleChange(nextAssigneeEmail: string) {
     const assignee = assignees.find((item) => item.email === nextAssigneeEmail);
@@ -34,7 +34,6 @@ export function TicketAssigneeSelect({
 
     setCurrentAssigneeEmail(nextAssigneeEmail);
     setIsSaving(true);
-    setError("");
 
     try {
       await assignTicket(
@@ -42,10 +41,11 @@ export function TicketAssigneeSelect({
         assignee?.name ?? null,
         assignee?.email ?? null,
       );
+      toast(assignee ? `Assigned to ${assignee.name}.` : "Unassigned.");
       router.refresh();
     } catch {
       setCurrentAssigneeEmail(assigneeEmail ?? "");
-      setError("Failed to assign ticket. Please try again.");
+      toast("Failed to assign ticket.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -68,17 +68,6 @@ export function TicketAssigneeSelect({
           </option>
         ))}
       </Select>
-
-      {error && (
-        <Alert
-          type="error"
-          dismissible
-          onDismiss={() => setError("")}
-          className="mt-3"
-        >
-          {error}
-        </Alert>
-      )}
 
       {isSaving && (
         <p className="mt-2 text-xs text-slate-400 animate-pulse">Saving...</p>
