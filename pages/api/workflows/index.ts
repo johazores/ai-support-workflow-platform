@@ -9,7 +9,7 @@ const triggerSchema = z.object({
 });
 
 const actionSchema = z.object({
-  type: z.enum(["change-status", "assign-ticket", "generate-draft"]),
+  type: z.enum(["change-status", "assign-ticket", "generate-draft", "add-tag"]),
   value: z.string().min(1),
 });
 

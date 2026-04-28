@@ -13,7 +13,7 @@ import { createWorkflow } from "@/features/workflows/services/workflow-client-se
 
 type WorkflowField = "subject" | "priority" | "status";
 type WorkflowOperator = "equals" | "contains";
-type WorkflowActionType = "change-status" | "assign-ticket" | "generate-draft";
+type WorkflowActionType = "change-status" | "assign-ticket" | "generate-draft" | "add-tag";
 
 export function CreateWorkflowForm() {
   const router = useRouter();
@@ -133,6 +133,7 @@ export function CreateWorkflowForm() {
               <option value="change-status">Change Status</option>
               <option value="assign-ticket">Assign Ticket</option>
               <option value="generate-draft">Generate Draft</option>
+              <option value="add-tag">Add Tag</option>
             </Select>
 
             <Input

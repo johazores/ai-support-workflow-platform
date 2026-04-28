@@ -5,7 +5,7 @@ export type WorkflowTrigger = {
 };
 
 export type WorkflowAction = {
-  type: "change-status" | "assign-ticket" | "generate-draft";
+  type: "change-status" | "assign-ticket" | "generate-draft" | "add-tag";
   value: string;
 };
 
@@ -16,6 +16,7 @@ const validWorkflowActionTypes = [
   "change-status",
   "assign-ticket",
   "generate-draft",
+  "add-tag",
 ] as const;
 
 export function isWorkflowTrigger(value: unknown): value is WorkflowTrigger {

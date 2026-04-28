@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
+import { addTagToTicket } from "@/features/tags/services/tag-service";
 
 type WorkflowAction = {
-  type: "change-status" | "assign-ticket" | "generate-draft";
+  type: "change-status" | "assign-ticket" | "generate-draft" | "add-tag";
   value: string;
 };
 
@@ -21,6 +22,7 @@ const validWorkflowActionTypes = [
   "change-status",
   "assign-ticket",
   "generate-draft",
+  "add-tag",
 ] as const;
 
 function isWorkflowTrigger(value: unknown): value is WorkflowTrigger {
@@ -196,6 +198,11 @@ export async function executeWorkflowRules(
         });
 
         executedActions.push("Generated AI draft");
+      }
+
+      if (action.type === "add-tag") {
+        await addTagToTicket(ticketId, action.value);
+        executedActions.push(`Added tag ${action.value}`);
       }
     }
 
