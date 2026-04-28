@@ -2,6 +2,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { getTicketById } from "@/features/tickets/services/ticket-service";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
 import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
+import { CustomerHistory } from "@/features/customers/components/customer-history";
 import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
 import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assignee-select";
 import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-button";
@@ -209,6 +210,10 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           customerMessage={ticket.messages.at(-1)?.body ?? ""}
         />
         <RunWorkflowButton ticketId={ticket.id} />
+        <CustomerHistory
+          customerId={ticket.customerId}
+          currentTicketId={ticket.id}
+        />
 
         <aside className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
