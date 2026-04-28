@@ -35,6 +35,7 @@ model Ticket {
   customer   Customer  @relation(fields: [customerId], references: [id])
   assigneeName  String?
   assigneeEmail String?
+  tagIds     String[]  @db.ObjectId
   messages   Message[]
   drafts     Draft[]
   activityLogs ActivityLog[]
@@ -110,5 +111,12 @@ model Notification {
   message   String
   ticketId  String?  @db.ObjectId
   isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Tag {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @unique
+  color     String   @default("slate")
   createdAt DateTime @default(now())
 }
