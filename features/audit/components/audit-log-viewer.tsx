@@ -49,23 +49,33 @@ export function AuditLogViewer() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
 
-    const query = new URLSearchParams();
-    if (typeFilter) query.append("type", typeFilter);
+    async function fetchLogs() {
+      const query = new URLSearchParams();
+      if (typeFilter) query.append("type", typeFilter);
 
-    apiClient<{
-      logs: AuditLogEntry[];
-      nextCursor: string | null;
-      total: number;
-    }>(`/api/audit-logs?${query}`)
-      .then((res) => {
-        setLogs(res.logs);
-        setNextCursor(res.nextCursor);
-        setTotal(res.total);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      try {
+        const res = await apiClient<{
+          logs: AuditLogEntry[];
+          nextCursor: string | null;
+          total: number;
+        }>(`/api/audit-logs?${query}`);
+        if (!cancelled) {
+          setLogs(res.logs);
+          setNextCursor(res.nextCursor);
+          setTotal(res.total);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchLogs();
+    return () => {
+      cancelled = true;
+    };
   }, [typeFilter]);
 
   async function loadMore() {

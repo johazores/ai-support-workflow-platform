@@ -14,7 +14,9 @@ type UseTicketEventsOptions = {
 
 export function useTicketEvents({ ticketId, onEvent }: UseTicketEventsOptions) {
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  });
 
   useEffect(() => {
     const eventSource = new EventSource(`/api/tickets/${ticketId}/events`);
