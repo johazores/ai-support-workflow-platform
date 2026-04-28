@@ -19,6 +19,14 @@ function getAiProvider() {
   };
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unknown error";
+}
+
 export async function generateAiDraftReply(input: GenerateDraftInput) {
   const { name, model, provider } = getAiProvider();
 
@@ -34,13 +42,13 @@ export async function generateAiDraftReply(input: GenerateDraftInput) {
     });
 
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     await prisma.aiUsageLog.create({
       data: {
         provider: name,
         model,
         success: false,
-        error: error?.message ?? "Unknown error",
+        error: getErrorMessage(error),
       },
     });
 
