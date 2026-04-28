@@ -247,6 +247,33 @@ export default async function AdminPage() {
                 Browse and search the customer directory.
               </p>
             </Link>
+
+            <Link
+              href="/admin/email-logs"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
+            >
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-100">
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+                  />
+                </svg>
+              </div>
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
+                Email Logs
+              </h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Track sent emails and delivery status.
+              </p>
+            </Link>
           </div>
         </section>
       </main>
