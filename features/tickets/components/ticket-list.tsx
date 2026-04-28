@@ -7,6 +7,7 @@ import type {
   TicketStatus,
   TicketSummary,
 } from "@/features/tickets/types/ticket";
+import { highlightText } from "@/features/tickets/utils/highlight-text";
 
 const ticketStatuses: TicketStatus[] = ["open", "pending", "closed"];
 
@@ -102,11 +103,12 @@ export function TicketList() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-slate-900">
-                  {ticket.subject}
+                  {highlightText(ticket.subject, search)}
                 </h3>
 
                 <p className="text-sm text-slate-500">
-                  {ticket.customerName} · {ticket.customerEmail}
+                  {highlightText(ticket.customerName, search)} ·{" "}
+                  {highlightText(ticket.customerEmail, search)}
                 </p>
               </div>
 
