@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { apiClient } from "@/lib/api-client";
+import { formatShortDateTime } from "@/lib/utils";
 
 type AuditLogEntry = {
   id: string;
@@ -14,16 +15,6 @@ type AuditLogEntry = {
   message: string;
   createdAt: string;
 };
-
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 const typeColors: Record<string, string> = {
   "status-change": "bg-blue-100 text-blue-700",
@@ -141,7 +132,7 @@ export function AuditLogViewer() {
               {logs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50/50">
                   <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">
-                    {formatTime(log.createdAt)}
+                    {formatShortDateTime(log.createdAt)}
                   </td>
                   <td className="px-4 py-2.5">
                     <span

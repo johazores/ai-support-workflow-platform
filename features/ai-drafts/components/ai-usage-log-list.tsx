@@ -1,4 +1,5 @@
 import { getAiUsageLogs } from "@/features/ai-drafts/services/ai-usage-query-service";
+import { formatDateTime } from "@/lib/utils";
 
 export async function AiUsageLogList() {
   const logs = await getAiUsageLogs();
@@ -38,10 +39,7 @@ export async function AiUsageLogList() {
             </div>
 
             <p className="mt-3 text-xs text-slate-400">
-              {new Date(log.createdAt)
-                .toISOString()
-                .replace("T", " ")
-                .slice(0, 19)}
+              {formatDateTime(String(log.createdAt))}
             </p>
           </article>
         ))}

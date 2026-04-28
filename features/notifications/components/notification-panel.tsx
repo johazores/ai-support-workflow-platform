@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatRelativeTime } from "@/lib/utils";
 
 type Notification = {
   id: string;
@@ -56,7 +57,7 @@ export function NotificationPanel({ notifications }: NotificationPanelProps) {
 
                 <div className="mt-1.5 flex items-center gap-2">
                   <span className="text-[10px] text-slate-400">
-                    {formatTime(notification.createdAt)}
+                    {formatRelativeTime(notification.createdAt)}
                   </span>
 
                   {notification.ticketId && (
@@ -75,20 +76,4 @@ export function NotificationPanel({ notifications }: NotificationPanelProps) {
       </div>
     </div>
   );
-}
-
-function formatTime(dateString: string) {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60_000);
-
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
 }

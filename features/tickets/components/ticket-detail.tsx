@@ -11,6 +11,7 @@ import { InternalNoteComposer } from "@/features/tickets/components/internal-not
 import { TicketLiveUpdates } from "@/features/tickets/components/ticket-live-updates";
 import { TagPicker } from "@/features/tags/components/tag-picker";
 import { SlaCountdown } from "@/features/sla/components/sla-countdown";
+import { formatDateTime, formatRelativeTime } from "@/lib/utils";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -101,10 +102,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
                     </span>
 
                     <span className="ml-auto text-xs text-slate-400">
-                      {new Date(message.createdAt)
-                        .toISOString()
-                        .replace("T", " ")
-                        .slice(0, 19)}
+                      {formatRelativeTime(String(message.createdAt))}
                     </span>
                   </div>
 
@@ -134,7 +132,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
                     <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-50 pt-3">
                       <p className="text-xs text-slate-400">
-                        Saved {draft.updatedAt.toLocaleString()}
+                        Saved {formatDateTime(String(draft.updatedAt))}
                       </p>
 
                       <SendDraftButton draftId={draft.id} />
@@ -229,7 +227,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
                   {log.message}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-400">
-                  {log.createdAt.toLocaleString()}
+                  {formatRelativeTime(String(log.createdAt))}
                 </p>
               </div>
             ))}
