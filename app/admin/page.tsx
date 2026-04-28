@@ -70,17 +70,17 @@ export default async function AdminPage() {
             </Link>
 
             {hasPermission(user.role, "audit-logs:read") && (
-            <Link
-              href="/admin/audit-logs"
-              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
-            >
-              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
-                Audit Logs
-              </h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Activity history across all tickets.
-              </p>
-            </Link>
+              <Link
+                href="/admin/audit-logs"
+                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+              >
+                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                  Audit Logs
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Activity history across all tickets.
+                </p>
+              </Link>
             )}
           </div>
         </section>
