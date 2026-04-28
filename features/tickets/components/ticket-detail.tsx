@@ -227,9 +227,11 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
             {ticket.activityLogs.map((log, i) => (
               <div key={log.id} className="relative pl-6 py-1">
-                <div className="absolute left-0 top-2.5 h-2 w-2 rounded-full bg-slate-300" />
+                <div
+                  className={`absolute left-0 top-2.5 h-2 w-2 rounded-full ${activityDotColor(log.type)}`}
+                />
                 {i < ticket.activityLogs.length - 1 && (
-                  <div className="absolute left-[3px] top-4.5 bottom-0 w-px bg-slate-200" />
+                  <div className="absolute left-[3px] top-4.5 bottom-0 w-px bg-slate-200 dark:bg-slate-600" />
                 )}
                 <p className="text-sm leading-snug text-slate-700">
                   {log.message}
@@ -262,4 +264,18 @@ function PriorityBadge({ priority }: { priority: string }) {
       {priority}
     </span>
   );
+}
+
+const activityDotColors: Record<string, string> = {
+  status_changed: "bg-blue-400",
+  reply_sent: "bg-green-400",
+  internal_note_added: "bg-amber-400",
+  ticket_assigned: "bg-purple-400",
+  workflow_executed: "bg-indigo-400",
+  "customer-reply": "bg-teal-400",
+  "new-ticket": "bg-emerald-400",
+};
+
+function activityDotColor(type: string): string {
+  return activityDotColors[type] ?? "bg-slate-300";
 }
