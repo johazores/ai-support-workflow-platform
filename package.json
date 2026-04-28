@@ -18,6 +18,7 @@
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.3",
+    "jose": "^6.2.3",
     "next": "16.2.4",
     "openai": "^6.34.0",
     "prisma": "^6.16.2",

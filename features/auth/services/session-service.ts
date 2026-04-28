@@ -1,7 +1,18 @@
 import type { NextApiResponse } from "next";
 import { cookies } from "next/headers";
+import { SignJWT, jwtVerify } from "jose";
 
 const sessionCookieName = "support_session";
+
+function getSecret() {
+  const secret = process.env.SESSION_SECRET;
+
+  if (!secret) {
+    throw new Error("SESSION_SECRET environment variable is required");
+  }
+
+  return new TextEncoder().encode(secret);
+}
 
 type SessionUser = {
   id: string;
@@ -10,28 +21,47 @@ type SessionUser = {
   role: string;
 };
 
-export function createSessionValue(user: SessionUser) {
-  return Buffer.from(JSON.stringify(user)).toString("base64");
+export async function createSessionValue(user: SessionUser) {
+  return new SignJWT({
+    sub: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("24h")
+    .sign(getSecret());
 }
 
-export function parseSessionValue(value?: string): SessionUser | null {
+export async function parseSessionValue(
+  value?: string,
+): Promise<SessionUser | null> {
   if (!value) return null;
 
   try {
-    const decoded = Buffer.from(value, "base64").toString("utf-8");
+    const { payload } = await jwtVerify(value, getSecret());
 
-    return JSON.parse(decoded) as SessionUser;
+    return {
+      id: payload.sub as string,
+      name: payload.name as string,
+      email: payload.email as string,
+      role: payload.role as string,
+    };
   } catch {
     return null;
   }
 }
 
-export function setSessionCookie(res: NextApiResponse, user: SessionUser) {
+export async function setSessionCookie(
+  res: NextApiResponse,
+  user: SessionUser,
+) {
+  const token = await createSessionValue(user);
+
   res.setHeader(
     "Set-Cookie",
-    `${sessionCookieName}=${createSessionValue(
-      user,
-    )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+    `${sessionCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
   );
 }
 

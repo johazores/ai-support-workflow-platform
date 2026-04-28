@@ -34,7 +34,7 @@ export default async function handler(
     });
   }
 
-  setSessionCookie(res, user);
+  await setSessionCookie(res, user);
 
   return res.status(200).json({
     data: user,
