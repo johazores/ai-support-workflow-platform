@@ -15,11 +15,11 @@ export default async function TicketPage({ params }: TicketPageProps) {
   return (
     <>
       <AppHeader user={user} />
-      <main className="min-h-screen bg-slate-50 px-6 py-10">
+      <main className="min-h-screen bg-slate-50 px-6 py-10 dark:bg-slate-900">
         <section className="mx-auto max-w-6xl">
           <Link
             href="/inbox"
-            className="mb-8 inline-flex items-center gap-1 text-sm font-medium text-slate-500 transition-colors hover:text-slate-950"
+            className="mb-8 inline-flex items-center gap-1 text-sm font-medium text-slate-500 transition-colors hover:text-slate-950 dark:hover:text-white"
           >
             <svg
               className="h-4 w-4"

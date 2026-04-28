@@ -68,16 +68,16 @@ export function ConfirmDialog({
       {/* Dialog */}
       <div
         ref={dialogRef}
-        className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-100 animate-in fade-in zoom-in-95"
+        className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-100 animate-in fade-in zoom-in-95 dark:bg-slate-800 dark:ring-slate-700"
       >
         <h2
           id="confirm-dialog-title"
-          className="text-lg font-semibold text-slate-950"
+          className="text-lg font-semibold text-slate-950 dark:text-white"
         >
           {title}
         </h2>
 
-        <div className="mt-2 text-sm leading-relaxed text-slate-500">
+        <div className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
           {children}
         </div>
 

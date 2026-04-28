@@ -7,13 +7,13 @@ export default async function AdminPage() {
   return (
     <>
       <AppHeader user={user} />
-      <main className="min-h-screen bg-slate-50 px-6 py-10">
+      <main className="min-h-screen bg-slate-50 px-6 py-10 dark:bg-slate-900">
         <section className="mx-auto max-w-6xl">
           <div className="mb-8">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Admin
             </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
               Dashboard
             </h1>
           </div>
@@ -22,7 +22,7 @@ export default async function AdminPage() {
             {hasPermission(user.role, "workflows:manage") && (
               <Link
                 href="/admin/workflows"
-                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-100">
                   <svg
@@ -44,10 +44,10 @@ export default async function AdminPage() {
                     />
                   </svg>
                 </div>
-                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
                   Workflows
                 </h2>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                   Manage workflow automation rules.
                 </p>
               </Link>
@@ -55,7 +55,7 @@ export default async function AdminPage() {
 
             <Link
               href="/admin/ai-logs"
-              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
             >
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600 transition-colors group-hover:bg-purple-100">
                 <svg
@@ -72,17 +72,17 @@ export default async function AdminPage() {
                   />
                 </svg>
               </div>
-              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
                 AI Logs
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 View AI usage, success rate, and errors.
               </p>
             </Link>
 
             <Link
               href="/admin/saved-replies"
-              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
             >
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600 transition-colors group-hover:bg-green-100">
                 <svg
@@ -99,17 +99,17 @@ export default async function AdminPage() {
                   />
                 </svg>
               </div>
-              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
                 Saved Replies
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Manage reusable reply templates.
               </p>
             </Link>
 
             <Link
               href="/admin/analytics"
-              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
             >
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-colors group-hover:bg-amber-100">
                 <svg
@@ -126,10 +126,10 @@ export default async function AdminPage() {
                   />
                 </svg>
               </div>
-              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
                 Analytics
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Ticket volume, response times, and breakdowns.
               </p>
             </Link>
@@ -137,7 +137,7 @@ export default async function AdminPage() {
             {hasPermission(user.role, "audit-logs:read") && (
               <Link
                 href="/admin/audit-logs"
-                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-slate-600"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors group-hover:bg-slate-200">
                   <svg
@@ -154,10 +154,10 @@ export default async function AdminPage() {
                     />
                   </svg>
                 </div>
-                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700 dark:text-slate-100 dark:group-hover:text-white">
                   Audit Logs
                 </h2>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                   Activity history across all tickets.
                 </p>
               </Link>

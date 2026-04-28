@@ -154,20 +154,20 @@ export function TicketList() {
         </Alert>
       )}
 
-      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 dark:divide-slate-700 dark:bg-slate-800 dark:ring-slate-700">
         {filteredTickets.map((ticket) => (
           <Link
             key={ticket.id}
             href={`/inbox/${ticket.id}`}
-            className="group block px-5 py-4 transition-colors hover:bg-slate-50/80"
+            className="group block px-5 py-4 transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-700/50"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-slate-900 group-hover:text-slate-950">
+                <h3 className="font-semibold text-slate-900 group-hover:text-slate-950 dark:text-slate-100 dark:group-hover:text-white">
                   {highlightText(ticket.subject, search)}
                 </h3>
 
-                <p className="mt-1 truncate text-sm text-slate-500">
+                <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">
                   {highlightText(ticket.customerName, search)}
                   <span className="mx-1.5 text-slate-300">&middot;</span>
                   {highlightText(ticket.customerEmail, search)}

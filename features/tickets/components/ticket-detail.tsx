@@ -33,11 +33,11 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
       {/* Main conversation column */}
       <div className="space-y-6">
         {/* Ticket header card */}
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
           <div className="p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-bold tracking-tight text-slate-950">
+                <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-white">
                   {ticket.subject}
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -62,14 +62,14 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
         </section>
 
         {/* Message thread */}
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-          <div className="border-b border-slate-100 px-6 py-3">
+        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
+          <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Conversation
             </h2>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-700">
             {ticket.messages.map((message) => {
               const isCustomer = message.author === "customer";
               const isSupport = message.author === "support";
@@ -119,7 +119,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           </div>
 
           {ticket.drafts.length > 0 && (
-            <div className="border-t border-slate-100 bg-slate-50/60 p-6">
+            <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50/60 p-6">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Saved Drafts
               </h2>
@@ -151,7 +151,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
       {/* Sidebar */}
       <div className="space-y-5">
-        <aside className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+        <aside className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Details
           </h2>
@@ -176,7 +176,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
               <PriorityBadge priority={ticket.priority} />
             </div>
 
-            <div className="border-t border-slate-100 pt-4">
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
               <TicketStatusSelect
                 ticketId={ticket.id}
                 status={ticket.status as TicketStatus}
@@ -190,11 +190,11 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
               />
             </div>
 
-            <div className="border-t border-slate-100 pt-4">
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
               <TagPicker ticketId={ticket.id} initialTagIds={ticket.tagIds} />
             </div>
 
-            <div className="border-t border-slate-100 pt-4">
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
               <SlaCountdown ticketId={ticket.id} />
             </div>
           </div>
@@ -210,7 +210,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
         />
         <RunWorkflowButton ticketId={ticket.id} />
 
-        <aside className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+        <aside className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Activity
           </h2>
