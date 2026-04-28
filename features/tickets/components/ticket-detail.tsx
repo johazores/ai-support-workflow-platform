@@ -7,6 +7,7 @@ import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assig
 import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-button";
 import { SendDraftButton } from "@/features/ai-drafts/components/send-draft-button";
 import { ReplyComposer } from "@/features/tickets/components/reply-composer";
+import { InternalNoteComposer } from "@/features/tickets/components/internal-note-composer";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -120,6 +121,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           </div>
         </aside>
         <ReplyComposer ticketId={ticket.id} />
+        <InternalNoteComposer ticketId={ticket.id} />
         <AiDraftPanel
           ticketId={ticket.id}
           subject={ticket.subject}
