@@ -41,6 +41,12 @@ model Ticket {
   activityLogs ActivityLog[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+  @@index([priority])
+  @@index([customerId])
+  @@index([updatedAt])
+  @@index([assigneeEmail])
 }
 
 model Message {
@@ -52,6 +58,9 @@ model Message {
   externalMessageId String?
   inReplyTo         String?
   createdAt         DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([externalMessageId])
 }
 
 model WorkflowRule {
@@ -72,6 +81,8 @@ model Draft {
   body      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ticketId])
 }
 
 model ActivityLog {
@@ -81,6 +92,10 @@ model ActivityLog {
   type      String
   message   String
   createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
+  @@index([type])
 }
 
 model AiUsageLog {
@@ -101,6 +116,8 @@ model EmailLog {
   status    String   @default("sent")
   error     String?
   createdAt DateTime @default(now())
+
+  @@index([ticketId])
 }
 
 model Notification {
@@ -112,6 +129,9 @@ model Notification {
   ticketId  String?  @db.ObjectId
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }
 
 model Tag {
