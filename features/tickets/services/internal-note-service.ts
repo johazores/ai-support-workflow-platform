@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
 type AddInternalNoteInput = {
   ticketId: string;
@@ -21,6 +22,8 @@ export async function addInternalNote(input: AddInternalNoteInput) {
       message: "Internal note added.",
     },
   });
+
+  broadcastTicketUpdate(input.ticketId, "message-created", { messageId: message.id });
 
   return message;
 }

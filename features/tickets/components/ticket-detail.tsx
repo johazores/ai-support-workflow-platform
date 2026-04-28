@@ -8,6 +8,7 @@ import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-
 import { SendDraftButton } from "@/features/ai-drafts/components/send-draft-button";
 import { ReplyComposer } from "@/features/tickets/components/reply-composer";
 import { InternalNoteComposer } from "@/features/tickets/components/internal-note-composer";
+import { TicketLiveUpdates } from "@/features/tickets/components/ticket-live-updates";
 type TicketDetailProps = {
   ticketId: string;
 };
@@ -25,6 +26,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
+      <TicketLiveUpdates ticketId={ticketId} />
       {/* Main conversation column */}
       <div className="space-y-6">
         {/* Ticket header card */}

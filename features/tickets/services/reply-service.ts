@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
+import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
 type SendManualReplyInput = {
   ticketId: string;
@@ -31,6 +32,8 @@ export async function sendManualReply(input: SendManualReplyInput) {
       message: "Manual support reply sent.",
     },
   });
+
+  broadcastTicketUpdate(input.ticketId, "message-created", { messageId: message.id });
 
   // Dispatch email to customer
   const ticket = await prisma.ticket.findUnique({

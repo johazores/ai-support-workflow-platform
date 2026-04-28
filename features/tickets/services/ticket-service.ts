@@ -5,6 +5,7 @@ import type {
   TicketSummary,
 } from "@/features/tickets/types/ticket";
 import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
+import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
 export async function getTicketSummaries(): Promise<TicketSummary[]> {
   const tickets = await prisma.ticket.findMany({
@@ -74,6 +75,8 @@ export async function updateTicketStatus(
 
   await executeWorkflowRules(ticketId);
 
+  broadcastTicketUpdate(ticketId, "status-changed", { status });
+
   return ticket;
 }
 
@@ -103,6 +106,10 @@ export async function assignTicket(input: AssignTicketInput) {
   });
 
   await executeWorkflowRules(input.ticketId);
+
+  broadcastTicketUpdate(input.ticketId, "ticket-assigned", {
+    assigneeName: input.assigneeName,
+  });
 
   return ticket;
 }
