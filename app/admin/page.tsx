@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { requireAdmin } from "@/features/auth/services/auth-guard-service";
-
+import { requireSupervisor } from "@/features/auth/services/auth-guard-service";
+import { hasPermission } from "@/features/auth/services/role-service";
 import { AppHeader } from "@/components/layout/app-header";
 export default async function AdminPage() {
-  const user = await requireAdmin();
+  const user = await requireSupervisor();
   return (
     <>
       <AppHeader user={user} />
@@ -19,17 +19,19 @@ export default async function AdminPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <Link
-              href="/admin/workflows"
-              className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
-            >
-              <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
-                Workflows
-              </h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Manage workflow automation rules.
-              </p>
-            </Link>
+            {hasPermission(user.role, "workflows:manage") && (
+              <Link
+                href="/admin/workflows"
+                className="group rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-md hover:ring-slate-200"
+              >
+                <h2 className="font-semibold text-slate-950 group-hover:text-slate-700">
+                  Workflows
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Manage workflow automation rules.
+                </p>
+              </Link>
+            )}
 
             <Link
               href="/admin/ai-logs"

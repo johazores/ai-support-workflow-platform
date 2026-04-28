@@ -3,6 +3,8 @@ import { LogoutButton } from "@/features/auth/components/logout-button";
 import { CurrentUserBadge } from "@/features/auth/components/current-user-badge";
 import { NotificationBell } from "@/features/notifications/components/notification-bell";
 
+import { isElevatedRole } from "@/features/auth/services/role-service";
+
 type AppHeaderProps = {
   user: {
     name: string;
@@ -35,7 +37,7 @@ export function AppHeader({ user }: AppHeaderProps) {
               Inbox
             </Link>
 
-            {user.role === "admin" && (
+            {isElevatedRole(user.role) && (
               <Link
                 href="/admin"
                 className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"

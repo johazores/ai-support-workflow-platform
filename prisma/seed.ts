@@ -30,7 +30,16 @@ async function main() {
       name: "Jordan Lee",
       email: "jordan@company.com",
       passwordHash: supportHash,
-      role: "support",
+      role: "agent",
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      name: "Sam Taylor",
+      email: "sam@company.com",
+      passwordHash: supportHash,
+      role: "supervisor",
     },
   });
 
