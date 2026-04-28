@@ -11,6 +11,7 @@ type Permission =
   | "analytics:read"
   | "ai-logs:read"
   | "audit-logs:read"
+  | "email-logs:read"
   | "users:manage";
 
 const rolePermissions: Record<UserRole, Permission[]> = {
@@ -25,6 +26,7 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     "analytics:read",
     "ai-logs:read",
     "audit-logs:read",
+    "email-logs:read",
     "users:manage",
   ],
   supervisor: [
@@ -37,6 +39,7 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     "analytics:read",
     "ai-logs:read",
     "audit-logs:read",
+    "email-logs:read",
   ],
   agent: [
     "tickets:read",
