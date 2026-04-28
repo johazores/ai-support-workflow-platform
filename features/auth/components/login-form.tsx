@@ -12,8 +12,8 @@ import { login } from "@/features/auth/services/auth-client-service";
 export function LoginForm() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const { isLoading, message, messageType, execute, clearMessage } =
     useAsyncAction();
 
