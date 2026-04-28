@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
+import { notifyAssignee, notifyAdmins } from "@/features/notifications/services/notification-service";
 
 type InboundEmailInput = {
   from: string;
@@ -86,6 +87,22 @@ export async function processInboundEmail(input: InboundEmailInput) {
   }
 
   await executeWorkflowRules(ticketId);
+
+  // Notify relevant users
+  if (input.inReplyTo) {
+    await notifyAssignee(ticketId, {
+      type: "customer-reply",
+      title: "New customer reply",
+      message: `${input.fromName} replied to a ticket.`,
+    });
+  } else {
+    await notifyAdmins({
+      type: "new-ticket",
+      title: "New ticket from email",
+      message: `${input.fromName}: ${input.subject}`,
+      ticketId,
+    });
+  }
 
   return { ticketId, messageId: message.id, isNewTicket: !input.inReplyTo };
 }
