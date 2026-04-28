@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { TextArea } from "@/components/ui/textarea";
+import { Alert } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 
 type WorkflowField = "subject" | "priority" | "status";
 type WorkflowOperator = "equals" | "contains";
@@ -19,6 +24,9 @@ export function CreateWorkflowForm() {
     useState<WorkflowActionType>("change-status");
   const [actionValue, setActionValue] = useState("pending");
   const [isSaving, setIsSaving] = useState(false);
+  const [messageType, setMessageType] = useState<"success" | "error" | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -26,6 +34,7 @@ export function CreateWorkflowForm() {
 
     setIsSaving(true);
     setMessage("");
+    setMessageType(null);
 
     try {
       const response = await fetch("/api/workflows", {
@@ -58,102 +67,143 @@ export function CreateWorkflowForm() {
 
       setName("");
       setDescription("");
-      setMessage("Workflow created.");
+      setMessage("Workflow created successfully.");
+      setMessageType("success");
       router.refresh();
     } catch (error) {
       console.error(error);
-      setMessage("Failed to create workflow.");
+      setMessage("Failed to create workflow. Please try again.");
+      setMessageType("error");
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-2xl border bg-white p-5 shadow-sm"
-    >
-      <h2 className="font-semibold text-slate-950">Create Workflow</h2>
+    <Card>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-slate-950">
+          Create Workflow
+        </h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Set up automated actions based on ticket attributes
+        </p>
+      </div>
 
-      <div className="mt-4 space-y-4">
-        <input
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Workflow Name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Workflow name"
-          className="w-full rounded-xl border px-3 py-2 text-sm"
+          placeholder="e.g., High Priority Triage"
+          fullWidth
           required
         />
 
-        <input
+        <TextArea
+          label="Description"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="Description"
-          className="w-full rounded-xl border px-3 py-2 text-sm"
+          placeholder="Describe what this workflow does"
+          fullWidth
+          rows={3}
         />
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <select
-            value={field}
-            onChange={(event) => setField(event.target.value as WorkflowField)}
-            className="rounded-xl border px-3 py-2 text-sm"
-          >
-            <option value="priority">Priority</option>
-            <option value="subject">Subject</option>
-            <option value="status">Status</option>
-          </select>
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-slate-700">
+            Trigger Conditions
+          </p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Field
+              </label>
+              <select
+                value={field}
+                onChange={(event) =>
+                  setField(event.target.value as WorkflowField)
+                }
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="priority">Priority</option>
+                <option value="subject">Subject</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
 
-          <select
-            value={operator}
-            onChange={(event) =>
-              setOperator(event.target.value as WorkflowOperator)
-            }
-            className="rounded-xl border px-3 py-2 text-sm"
-          >
-            <option value="equals">Equals</option>
-            <option value="contains">Contains</option>
-          </select>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Operator
+              </label>
+              <select
+                value={operator}
+                onChange={(event) =>
+                  setOperator(event.target.value as WorkflowOperator)
+                }
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="equals">Equals</option>
+                <option value="contains">Contains</option>
+              </select>
+            </div>
 
-          <input
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            placeholder="Trigger value"
-            className="rounded-xl border px-3 py-2 text-sm"
-            required
-          />
+            <Input
+              label="Value"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder="e.g., high"
+              required
+            />
+          </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <select
-            value={actionType}
-            onChange={(event) =>
-              setActionType(event.target.value as WorkflowActionType)
-            }
-            className="rounded-xl border px-3 py-2 text-sm"
-          >
-            <option value="change-status">Change Status</option>
-            <option value="assign-ticket">Assign Ticket</option>
-            <option value="generate-draft">Generate Draft</option>
-          </select>
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-slate-700">Action</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Action Type
+              </label>
+              <select
+                value={actionType}
+                onChange={(event) =>
+                  setActionType(event.target.value as WorkflowActionType)
+                }
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="change-status">Change Status</option>
+                <option value="assign-ticket">Assign Ticket</option>
+                <option value="generate-draft">Generate Draft</option>
+              </select>
+            </div>
 
-          <input
-            value={actionValue}
-            onChange={(event) => setActionValue(event.target.value)}
-            placeholder="Action value"
-            className="rounded-xl border px-3 py-2 text-sm"
-            required
-          />
+            <Input
+              label="Action Value"
+              value={actionValue}
+              onChange={(event) => setActionValue(event.target.value)}
+              placeholder="e.g., pending"
+              required
+            />
+          </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-        >
-          {isSaving ? "Saving..." : "Create Workflow"}
-        </button>
+        {messageType && (
+          <Alert
+            type={messageType}
+            dismissible
+            onDismiss={() => {
+              setMessage("");
+              setMessageType(null);
+            }}
+          >
+            {message}
+          </Alert>
+        )}
 
-        {message && <p className="text-sm text-slate-500">{message}</p>}
-      </div>
-    </form>
+        <Button type="submit" fullWidth isLoading={isSaving}>
+          {isSaving ? "Creating..." : "Create Workflow"}
+        </Button>
+      </form>
+    </Card>
   );
 }
