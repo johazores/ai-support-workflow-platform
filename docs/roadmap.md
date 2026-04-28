@@ -1,121 +1,63 @@
 # Roadmap
 
-This document tracks the planned direction for the AI Support Workflow Platform.
+## Completed
 
-## Current Status
+- [x] Support inbox with search, filters, and highlighted matches
+- [x] Ticket detail with full conversation thread
+- [x] Status management (open → pending → resolved → closed)
+- [x] Ticket assignment
+- [x] Internal notes (team-only)
+- [x] AI draft generation with provider interface (mock + OpenAI)
+- [x] Draft save, edit, and send as reply
+- [x] Workflow rule builder (triggers + actions)
+- [x] Manual and automatic workflow execution
+- [x] Workflow admin (create, toggle, delete)
+- [x] Activity logging (status changes, assignments, workflow runs)
+- [x] AI usage logging dashboard
+- [x] Authentication with signed JWT sessions
+- [x] Role-based access (admin vs. support)
+- [x] Centralized API client and feature service layers
+- [x] Zod validation on all API routes
+- [x] Seed data with realistic tickets and customers
 
-The project currently has:
+## In Progress
 
-- Support inbox
-- Ticket detail page
-- Customer context
-- AI draft generation
-- Draft saving
-- Ticket status updates
-- Ticket assignment
-- Activity logs
-- Manual workflow execution
-- Automatic workflow execution
-- Workflow admin page
-- Create workflow rule
-- Enable / disable workflow rule
-- Delete workflow rule
-- Structured workflow triggers
-- Workflow action validation
+### Email Integration (Track A)
+- [ ] Add email threading fields to message model
+- [ ] Inbound email webhook with HMAC signature verification
+- [ ] Outbound email via provider interface (console-log dev provider)
+- [ ] Wire replies to email sending pipeline
 
-## Next Priority Features
+### Real-Time Updates (Track B)
+- [ ] SSE endpoint for live ticket updates
+- [ ] Client hook for auto-refresh on new messages
+- [ ] Notification model and service
+- [ ] Notification bell UI in header with unread count
 
-### 1. Authentication
+### Ticket Management (Track C)
+- [ ] Tags model with ticket many-to-many relation
+- [ ] Tag CRUD API and picker UI
+- [ ] Tag filtering on ticket list
+- [ ] Workflow action for auto-tagging
+- [ ] Saved replies model and CRUD
+- [ ] Saved reply insertion in reply composer
+- [ ] Cursor-based pagination on ticket list
+- [ ] SLA timer model with countdown display
 
-Add authentication so admin and inbox pages are protected.
+## Planned
 
-Recommended approach:
+### AI Enhancements
+- [ ] Multi-turn conversation context for draft generation
+- [ ] Sentiment analysis badge on tickets
+- [ ] AI confidence score display
 
-- Start with simple custom auth
-- Later optionally replace with Clerk or NextAuth
+### Analytics & Reporting
+- [ ] Dashboard with resolution time, ticket volume, agent performance metrics
+- [ ] Chart components for key metrics
 
-Expected work:
-
-- Add user model
-- Add password hashing
-- Add login API
-- Add session handling
-- Protect admin and inbox pages
-
-### 2. Role-Based Access
-
-Add user roles.
-
-Roles:
-
-- admin
-- support
-- viewer
-
-### 3. Real AI Provider Integration
-
-Replace mock AI draft generation with real provider support.
-
-Potential providers:
-
-- OpenAI
-- Claude
-- Gemini
-
-Goal:
-
-- Keep AI logic provider-neutral
-- Allow switching providers through environment variables
-
-### 4. Ticket Reply Sending
-
-Add ability to send saved drafts as replies.
-
-Expected work:
-
-- Add reply API
-- Convert draft into message
-- Mark draft as sent
-- Add activity log
-
-### 5. Workflow Builder Improvements
-
-Improve workflow creation UI.
-
-Planned improvements:
-
-- Add multiple actions per workflow
-- Add action rows dynamically
-- Add better field/operator/value controls
-- Show readable trigger preview
-- Show readable actions preview
-
-### 6. Testing
-
-Add test coverage.
-
-Recommended:
-
-- Vitest for services
-- Playwright for main user flows
-
-Important tests:
-
-- Create workflow
-- Run workflow
-- Generate AI draft
-- Save draft
-- Update ticket status
-- Assign ticket
-- Search tickets
-
-### 7. Deployment
-
-Prepare app for deployment.
-
-Expected work:
-
-- Add deployment guide
-- Add production environment docs
-- Add MongoDB Atlas setup notes
-- Add Vercel deployment notes
+### Production Readiness
+- [ ] Expanded test coverage (service + API route integration tests)
+- [ ] CI pipeline (GitHub Actions: lint, type-check, test)
+- [ ] Dockerfile and docker-compose for local development
+- [ ] Rate limiting on API routes
+- [ ] RBAC middleware for granular permissions
