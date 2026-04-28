@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { useAsyncAction } from "@/lib/use-async-action";
 import { sendReply } from "@/features/tickets/services/ticket-client-service";
+import { MacroPicker } from "@/features/saved-replies/components/macro-picker";
 
 type ReplyComposerProps = {
   ticketId: string;
@@ -36,11 +37,16 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
 
   return (
     <Card>
-      <div className="mb-4">
-        <h2 className="text-sm font-semibold text-slate-950">Manual Reply</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Write and send a support reply without using AI.
-        </p>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-950">
+            Manual Reply
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Write and send a support reply without using AI.
+          </p>
+        </div>
+        <MacroPicker onSelect={(text) => setBody(text)} />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
