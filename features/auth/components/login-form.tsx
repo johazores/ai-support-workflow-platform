@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 
 export function LoginForm() {
   const router = useRouter();
@@ -46,48 +50,43 @@ export function LoginForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm"
-    >
-      <div>
-        <p className="text-sm font-medium text-slate-500">Admin Access</p>
-        <h1 className="mt-2 text-2xl font-bold text-slate-950">Login</h1>
+    <Card className="w-full max-w-md">
+      <div className="mb-6">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+          Admin Access
+        </p>
+        <h1 className="mt-2 text-3xl font-bold text-slate-950">Login</h1>
       </div>
 
-      <div className="mt-6 space-y-4">
-        <div>
-          <label className="text-sm font-medium text-slate-700">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-slate-400"
-            required
-          />
-        </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          type="email"
+          label="Email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          fullWidth
+          required
+        />
 
-        <div>
-          <label className="text-sm font-medium text-slate-700">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-slate-400"
-            required
-          />
-        </div>
+        <Input
+          type="password"
+          label="Password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          fullWidth
+          required
+        />
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <Alert type="error" dismissible>
+            {error}
+          </Alert>
+        )}
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-        >
+        <Button type="submit" fullWidth isLoading={isLoading}>
           {isLoading ? "Logging in..." : "Login"}
-        </button>
-      </div>
-    </form>
+        </Button>
+      </form>
+    </Card>
   );
 }
