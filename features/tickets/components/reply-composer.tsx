@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { TextArea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 
 type ReplyComposerProps = {
   ticketId: string;
@@ -11,6 +15,9 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [messageType, setMessageType] = useState<"success" | "error" | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -20,6 +27,7 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
 
     setIsSending(true);
     setMessage("");
+    setMessageType(null);
 
     try {
       const response = await fetch(`/api/tickets/${ticketId}/reply`, {
@@ -39,44 +47,58 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
       }
 
       setBody("");
-      setMessage("Reply sent.");
+      setMessage("Reply sent successfully.");
+      setMessageType("success");
       router.refresh();
     } catch (error) {
       console.error(error);
-      setMessage("Failed to send reply.");
+      setMessage("Failed to send reply. Please try again.");
+      setMessageType("error");
     } finally {
       setIsSending(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-2xl border bg-white p-5 shadow-sm"
-    >
-      <h2 className="font-semibold text-slate-950">Manual Reply</h2>
+    <Card>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-slate-950">Manual Reply</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Write and send a support reply without using AI.
+        </p>
+      </div>
 
-      <p className="mt-2 text-sm text-slate-500">
-        Write and send a support reply without using AI.
-      </p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <TextArea
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          rows={6}
+          placeholder="Write your reply..."
+          fullWidth
+        />
 
-      <textarea
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        rows={6}
-        placeholder="Write your reply..."
-        className="mt-4 w-full rounded-xl border bg-slate-50 p-3 text-sm leading-6 text-slate-700 outline-none focus:border-slate-400"
-      />
+        {messageType && (
+          <Alert
+            type={messageType}
+            dismissible
+            onDismiss={() => {
+              setMessage("");
+              setMessageType(null);
+            }}
+          >
+            {message}
+          </Alert>
+        )}
 
-      <button
-        type="submit"
-        disabled={isSending || !body.trim()}
-        className="mt-3 w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-      >
-        {isSending ? "Sending..." : "Send Reply"}
-      </button>
-
-      {message && <p className="mt-3 text-sm text-slate-500">{message}</p>}
-    </form>
+        <Button
+          type="submit"
+          fullWidth
+          disabled={isSending || !body.trim()}
+          isLoading={isSending}
+        >
+          Send Reply
+        </Button>
+      </form>
+    </Card>
   );
 }

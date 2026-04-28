@@ -1,5 +1,3 @@
-import { getStatusStyles } from "@/lib/design-tokens";
-
 type StatusBadgeProps = {
   status: "open" | "pending" | "closed";
   showDot?: boolean;
@@ -9,6 +7,24 @@ const statusLabels = {
   open: "Open",
   pending: "Pending",
   closed: "Closed",
+};
+
+const statusStyles = {
+  open: {
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    ring: "ring-emerald-200",
+  },
+  pending: {
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+    ring: "ring-amber-200",
+  },
+  closed: {
+    bg: "bg-slate-100",
+    text: "text-slate-700",
+    ring: "ring-slate-200",
+  },
 };
 
 const statusIcons = {
@@ -57,7 +73,7 @@ const statusIcons = {
 };
 
 export function StatusBadge({ status, showDot = true }: StatusBadgeProps) {
-  const styles = getStatusStyles(status);
+  const styles = statusStyles[status];
 
   return (
     <span

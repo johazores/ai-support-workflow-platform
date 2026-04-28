@@ -11,7 +11,7 @@ type AppHeaderProps = {
 
 export function AppHeader({ user }: AppHeaderProps) {
   return (
-    <header className="border-b bg-white">
+    <header className="border-b border-slate-100 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <nav className="flex items-center gap-4">
           <Link href="/inbox" className="text-sm font-medium text-slate-700">

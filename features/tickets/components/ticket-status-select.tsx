@@ -1,6 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Select } from "@/components/ui/select";
+import { Alert } from "@/components/ui/alert";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
 
 type TicketStatusSelectProps = {
@@ -15,10 +17,12 @@ export function TicketStatusSelect({
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState<TicketStatus>(status);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleChange(nextStatus: TicketStatus) {
     setCurrentStatus(nextStatus);
     setIsSaving(true);
+    setError("");
 
     try {
       const response = await fetch(`/api/tickets/${ticketId}/status`, {
@@ -36,9 +40,10 @@ export function TicketStatusSelect({
       }
 
       router.refresh();
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
       setCurrentStatus(status);
+      setError("Failed to update status. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -46,20 +51,32 @@ export function TicketStatusSelect({
 
   return (
     <div>
-      <label className="text-sm font-medium text-slate-700">Status</label>
-
-      <select
+      <Select
+        label="Status"
         value={currentStatus}
         disabled={isSaving}
         onChange={(event) => handleChange(event.target.value as TicketStatus)}
-        className="mt-2 w-full rounded-xl border bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+        fullWidth
       >
         <option value="open">Open</option>
         <option value="pending">Pending</option>
         <option value="closed">Closed</option>
-      </select>
+      </Select>
 
-      {isSaving && <p className="mt-2 text-xs text-slate-400">Saving...</p>}
+      {error && (
+        <Alert
+          type="error"
+          dismissible
+          onDismiss={() => setError("")}
+          className="mt-3"
+        >
+          {error}
+        </Alert>
+      )}
+
+      {isSaving && (
+        <p className="mt-2 text-xs text-slate-400 animate-pulse">Saving...</p>
+      )}
     </div>
   );
 }

@@ -1,167 +1,37 @@
 @import "tailwindcss";
 
-/* Design System CSS Variables */
-:root {
-  /* Color Palette */
-  --color-slate-50: #f8fafc;
-  --color-slate-100: #f1f5f9;
-  --color-slate-200: #e2e8f0;
-  --color-slate-300: #cbd5e1;
-  --color-slate-400: #94a3b8;
-  --color-slate-500: #64748b;
-  --color-slate-600: #475569;
-  --color-slate-700: #334155;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
-
-  /* Status Colors */
-  --color-status-open: #10b981;
-  --color-status-pending: #d97706;
-  --color-status-closed: #64748b;
-
-  /* Semantic Colors */
-  --color-success: #10b981;
-  --color-warning: #d97706;
-  --color-error: #ef4444;
-  --color-info: #3b82f6;
-
-  /* Background & Foreground */
-  --background: var(--color-slate-50);
-  --foreground: var(--color-slate-900);
-
-  /* Spacing */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
-  --space-2xl: 2.5rem;
-  --space-3xl: 3rem;
-
-  /* Border Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-
-  /* Shadows */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg:
-    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-
-  /* Transitions */
-  --transition-fast: 150ms ease-in-out;
-  --transition-base: 200ms ease-in-out;
-  --transition-slow: 300ms ease-in-out;
-}
-
-/* Base Styles */
-* {
-  @apply transition-colors duration-200;
-}
-
-html {
-  @apply scroll-smooth;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
-  @apply antialiased;
-}
-
-/* Typography Hierarchy */
-h1 {
-  @apply text-3xl font-bold text-slate-950;
-}
-
-h2 {
-  @apply text-2xl font-bold text-slate-950;
-}
-
-h3 {
-  @apply text-xl font-semibold text-slate-900;
-}
-
-h4 {
-  @apply text-lg font-semibold text-slate-900;
-}
-
-h5,
-h6 {
-  @apply text-base font-semibold text-slate-900;
-}
-
-p {
-  @apply text-sm text-slate-700;
-}
-
-a {
-  @apply text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors;
-  &:focus-visible {
-    @apply outline-none ring-2 ring-slate-950 ring-offset-2 rounded;
+/*
+ * All base/element styles go inside @layer base so Tailwind
+ * utility classes can override them (CSS cascade layers).
+ */
+@layer base {
+  html {
+    scroll-behavior: smooth;
   }
-}
 
-label {
-  @apply block text-sm font-medium text-slate-700;
-}
-
-/* Form Defaults */
-input:not([type="checkbox"]):not([type="radio"]),
-textarea,
-select {
-  @apply rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500;
-  @apply transition-all duration-200;
-  @apply focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200;
-
-  &:disabled {
-    @apply bg-slate-50 text-slate-500 cursor-not-allowed;
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-}
-
-/* Focus Visibility for Accessibility */
-:focus-visible {
-  @apply outline-none;
-}
-
-/* Utility Classes */
-.truncate-lines {
-  @apply line-clamp-2;
-}
-
-.truncate-lines-3 {
-  @apply line-clamp-3;
-}
-
-.text-truncate {
-  @apply truncate;
-}
-
-.flex-center {
-  @apply flex items-center justify-center;
-}
-
-.flex-between {
-  @apply flex items-center justify-between;
 }
 
 /* Smooth Scrollbar */
 ::-webkit-scrollbar {
-  @apply w-2 h-2;
+  width: 0.5rem;
+  height: 0.5rem;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-slate-100;
+  background-color: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-400 rounded-full hover:bg-slate-500;
+  background-color: #94a3b8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #64748b;
 }

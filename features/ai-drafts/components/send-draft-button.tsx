@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type SendDraftButtonProps = {
   draftId: string;
@@ -30,20 +31,15 @@ export function SendDraftButton({ draftId }: SendDraftButtonProps) {
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("Failed to send draft.");
+      alert("Failed to send draft. Please try again.");
     } finally {
       setIsSending(false);
     }
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleSend}
-      disabled={isSending}
-      className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
-    >
-      {isSending ? "Sending..." : "Send Reply"}
-    </button>
+    <Button size="sm" onClick={handleSend} isLoading={isSending}>
+      Send Reply
+    </Button>
   );
 }

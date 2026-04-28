@@ -17,7 +17,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
   if (!ticket) {
     return (
-      <div className="rounded-2xl border bg-white p-8 text-sm text-slate-500 shadow-sm">
+      <div className="rounded-2xl bg-white p-8 text-sm text-slate-500 shadow-sm">
         Ticket not found.
       </div>
     );
@@ -25,8 +25,8 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-        <div className="border-b p-5">
+      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold text-slate-950">
@@ -41,7 +41,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           </div>
         </div>
 
-        <div className="divide-y">
+        <div className="divide-y divide-slate-100">
           {ticket.messages.map((message) => {
             const isCustomer = message.author === "customer";
             const isSupport = message.author === "support";
@@ -50,12 +50,12 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
             return (
               <div
                 key={message.id}
-                className={`rounded-2xl border p-4 text-sm ${
+                className={`p-4 text-sm ${
                   isCustomer
                     ? "bg-white"
                     : isSupport
-                      ? "bg-blue-50"
-                      : "bg-amber-50 border-amber-200"
+                      ? "bg-blue-50/50"
+                      : "bg-amber-50/50"
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between">
@@ -81,14 +81,14 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           })}
         </div>
         {ticket.drafts.length > 0 && (
-          <div className="border-t bg-slate-50 p-5">
+          <div className="border-t border-slate-100 bg-slate-50 p-5">
             <h2 className="font-semibold text-slate-950">Saved Drafts</h2>
 
             <div className="mt-4 space-y-3">
               {ticket.drafts.map((draft) => (
                 <article
                   key={draft.id}
-                  className="rounded-xl border bg-white p-4 shadow-sm"
+                  className="rounded-xl bg-white p-4 shadow-sm"
                 >
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
                     {draft.body}
@@ -109,7 +109,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
       </section>
 
       <div className="space-y-6">
-        <aside className="rounded-2xl border bg-white p-5 shadow-sm">
+        <aside className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="font-semibold text-slate-950">Customer</h2>
 
           <div className="mt-4 space-y-3 text-sm">
@@ -152,7 +152,7 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
           customerMessage={ticket.messages.at(-1)?.body ?? ""}
         />
         <RunWorkflowButton ticketId={ticket.id} />
-        <aside className="rounded-2xl border bg-white p-5 shadow-sm">
+        <aside className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="font-semibold text-slate-950">Activity</h2>
 
           <div className="mt-4 space-y-3">

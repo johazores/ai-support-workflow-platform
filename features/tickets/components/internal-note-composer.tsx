@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { TextArea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 
 type InternalNoteComposerProps = {
   ticketId: string;
@@ -11,6 +15,9 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [messageType, setMessageType] = useState<"success" | "error" | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -20,6 +27,7 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
 
     setIsSaving(true);
     setMessage("");
+    setMessageType(null);
 
     try {
       const response = await fetch(`/api/tickets/${ticketId}/notes`, {
@@ -39,44 +47,58 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
       }
 
       setBody("");
-      setMessage("Internal note added.");
+      setMessage("Internal note added successfully.");
+      setMessageType("success");
       router.refresh();
     } catch (error) {
       console.error(error);
-      setMessage("Failed to add internal note.");
+      setMessage("Failed to add internal note. Please try again.");
+      setMessageType("error");
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-2xl border bg-amber-50 p-5 shadow-sm"
-    >
-      <h2 className="font-semibold text-slate-950">Internal Note</h2>
+    <Card className="bg-amber-50">
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-amber-900">Internal Note</h2>
+        <p className="mt-2 text-sm text-amber-800">
+          Add a private note for the support team.
+        </p>
+      </div>
 
-      <p className="mt-2 text-sm text-slate-600">
-        Add a private note for the support team.
-      </p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <TextArea
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          rows={5}
+          placeholder="Write an internal note..."
+          fullWidth
+        />
 
-      <textarea
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        rows={5}
-        placeholder="Write an internal note..."
-        className="mt-4 w-full rounded-xl border bg-white p-3 text-sm leading-6 text-slate-700 outline-none focus:border-slate-400"
-      />
+        {messageType && (
+          <Alert
+            type={messageType}
+            dismissible
+            onDismiss={() => {
+              setMessage("");
+              setMessageType(null);
+            }}
+          >
+            {message}
+          </Alert>
+        )}
 
-      <button
-        type="submit"
-        disabled={isSaving || !body.trim()}
-        className="mt-3 w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-      >
-        {isSaving ? "Saving..." : "Add Note"}
-      </button>
-
-      {message && <p className="mt-3 text-sm text-slate-600">{message}</p>}
-    </form>
+        <Button
+          type="submit"
+          fullWidth
+          disabled={isSaving || !body.trim()}
+          isLoading={isSaving}
+        >
+          Add Note
+        </Button>
+      </form>
+    </Card>
   );
 }

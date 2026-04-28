@@ -2,7 +2,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-16">
       <section className="mx-auto max-w-5xl">
-        <div className="rounded-3xl border bg-white p-8 shadow-sm">
+        <div className="rounded-3xl bg-white p-8 shadow-sm">
           <p className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-500">
             Portfolio Project
           </p>

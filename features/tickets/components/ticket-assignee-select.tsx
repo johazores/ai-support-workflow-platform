@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Select } from "@/components/ui/select";
+import { Alert } from "@/components/ui/alert";
 
 const assignees = [
   {
@@ -32,14 +34,16 @@ export function TicketAssigneeSelect({
     assigneeEmail ?? "",
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleChange(nextAssigneeEmail: string) {
     const assignee = assignees.find((item) => item.email === nextAssigneeEmail);
 
-    if (!assignee) return;
+    if (!assignee && nextAssigneeEmail !== "") return;
 
     setCurrentAssigneeEmail(nextAssigneeEmail);
     setIsSaving(true);
+    setError("");
 
     try {
       const response = await fetch(`/api/tickets/${ticketId}/assign`, {
@@ -48,8 +52,8 @@ export function TicketAssigneeSelect({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          assigneeName: assignee.name,
-          assigneeEmail: assignee.email,
+          assigneeName: assignee?.name ?? null,
+          assigneeEmail: assignee?.email ?? null,
         }),
       });
 
@@ -58,9 +62,10 @@ export function TicketAssigneeSelect({
       }
 
       router.refresh();
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
       setCurrentAssigneeEmail(assigneeEmail ?? "");
+      setError("Failed to assign ticket. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -68,13 +73,12 @@ export function TicketAssigneeSelect({
 
   return (
     <div>
-      <label className="text-sm font-medium text-slate-700">Assignee</label>
-
-      <select
+      <Select
+        label="Assignee"
         value={currentAssigneeEmail}
         disabled={isSaving}
         onChange={(event) => handleChange(event.target.value)}
-        className="mt-2 w-full rounded-xl border bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+        fullWidth
       >
         <option value="">Unassigned</option>
 
@@ -83,9 +87,22 @@ export function TicketAssigneeSelect({
             {assignee.name}
           </option>
         ))}
-      </select>
+      </Select>
 
-      {isSaving && <p className="mt-2 text-xs text-slate-400">Saving...</p>}
+      {error && (
+        <Alert
+          type="error"
+          dismissible
+          onDismiss={() => setError("")}
+          className="mt-3"
+        >
+          {error}
+        </Alert>
+      )}
+
+      {isSaving && (
+        <p className="mt-2 text-xs text-slate-400 animate-pulse">Saving...</p>
+      )}
     </div>
   );
 }

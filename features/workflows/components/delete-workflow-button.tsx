@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type DeleteWorkflowButtonProps = {
   workflowId: string;
@@ -41,13 +42,14 @@ export function DeleteWorkflowButton({
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="tertiary"
+      size="sm"
       onClick={handleDelete}
       disabled={isDeleting}
-      className="rounded-full px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+      className="text-red-600 hover:text-red-700"
     >
       {isDeleting ? "Deleting..." : "Delete"}
-    </button>
+    </Button>
   );
 }

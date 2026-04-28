@@ -127,7 +127,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         {...props}
       >
         <div className="flex gap-3">
-          <div className={`flex-shrink-0 ${styles.icon}`}>{icons[type]}</div>
+          <div className={`shrink-0 ${styles.icon}`}>{icons[type]}</div>
           <div className="flex-1">
             {title && <p className={styles.title}>{title}</p>}
             <p className={`text-sm ${styles.text}`}>{children}</p>
@@ -135,7 +135,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
           {dismissible && (
             <button
               onClick={handleDismiss}
-              className={`flex-shrink-0 ${styles.icon} hover:opacity-75 transition-opacity`}
+              className={`shrink-0 ${styles.icon} hover:opacity-75 transition-opacity`}
             >
               <svg
                 className="h-5 w-5"

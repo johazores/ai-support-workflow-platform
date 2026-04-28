@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type WorkflowStatusToggleProps = {
   workflowId: string;
@@ -46,13 +47,13 @@ export function WorkflowStatusToggle({
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="secondary"
+      size="sm"
       onClick={handleToggle}
       disabled={isSaving}
-      className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 disabled:opacity-60"
     >
       {currentIsActive ? "Active" : "Inactive"}
-    </button>
+    </Button>
   );
 }

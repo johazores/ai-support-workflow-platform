@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import type {
   TicketStatus,
   TicketSummary,
@@ -40,7 +44,7 @@ export function TicketList() {
         setTickets(result.data);
       } catch (error) {
         console.error(error);
-        setError("Failed to load tickets.");
+        setError("Failed to load tickets. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -56,57 +60,64 @@ export function TicketList() {
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
-        <input
+        <Input
           placeholder="Search tickets..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="w-full rounded-xl border px-3 py-2 text-sm"
+          fullWidth
         />
 
-        <select
+        <Select
           value={status}
           onChange={(event) =>
             setStatus(event.target.value as TicketStatus | "")
           }
-          className="rounded-xl border px-3 py-2 text-sm"
+          className="w-32"
         >
-          <option value="">All</option>
+          <option value="">All Status</option>
 
           {ticketStatuses.map((ticketStatus) => (
             <option key={ticketStatus} value={ticketStatus}>
-              {ticketStatus}
+              {ticketStatus.charAt(0).toUpperCase() + ticketStatus.slice(1)}
             </option>
           ))}
-        </select>
-        <button
-          type="button"
+        </Select>
+        <Button
+          variant="secondary"
           onClick={() => {
             setSearch("");
             setStatus("");
           }}
-          className="rounded-xl border px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
         >
           Clear
-        </button>
+        </Button>
       </div>
 
-      {loading && <p className="text-sm text-slate-500">Loading...</p>}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {loading && (
+        <p className="text-sm text-slate-500 animate-pulse">
+          Loading tickets...
+        </p>
+      )}
+      {error && (
+        <Alert type="error" dismissible onDismiss={() => setError("")}>
+          {error}
+        </Alert>
+      )}
 
-      <div className="divide-y rounded-2xl border bg-white">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm">
         {tickets.map((ticket) => (
           <Link
             key={ticket.id}
             href={`/inbox/${ticket.id}`}
-            className="block p-4 hover:bg-slate-50"
+            className="block p-4 hover:bg-slate-50 transition-colors"
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="flex-1">
                 <h3 className="font-semibold text-slate-900">
                   {highlightText(ticket.subject, search)}
                 </h3>
 
-                <p className="text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-600">
                   {highlightText(ticket.customerName, search)} ·{" "}
                   {highlightText(ticket.customerEmail, search)}
                 </p>
@@ -117,13 +128,15 @@ export function TicketList() {
           </Link>
         ))}
 
-        <p className="text-sm text-slate-500">
-          {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} found
-        </p>
+        {!loading && tickets.length > 0 && (
+          <div className="px-4 py-3 text-center text-xs font-medium text-slate-500">
+            {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} found
+          </div>
+        )}
 
         {!loading && tickets.length === 0 && (
-          <div className="p-6 text-center text-sm text-slate-500">
-            No tickets found.
+          <div className="p-8 text-center">
+            <p className="text-sm text-slate-600">No tickets found.</p>
           </div>
         )}
       </div>

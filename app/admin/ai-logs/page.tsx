@@ -18,15 +18,6 @@ export default async function AiLogsPage() {
           >
             ← Back to admin
           </Link>
-          <Link
-            href="/admin/ai-logs"
-            className="rounded-2xl border bg-white p-5 shadow-sm hover:bg-slate-50"
-          >
-            <h2 className="font-semibold text-slate-950">AI Logs</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              View AI usage, success rate, and errors.
-            </p>
-          </Link>
 
           <div className="mb-6">
             <p className="text-sm font-medium text-slate-500">Admin</p>

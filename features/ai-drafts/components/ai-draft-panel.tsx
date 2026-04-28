@@ -1,5 +1,9 @@
 "use client";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { TextArea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 
 type AiDraftPanelProps = {
   ticketId: string;
@@ -17,11 +21,15 @@ export function AiDraftPanel({
   const [draft, setDraft] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [messageType, setMessageType] = useState<"success" | "error" | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
 
   async function handleGenerateDraft() {
     setIsGenerating(true);
     setMessage("");
+    setMessageType(null);
 
     try {
       const response = await fetch("/api/ai-drafts/generate", {
@@ -43,9 +51,12 @@ export function AiDraftPanel({
       }
 
       setDraft(result.data.draft);
+      setMessage("Draft generated successfully.");
+      setMessageType("success");
     } catch (error) {
       console.error(error);
-      setMessage("Failed to generate draft.");
+      setMessage("Failed to generate draft. Please try again.");
+      setMessageType("error");
     } finally {
       setIsGenerating(false);
     }
@@ -56,6 +67,7 @@ export function AiDraftPanel({
 
     setIsSaving(true);
     setMessage("");
+    setMessageType(null);
 
     try {
       const response = await fetch("/api/ai-drafts/save", {
@@ -75,53 +87,70 @@ export function AiDraftPanel({
         throw new Error(result.message ?? "Failed to save draft");
       }
 
-      setMessage("Draft saved.");
+      setMessage("Draft saved successfully.");
+      setMessageType("success");
     } catch (error) {
       console.error(error);
-      setMessage("Failed to save draft.");
+      setMessage("Failed to save draft. Please try again.");
+      setMessageType("error");
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <aside className="rounded-2xl border bg-white p-5 shadow-sm">
-      <h2 className="font-semibold text-slate-950">AI Draft</h2>
+    <Card>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-slate-950">AI Draft</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Generate, edit, and save a suggested support reply.
+        </p>
+      </div>
 
-      <p className="mt-2 text-sm leading-6 text-slate-500">
-        Generate, edit, and save a suggested support reply.
-      </p>
+      <div className="space-y-4">
+        <Button
+          fullWidth
+          disabled={isGenerating}
+          isLoading={isGenerating}
+          onClick={handleGenerateDraft}
+        >
+          Generate Draft
+        </Button>
 
-      <button
-        type="button"
-        onClick={handleGenerateDraft}
-        disabled={isGenerating}
-        className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isGenerating ? "Generating..." : "Generate Draft"}
-      </button>
+        {draft && (
+          <>
+            <TextArea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              rows={10}
+              fullWidth
+            />
 
-      {draft && (
-        <div className="mt-4 space-y-3">
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            rows={10}
-            className="w-full rounded-xl border bg-slate-50 p-3 text-sm leading-6 text-slate-700 outline-none focus:border-slate-400"
-          />
+            <Button
+              variant="secondary"
+              fullWidth
+              disabled={isSaving}
+              isLoading={isSaving}
+              onClick={handleSaveDraft}
+            >
+              Save Draft
+            </Button>
+          </>
+        )}
 
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            disabled={isSaving}
-            className="w-full rounded-xl border px-4 py-2.5 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+        {messageType && (
+          <Alert
+            type={messageType}
+            dismissible
+            onDismiss={() => {
+              setMessage("");
+              setMessageType(null);
+            }}
           >
-            {isSaving ? "Saving..." : "Save Draft"}
-          </button>
-        </div>
-      )}
-
-      {message && <p className="mt-3 text-sm text-slate-500">{message}</p>}
-    </aside>
+            {message}
+          </Alert>
+        )}
+      </div>
+    </Card>
   );
 }

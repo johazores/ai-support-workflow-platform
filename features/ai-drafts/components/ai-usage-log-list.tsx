@@ -4,15 +4,15 @@ export async function AiUsageLogList() {
   const logs = await getAiUsageLogs();
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-      <div className="border-b px-5 py-4">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-5 py-4">
         <h2 className="font-semibold text-slate-950">AI Usage Logs</h2>
         <p className="mt-1 text-sm text-slate-500">
           Recent AI draft generation attempts.
         </p>
       </div>
 
-      <div className="divide-y">
+      <div className="divide-y divide-slate-100">
         {logs.map((log) => (
           <article key={log.id} className="p-5">
             <div className="flex items-start justify-between gap-3">

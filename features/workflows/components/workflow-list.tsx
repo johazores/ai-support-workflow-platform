@@ -5,15 +5,15 @@ export async function WorkflowList() {
   const workflows = await getWorkflowRules();
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-      <div className="border-b px-5 py-4">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-5 py-4">
         <h2 className="font-semibold text-slate-950">Workflow Rules</h2>
         <p className="mt-1 text-sm text-slate-500">
           Active automation rules used by the support inbox.
         </p>
       </div>
 
-      <div className="divide-y">
+      <div className="divide-y divide-slate-100">
         {workflows.map((workflow) => (
           <article key={workflow.id} className="p-5">
             <div className="flex items-start justify-between gap-3">

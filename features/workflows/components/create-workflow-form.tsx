@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TextArea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 
@@ -114,38 +115,30 @@ export function CreateWorkflowForm() {
             Trigger Conditions
           </p>
           <div className="grid gap-3 md:grid-cols-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                Field
-              </label>
-              <select
-                value={field}
-                onChange={(event) =>
-                  setField(event.target.value as WorkflowField)
-                }
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              >
-                <option value="priority">Priority</option>
-                <option value="subject">Subject</option>
-                <option value="status">Status</option>
-              </select>
-            </div>
+            <Select
+              label="Field"
+              value={field}
+              onChange={(event) =>
+                setField(event.target.value as WorkflowField)
+              }
+              fullWidth
+            >
+              <option value="priority">Priority</option>
+              <option value="subject">Subject</option>
+              <option value="status">Status</option>
+            </Select>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                Operator
-              </label>
-              <select
-                value={operator}
-                onChange={(event) =>
-                  setOperator(event.target.value as WorkflowOperator)
-                }
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              >
-                <option value="equals">Equals</option>
-                <option value="contains">Contains</option>
-              </select>
-            </div>
+            <Select
+              label="Operator"
+              value={operator}
+              onChange={(event) =>
+                setOperator(event.target.value as WorkflowOperator)
+              }
+              fullWidth
+            >
+              <option value="equals">Equals</option>
+              <option value="contains">Contains</option>
+            </Select>
 
             <Input
               label="Value"
@@ -160,22 +153,18 @@ export function CreateWorkflowForm() {
         <div className="space-y-3">
           <p className="text-sm font-medium text-slate-700">Action</p>
           <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                Action Type
-              </label>
-              <select
-                value={actionType}
-                onChange={(event) =>
-                  setActionType(event.target.value as WorkflowActionType)
-                }
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              >
-                <option value="change-status">Change Status</option>
-                <option value="assign-ticket">Assign Ticket</option>
-                <option value="generate-draft">Generate Draft</option>
-              </select>
-            </div>
+            <Select
+              label="Action Type"
+              value={actionType}
+              onChange={(event) =>
+                setActionType(event.target.value as WorkflowActionType)
+              }
+              fullWidth
+            >
+              <option value="change-status">Change Status</option>
+              <option value="assign-ticket">Assign Ticket</option>
+              <option value="generate-draft">Generate Draft</option>
+            </Select>
 
             <Input
               label="Action Value"

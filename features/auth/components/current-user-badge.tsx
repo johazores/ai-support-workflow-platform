@@ -5,7 +5,7 @@ type CurrentUserBadgeProps = {
 
 export function CurrentUserBadge({ name, role }: CurrentUserBadgeProps) {
   return (
-    <div className="rounded-xl border bg-white px-3 py-2 text-sm shadow-sm">
+    <div className="text-sm">
       <p className="font-medium text-slate-900">{name}</p>
       <p className="text-xs capitalize text-slate-500">{role}</p>
     </div>
