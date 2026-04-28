@@ -7,19 +7,21 @@ type Tag = {
 };
 
 export async function fetchTags() {
-  return apiClient<Tag[]>("/api/tags");
+  const result = await apiClient<{ data: Tag[] }>("/api/tags");
+  return result.data;
 }
 
 export async function createTag(name: string, color?: string) {
-  return apiClient<Tag>("/api/tags", {
+  const result = await apiClient<{ data: Tag }>("/api/tags", {
     method: "POST",
-    body: JSON.stringify({ name, color }),
+    body: { name, color },
   });
+  return result.data;
 }
 
 export async function setTicketTags(ticketId: string, tagIds: string[]) {
   return apiClient<void>(`/api/tickets/${ticketId}/tags`, {
     method: "PUT",
-    body: JSON.stringify({ tagIds }),
+    body: { tagIds },
   });
 }

@@ -8,7 +8,8 @@ type SavedReply = {
 };
 
 export async function fetchSavedReplies() {
-  return apiClient<SavedReply[]>("/api/saved-replies");
+  const result = await apiClient<{ data: SavedReply[] }>("/api/saved-replies");
+  return result.data;
 }
 
 export async function createSavedReply(input: {
@@ -16,20 +17,25 @@ export async function createSavedReply(input: {
   body: string;
   shortcut?: string;
 }) {
-  return apiClient<SavedReply>("/api/saved-replies", {
+  const result = await apiClient<{ data: SavedReply }>("/api/saved-replies", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
+  return result.data;
 }
 
 export async function updateSavedReply(
   id: string,
   input: { title: string; body: string; shortcut?: string },
 ) {
-  return apiClient<SavedReply>(`/api/saved-replies/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
+  const result = await apiClient<{ data: SavedReply }>(
+    `/api/saved-replies/${id}`,
+    {
+      method: "PUT",
+      body: input,
+    },
+  );
+  return result.data;
 }
 
 export async function deleteSavedReply(id: string) {
