@@ -90,3 +90,14 @@ model AiUsageLog {
   error     String?
   createdAt DateTime @default(now())
 }
+
+model EmailLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId  String   @db.ObjectId
+  messageId String   @db.ObjectId
+  to        String
+  subject   String
+  status    String   @default("sent")
+  error     String?
+  createdAt DateTime @default(now())
+}
