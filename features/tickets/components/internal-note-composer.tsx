@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { useAsyncAction } from "@/lib/use-async-action";
+import { addInternalNote } from "@/features/tickets/services/ticket-client-service";
 
 type InternalNoteComposerProps = {
   ticketId: string;
@@ -14,48 +16,21 @@ type InternalNoteComposerProps = {
 export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [messageType, setMessageType] = useState<"success" | "error" | null>(
-    null,
-  );
-  const [message, setMessage] = useState("");
+  const { isLoading, message, messageType, execute, clearMessage } =
+    useAsyncAction();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (!body.trim()) return;
 
-    setIsSaving(true);
-    setMessage("");
-    setMessageType(null);
+    const success = await execute(async () => {
+      await addInternalNote(ticketId, body);
+      return "Internal note added successfully.";
+    }, "Failed to add internal note. Please try again.");
 
-    try {
-      const response = await fetch(`/api/tickets/${ticketId}/notes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          body,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to add note");
-      }
-
+    if (success) {
       setBody("");
-      setMessage("Internal note added successfully.");
-      setMessageType("success");
       router.refresh();
-    } catch (error) {
-      console.error(error);
-      setMessage("Failed to add internal note. Please try again.");
-      setMessageType("error");
-    } finally {
-      setIsSaving(false);
     }
   }
 
@@ -78,14 +53,7 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
         />
 
         {messageType && (
-          <Alert
-            type={messageType}
-            dismissible
-            onDismiss={() => {
-              setMessage("");
-              setMessageType(null);
-            }}
-          >
+          <Alert type={messageType} dismissible onDismiss={clearMessage}>
             {message}
           </Alert>
         )}
@@ -93,8 +61,8 @@ export function InternalNoteComposer({ ticketId }: InternalNoteComposerProps) {
         <Button
           type="submit"
           fullWidth
-          disabled={isSaving || !body.trim()}
-          isLoading={isSaving}
+          disabled={isLoading || !body.trim()}
+          isLoading={isLoading}
         >
           Add Note
         </Button>

@@ -4,20 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
+import { assignTicket } from "@/features/tickets/services/ticket-client-service";
 
 const assignees = [
-  {
-    name: "Support Team",
-    email: "support@example.com",
-  },
-  {
-    name: "Billing Team",
-    email: "billing@example.com",
-  },
-  {
-    name: "Technical Team",
-    email: "technical@example.com",
-  },
+  { name: "Support Team", email: "support@example.com" },
+  { name: "Billing Team", email: "billing@example.com" },
+  { name: "Technical Team", email: "technical@example.com" },
 ];
 
 type TicketAssigneeSelectProps = {
@@ -38,7 +30,6 @@ export function TicketAssigneeSelect({
 
   async function handleChange(nextAssigneeEmail: string) {
     const assignee = assignees.find((item) => item.email === nextAssigneeEmail);
-
     if (!assignee && nextAssigneeEmail !== "") return;
 
     setCurrentAssigneeEmail(nextAssigneeEmail);
@@ -46,24 +37,13 @@ export function TicketAssigneeSelect({
     setError("");
 
     try {
-      const response = await fetch(`/api/tickets/${ticketId}/assign`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          assigneeName: assignee?.name ?? null,
-          assigneeEmail: assignee?.email ?? null,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to assign ticket");
-      }
-
+      await assignTicket(
+        ticketId,
+        assignee?.name ?? null,
+        assignee?.email ?? null,
+      );
       router.refresh();
-    } catch (err) {
-      console.error(err);
+    } catch {
       setCurrentAssigneeEmail(assigneeEmail ?? "");
       setError("Failed to assign ticket. Please try again.");
     } finally {

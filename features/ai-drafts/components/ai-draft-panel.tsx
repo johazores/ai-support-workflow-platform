@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import {
+  generateDraft,
+  saveDraft,
+} from "@/features/ai-drafts/services/ai-draft-client-service";
 
 type AiDraftPanelProps = {
   ticketId: string;
@@ -26,35 +30,26 @@ export function AiDraftPanel({
   );
   const [message, setMessage] = useState("");
 
-  async function handleGenerateDraft() {
-    setIsGenerating(true);
+  function clearMessage() {
     setMessage("");
     setMessageType(null);
+  }
+
+  async function handleGenerateDraft() {
+    setIsGenerating(true);
+    clearMessage();
 
     try {
-      const response = await fetch("/api/ai-drafts/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          subject,
-          customerName,
-          customerMessage,
-        }),
+      const result = await generateDraft({
+        subject,
+        customerName,
+        customerMessage,
       });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to generate draft");
-      }
-
-      setDraft(result.data.draft);
+      setDraft(result);
       setMessage("Draft generated successfully.");
       setMessageType("success");
-    } catch (error) {
-      console.error(error);
+    } catch {
       setMessage("Failed to generate draft. Please try again.");
       setMessageType("error");
     } finally {
@@ -66,31 +61,13 @@ export function AiDraftPanel({
     if (!draft.trim()) return;
 
     setIsSaving(true);
-    setMessage("");
-    setMessageType(null);
+    clearMessage();
 
     try {
-      const response = await fetch("/api/ai-drafts/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ticketId,
-          body: draft,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to save draft");
-      }
-
+      await saveDraft(ticketId, draft);
       setMessage("Draft saved successfully.");
       setMessageType("success");
-    } catch (error) {
-      console.error(error);
+    } catch {
       setMessage("Failed to save draft. Please try again.");
       setMessageType("error");
     } finally {
@@ -139,14 +116,7 @@ export function AiDraftPanel({
         )}
 
         {messageType && (
-          <Alert
-            type={messageType}
-            dismissible
-            onDismiss={() => {
-              setMessage("");
-              setMessageType(null);
-            }}
-          >
+          <Alert type={messageType} dismissible onDismiss={clearMessage}>
             {message}
           </Alert>
         )}

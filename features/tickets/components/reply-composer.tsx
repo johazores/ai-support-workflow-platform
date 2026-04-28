@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { useAsyncAction } from "@/lib/use-async-action";
+import { sendReply } from "@/features/tickets/services/ticket-client-service";
 
 type ReplyComposerProps = {
   ticketId: string;
@@ -14,48 +16,21 @@ type ReplyComposerProps = {
 export function ReplyComposer({ ticketId }: ReplyComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [messageType, setMessageType] = useState<"success" | "error" | null>(
-    null,
-  );
-  const [message, setMessage] = useState("");
+  const { isLoading, message, messageType, execute, clearMessage } =
+    useAsyncAction();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (!body.trim()) return;
 
-    setIsSending(true);
-    setMessage("");
-    setMessageType(null);
+    const success = await execute(async () => {
+      await sendReply(ticketId, body);
+      return "Reply sent successfully.";
+    }, "Failed to send reply. Please try again.");
 
-    try {
-      const response = await fetch(`/api/tickets/${ticketId}/reply`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          body,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to send reply");
-      }
-
+    if (success) {
       setBody("");
-      setMessage("Reply sent successfully.");
-      setMessageType("success");
       router.refresh();
-    } catch (error) {
-      console.error(error);
-      setMessage("Failed to send reply. Please try again.");
-      setMessageType("error");
-    } finally {
-      setIsSending(false);
     }
   }
 
@@ -78,14 +53,7 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
         />
 
         {messageType && (
-          <Alert
-            type={messageType}
-            dismissible
-            onDismiss={() => {
-              setMessage("");
-              setMessageType(null);
-            }}
-          >
+          <Alert type={messageType} dismissible onDismiss={clearMessage}>
             {message}
           </Alert>
         )}
@@ -93,8 +61,8 @@ export function ReplyComposer({ ticketId }: ReplyComposerProps) {
         <Button
           type="submit"
           fullWidth
-          disabled={isSending || !body.trim()}
-          isLoading={isSending}
+          disabled={isLoading || !body.trim()}
+          isLoading={isLoading}
         >
           Send Reply
         </Button>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { deleteWorkflow } from "@/features/workflows/services/workflow-client-service";
 
 type DeleteWorkflowButtonProps = {
   workflowId: string;
@@ -15,26 +16,15 @@ export function DeleteWorkflowButton({
   const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleDelete() {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this workflow?",
-    );
-
-    if (!confirmed) return;
+    if (!window.confirm("Are you sure you want to delete this workflow?"))
+      return;
 
     setIsDeleting(true);
 
     try {
-      const response = await fetch(`/api/workflows/${workflowId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete workflow");
-      }
-
+      await deleteWorkflow(workflowId);
       router.refresh();
-    } catch (error) {
-      console.error(error);
+    } catch {
       alert("Failed to delete workflow.");
     } finally {
       setIsDeleting(false);

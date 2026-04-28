@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { updateWorkflowStatus } from "@/features/workflows/services/workflow-client-service";
 
 type WorkflowStatusToggleProps = {
   workflowId: string;
@@ -18,28 +19,13 @@ export function WorkflowStatusToggle({
 
   async function handleToggle() {
     const nextIsActive = !currentIsActive;
-
     setCurrentIsActive(nextIsActive);
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/workflows/${workflowId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          isActive: nextIsActive,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update workflow status");
-      }
-
+      await updateWorkflowStatus(workflowId, nextIsActive);
       router.refresh();
-    } catch (error) {
-      console.error(error);
+    } catch {
       setCurrentIsActive(isActive);
     } finally {
       setIsSaving(false);

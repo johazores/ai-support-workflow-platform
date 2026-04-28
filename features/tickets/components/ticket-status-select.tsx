@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import type { TicketStatus } from "@/features/tickets/types/ticket";
+import { updateTicketStatus } from "@/features/tickets/services/ticket-client-service";
 
 type TicketStatusSelectProps = {
   ticketId: string;
@@ -25,23 +26,9 @@ export function TicketStatusSelect({
     setError("");
 
     try {
-      const response = await fetch(`/api/tickets/${ticketId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: nextStatus,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update status");
-      }
-
+      await updateTicketStatus(ticketId, nextStatus);
       router.refresh();
-    } catch (err) {
-      console.error(err);
+    } catch {
       setCurrentStatus(status);
       setError("Failed to update status. Please try again.");
     } finally {

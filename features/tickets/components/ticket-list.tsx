@@ -12,6 +12,7 @@ import type {
   TicketSummary,
 } from "@/features/tickets/types/ticket";
 import { highlightText } from "@/features/tickets/utils/highlight-text";
+import { fetchTickets } from "@/features/tickets/services/ticket-client-service";
 
 const ticketStatuses: TicketStatus[] = ["open", "pending", "closed"];
 
@@ -23,36 +24,25 @@ export function TicketList() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchTickets() {
+    async function loadTickets() {
       setLoading(true);
       setError("");
 
       try {
-        const params = new URLSearchParams();
+        const data = await fetchTickets({
+          search: search || undefined,
+          status: status || undefined,
+        });
 
-        if (search) params.append("search", search);
-        if (status) params.append("status", status);
-
-        const response = await fetch(`/api/tickets?${params.toString()}`);
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch tickets");
-        }
-
-        const result: { data: TicketSummary[] } = await response.json();
-
-        setTickets(result.data);
-      } catch (error) {
-        console.error(error);
+        setTickets(data);
+      } catch {
         setError("Failed to load tickets. Please try again.");
       } finally {
         setLoading(false);
       }
     }
 
-    const timeout = setTimeout(() => {
-      fetchTickets();
-    }, 300);
+    const timeout = setTimeout(loadTickets, 300);
 
     return () => clearTimeout(timeout);
   }, [search, status]);

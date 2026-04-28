@@ -8,6 +8,8 @@ import { TextArea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
+import { useAsyncAction } from "@/lib/use-async-action";
+import { createWorkflow } from "@/features/workflows/services/workflow-client-service";
 
 type WorkflowField = "subject" | "priority" | "status";
 type WorkflowOperator = "equals" | "contains";
@@ -24,59 +26,26 @@ export function CreateWorkflowForm() {
   const [actionType, setActionType] =
     useState<WorkflowActionType>("change-status");
   const [actionValue, setActionValue] = useState("pending");
-  const [isSaving, setIsSaving] = useState(false);
-  const [messageType, setMessageType] = useState<"success" | "error" | null>(
-    null,
-  );
-  const [message, setMessage] = useState("");
+  const { isLoading, message, messageType, execute, clearMessage } =
+    useAsyncAction();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    setIsSaving(true);
-    setMessage("");
-    setMessageType(null);
-
-    try {
-      const response = await fetch("/api/workflows", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          description,
-          trigger: {
-            field,
-            operator,
-            value,
-          },
-          actions: [
-            {
-              type: actionType,
-              value: actionValue,
-            },
-          ],
-        }),
+    const success = await execute(async () => {
+      await createWorkflow({
+        name,
+        description,
+        trigger: { field, operator, value },
+        actions: [{ type: actionType, value: actionValue }],
       });
+      return "Workflow created successfully.";
+    }, "Failed to create workflow. Please try again.");
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to create workflow");
-      }
-
+    if (success) {
       setName("");
       setDescription("");
-      setMessage("Workflow created successfully.");
-      setMessageType("success");
       router.refresh();
-    } catch (error) {
-      console.error(error);
-      setMessage("Failed to create workflow. Please try again.");
-      setMessageType("error");
-    } finally {
-      setIsSaving(false);
     }
   }
 
@@ -177,20 +146,13 @@ export function CreateWorkflowForm() {
         </div>
 
         {messageType && (
-          <Alert
-            type={messageType}
-            dismissible
-            onDismiss={() => {
-              setMessage("");
-              setMessageType(null);
-            }}
-          >
+          <Alert type={messageType} dismissible onDismiss={clearMessage}>
             {message}
           </Alert>
         )}
 
-        <Button type="submit" fullWidth isLoading={isSaving}>
-          {isSaving ? "Creating..." : "Create Workflow"}
+        <Button type="submit" fullWidth isLoading={isLoading}>
+          {isLoading ? "Creating..." : "Create Workflow"}
         </Button>
       </form>
     </Card>

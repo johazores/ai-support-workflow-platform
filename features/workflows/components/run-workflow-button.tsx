@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { useAsyncAction } from "@/lib/use-async-action";
+import { runWorkflows } from "@/features/workflows/services/workflow-client-service";
 
 type RunWorkflowButtonProps = {
   ticketId: string;
@@ -12,41 +13,19 @@ type RunWorkflowButtonProps = {
 
 export function RunWorkflowButton({ ticketId }: RunWorkflowButtonProps) {
   const router = useRouter();
-  const [isRunning, setIsRunning] = useState(false);
-  const [messageType, setMessageType] = useState<"success" | "error" | null>(
-    null,
-  );
-  const [message, setMessage] = useState("");
+  const { isLoading, message, messageType, execute, clearMessage } =
+    useAsyncAction();
 
   async function handleRunWorkflows() {
-    setIsRunning(true);
-    setMessage("");
-    setMessageType(null);
+    const success = await execute(async () => {
+      const executed = await runWorkflows(ticketId);
+      return executed
+        ? "Workflow executed successfully."
+        : "No matching workflow rules found.";
+    }, "Failed to run workflow. Please try again.");
 
-    try {
-      const response = await fetch(`/api/tickets/${ticketId}/workflows/run`, {
-        method: "POST",
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to run workflow");
-      }
-
-      setMessage(
-        result.data.executed
-          ? "Workflow executed successfully."
-          : "No matching workflow rules found.",
-      );
-      setMessageType("success");
+    if (success) {
       router.refresh();
-    } catch (error) {
-      console.error(error);
-      setMessage("Failed to run workflow. Please try again.");
-      setMessageType("error");
-    } finally {
-      setIsRunning(false);
     }
   }
 
@@ -64,22 +43,15 @@ export function RunWorkflowButton({ ticketId }: RunWorkflowButtonProps) {
       <div className="space-y-4">
         <Button
           fullWidth
-          disabled={isRunning}
-          isLoading={isRunning}
+          disabled={isLoading}
+          isLoading={isLoading}
           onClick={handleRunWorkflows}
         >
           Run Workflows
         </Button>
 
         {messageType && (
-          <Alert
-            type={messageType}
-            dismissible
-            onDismiss={() => {
-              setMessage("");
-              setMessageType(null);
-            }}
-          >
+          <Alert type={messageType} dismissible onDismiss={clearMessage}>
             {message}
           </Alert>
         )}

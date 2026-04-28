@@ -6,46 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
+import { useAsyncAction } from "@/lib/use-async-action";
+import { login } from "@/features/auth/services/auth-client-service";
 
 export function LoginForm() {
   const router = useRouter();
 
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("admin123");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { isLoading, message, messageType, execute, clearMessage } =
+    useAsyncAction();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    setIsLoading(true);
-    setError("");
+    const success = await execute(async () => {
+      await login(email, password);
+    }, "Invalid email or password.");
 
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "Failed to login");
-      }
-
+    if (success) {
       router.push("/inbox");
       router.refresh();
-    } catch (error) {
-      console.error(error);
-      setError("Invalid email or password.");
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -79,9 +60,9 @@ export function LoginForm() {
           required
         />
 
-        {error && (
-          <Alert type="error" dismissible>
-            {error}
+        {messageType === "error" && (
+          <Alert type="error" dismissible onDismiss={clearMessage}>
+            {message}
           </Alert>
         )}
 
