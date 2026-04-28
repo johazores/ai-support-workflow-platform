@@ -1,14 +1,9 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUser } from "@/features/auth/services/session-service";
+import { requireAdmin } from "@/features/auth/services/auth-guard-service";
 import { LogoutButton } from "@/features/auth/components/logout-button";
 
 export default async function AdminPage() {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  await requireAdmin();
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">

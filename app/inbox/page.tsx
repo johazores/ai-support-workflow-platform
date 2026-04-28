@@ -1,13 +1,7 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/features/auth/services/session-service";
 import { TicketList } from "@/features/tickets/components/ticket-list";
-
+import { requireUser } from "@/features/auth/services/auth-guard-service";
 export default async function InboxPage() {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  await requireUser();
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">

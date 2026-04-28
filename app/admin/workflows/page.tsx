@@ -1,15 +1,10 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/features/auth/services/session-service";
+import { requireAdmin } from "@/features/auth/services/auth-guard-service";
 import Link from "next/link";
 import { WorkflowList } from "@/features/workflows/components/workflow-list";
 import { CreateWorkflowForm } from "@/features/workflows/components/create-workflow-form";
 import { LogoutButton } from "@/features/auth/components/logout-button";
 export default async function WorkflowsAdminPage() {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  await requireAdmin();
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
