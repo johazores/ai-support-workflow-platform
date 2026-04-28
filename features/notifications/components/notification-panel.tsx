@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Notification = {
   id: string;
@@ -19,9 +20,12 @@ export function NotificationPanel({ notifications }: NotificationPanelProps) {
   if (notifications.length === 0) {
     return (
       <div className="absolute right-0 top-full mt-2 w-80 rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200">
-        <p className="text-center text-sm text-slate-400">
-          No notifications yet
-        </p>
+        <EmptyState
+          icon="bell"
+          title="No notifications"
+          description="You're all caught up."
+          className="py-6"
+        />
       </div>
     );
   }

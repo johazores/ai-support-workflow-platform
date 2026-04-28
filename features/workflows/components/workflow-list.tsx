@@ -1,6 +1,7 @@
 import { getWorkflowRules } from "@/features/workflows/services/workflow-query-service";
 import { WorkflowStatusToggle } from "@/features/workflows/components/workflow-status-toggle";
 import { DeleteWorkflowButton } from "@/features/workflows/components/delete-workflow-button";
+import { EmptyState } from "@/components/ui/empty-state";
 export async function WorkflowList() {
   const workflows = await getWorkflowRules();
 
@@ -49,9 +50,11 @@ export async function WorkflowList() {
         ))}
 
         {workflows.length === 0 && (
-          <div className="p-8 text-center text-sm text-slate-500">
-            No workflows found.
-          </div>
+          <EmptyState
+            icon="file"
+            title="No workflows yet"
+            description="Create your first automation rule to streamline ticket handling."
+          />
         )}
       </div>
     </div>

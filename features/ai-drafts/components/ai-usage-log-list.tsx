@@ -1,5 +1,6 @@
 import { getAiUsageLogs } from "@/features/ai-drafts/services/ai-usage-query-service";
 import { formatDateTime } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export async function AiUsageLogList() {
   const logs = await getAiUsageLogs();
@@ -45,9 +46,11 @@ export async function AiUsageLogList() {
         ))}
 
         {logs.length === 0 && (
-          <div className="p-8 text-center text-sm text-slate-500">
-            No AI usage logs yet.
-          </div>
+          <EmptyState
+            icon="chart"
+            title="No AI usage logs yet"
+            description="Logs will appear here when AI drafts are generated."
+          />
         )}
       </div>
     </div>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { EmptyState } from "@/components/ui/empty-state";
 import type {
   TicketStatus,
   TicketSummary,
@@ -211,9 +212,11 @@ export function TicketList() {
         )}
 
         {!loading && filteredTickets.length === 0 && (
-          <div className="p-8 text-center">
-            <p className="text-sm text-slate-600">No tickets found.</p>
-          </div>
+          <EmptyState
+            icon="search"
+            title="No tickets found"
+            description="Try adjusting your search or filters to find what you're looking for."
+          />
         )}
       </div>
     </div>
