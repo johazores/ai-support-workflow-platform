@@ -1,159 +1,214 @@
 # Architecture Decision Records
 
-## ADR-1: App Router for pages, Pages Router for API routes
+## ADR-1: Next.js with Dual Routing
 
-**Context:** Next.js supports both the App Router and Pages Router. We need to choose how to split responsibilities.
+**Status:** Accepted
 
-**Decision:** Use the App Router (`app/`) for all page rendering and the Pages Router (`pages/api/`) for all API routes.
+**Context:** The application needs server-rendered pages for SEO and initial load performance, plus API endpoints for client-side interactions.
 
-**Rationale:** The App Router provides server components, streaming, and modern layouts. However, API route handlers in the App Router have a different signature and less ecosystem support. Pages Router API routes are explicit, well-documented, and easy to test with standard tools.
+**Decision:** Use Next.js App Router for pages and Pages Router for API routes.
 
-**Consequences:** Two routing systems coexist. Developers must know which directory to use for each concern.
+**Rationale:** App Router provides React Server Components and layouts. Pages Router gives explicit, file-based API handlers with full request/response control. While two routing systems coexist, the separation is clean: `app/` for UI, `pages/api/` for data.
 
----
-
-## ADR-2: Feature-based folder structure without `src/`
-
-**Context:** The codebase needs a clear organizational pattern that scales with feature count.
-
-**Decision:** Group code by product feature under `features/` at the project root. No `src/` wrapper directory.
-
-**Rationale:** Feature folders (`features/tickets/`, `features/workflows/`) keep related components, services, types, and utilities together. This reduces cross-directory navigation compared to grouping by technical layer (e.g., all services in one folder). Omitting `src/` reduces nesting depth by one level.
-
-**Consequences:** Shared infrastructure lives in `lib/` and `components/`, which must stay free of feature-specific logic.
+**Consequences:** Developers must understand both routers. API routes cannot use App Router features like Server Actions.
 
 ---
 
-## ADR-3: Layered service architecture
+## ADR-2: MongoDB with Prisma ORM
 
-**Context:** Components need data. API routes need business logic. We need to prevent tight coupling.
+**Status:** Accepted
 
-**Decision:** Enforce three layers per feature:
+**Context:** The data model includes JSON-structured triggers/actions (workflows), nested message threads, and flexible tag arrays.
 
-1. **Client services** — functions that call API endpoints via `apiClient()`
-2. **API route handlers** — validate input with Zod, call server services, return JSON
-3. **Server services** — execute business logic and Prisma queries
+**Decision:** Use MongoDB as the primary database with Prisma 6 as the ORM.
 
-**Rationale:** Components never call `fetch()` or Prisma directly. This makes each layer independently testable and keeps API handlers thin (validation + delegation only).
+**Rationale:** MongoDB's document model naturally fits JSON workflow definitions and nested ticket conversations. Prisma provides type-safe queries, schema validation, and migration tooling while abstracting MongoDB-specific syntax.
 
-**Consequences:** More files per feature, but each file has a single clear responsibility.
+**Consequences:** No relational joins — data denormalization is required in places. Prisma's MongoDB support has some limitations (no transactions on unsharded collections in older Atlas tiers).
 
 ---
 
-## ADR-4: Signed JWT sessions instead of plain cookies
+## ADR-3: Feature-Based Module Structure
 
-**Context:** The initial implementation used Base64-encoded JSON in cookies, which is trivially forgeable.
+**Status:** Accepted
 
-**Decision:** Replace with signed JWTs using `jose` (HS256 algorithm, 24-hour expiry).
+**Context:** As the application grew beyond basic CRUD (14 feature modules, 39 API routes), a flat file structure would become unmaintainable.
 
-**Rationale:** JWTs provide tamper detection via HMAC signatures. The `jose` library is lightweight (no native dependencies), supports edge runtimes, and handles standard claims (exp, iat, sub).
+**Decision:** Organize code by feature domain with a consistent internal structure (`components/`, `services/`, `types/`, `utils/`).
 
-**Consequences:** Requires a `SESSION_SECRET` environment variable. Sessions cannot be revoked server-side without adding a blocklist (acceptable for this scale).
+**Rationale:** Co-locating related code reduces cognitive load when working on a feature. The consistent structure makes the codebase predictable — a developer knows where to find the service layer for any feature.
 
----
-
-## ADR-5: Provider pattern for AI integration
-
-**Context:** AI draft generation should work in development (without API keys) and production (with real providers).
-
-**Decision:** Define an `AiDraftProvider` interface with `generateDraft()`. Implement `mock` and `openai` providers. Select via the `AI_PROVIDER` environment variable.
-
-**Rationale:** Developers can work on AI-related features without incurring API costs. Adding a new provider (Claude, Gemini) requires implementing one interface — no changes to the rest of the codebase.
-
-**Consequences:** The mock provider returns deterministic responses that don't test prompt quality.
+**Consequences:** Shared utilities must live outside `features/` in `lib/`. Cross-feature imports are allowed but should go through service interfaces rather than reaching into internal components.
 
 ---
 
-## ADR-6: MongoDB with Prisma ORM
+## ADR-4: Provider Chain for AI Integration
 
-**Context:** We need a database that supports flexible schemas and a type-safe query layer.
+**Status:** Accepted
 
-**Decision:** Use MongoDB as the database and Prisma as the ORM.
+**Context:** AI draft generation needs to work in development (without API keys) and production (with real providers), and should handle provider outages gracefully.
 
-**Rationale:** MongoDB's document model maps naturally to ticket threads (nested messages, JSON workflow triggers/actions). Prisma provides auto-generated TypeScript types from the schema, preventing runtime type mismatches.
+**Decision:** Implement an `AiDraftProvider` interface with a chain-of-responsibility pattern: OpenAI → Anthropic → mock fallback.
 
-**Consequences:** Some Prisma features (e.g., migrations) have limited MongoDB support. We use `prisma db push` instead of migration files.
+**Rationale:** The provider interface enables swapping implementations without changing business logic. The chain provides automatic failover. The mock provider enables full development workflow without API keys.
 
----
-
-## ADR-7: Zod for request validation at API boundaries
-
-**Context:** API routes receive untrusted input that must be validated before processing.
-
-**Decision:** Use Zod schemas to validate all request bodies in API route handlers.
-
-**Rationale:** Zod provides runtime validation with TypeScript type inference, eliminating the need for separate type definitions and validation logic. Validation errors are returned in a structured format via `error.flatten()`.
-
-**Consequences:** Zod schemas are defined per-route. Shared schemas can be extracted to feature `types/` directories if reuse is needed.
+**Consequences:** All provider attempts are logged to `AiUsageLog`, adding database writes even on failure. The chain adds latency when primary providers fail (sequential fallback, not parallel).
 
 ---
 
-## ADR-8: Centralized API client
+## ADR-5: Signed JWT Sessions
 
-**Context:** Client components were making raw `fetch()` calls with inconsistent error handling.
+**Status:** Accepted
 
-**Decision:** Create a single `apiClient<T>()` function in `lib/api-client.ts` that handles headers, JSON serialization, and error extraction. All client services use it exclusively.
+**Context:** The initial prototype used Base64-encoded JSON cookies — trivially forgeable.
 
-**Rationale:** Eliminates duplicated fetch boilerplate. Provides a single point for adding auth headers, retries, or request logging in the future.
+**Decision:** Use signed JWTs via `jose` (HS256, 24h expiry) stored in HttpOnly cookies.
 
-**Consequences:** All API calls flow through one function, making it easy to audit network behavior.
+**Rationale:** JWTs are stateless (no server-side session store needed), signed (tamper-proof), and widely understood. The `jose` library is lightweight and supports the Web Crypto API.
 
----
-
-## ADR-9: Activity logging for audit trail
-
-**Context:** Support operations (status changes, assignments, workflow runs) need to be traceable.
-
-**Decision:** Log key actions as `ActivityLog` records linked to tickets.
-
-**Rationale:** An audit trail is essential for any support tool. Logging at the service layer (not the API layer) ensures consistency regardless of how the action is triggered.
-
-**Consequences:** Activity logs grow over time. Cursor-based pagination is used to handle large volumes.
+**Consequences:** No server-side session revocation without a blocklist. Token refresh requires re-authentication after 24h.
 
 ---
 
-## ADR-10: Three-tier RBAC with granular permissions
+## ADR-6: SameSite=Strict Cookies
 
-**Context:** The initial role model had only "admin" and "support" roles. As the feature set grew (analytics, audit logs, saved replies), finer-grained access control was needed.
+**Status:** Accepted
 
-**Decision:** Define three roles (admin, supervisor, agent) with 11 granular permissions managed in `role-service.ts`. Enforce permissions on both server-rendered pages (auth guards) and API routes (middleware).
+**Context:** CSRF protection is critical for a support tool that modifies ticket data.
 
-**Rationale:** A permission-based model decouples roles from capabilities. Adding a new feature only requires defining its permission and assigning it to roles — no code changes to existing guards.
+**Decision:** Set session cookies to `SameSite=Strict` with the `Secure` flag in production.
 
-**Consequences:** Every new API route and admin page must declare its required permission. Forgetting to add a guard is a security risk, mitigated by the centralized `requireApiAuth`/`requireApiPermission` middleware pattern.
+**Rationale:** `SameSite=Strict` prevents the cookie from being sent on any cross-site request, eliminating CSRF. The `Secure` flag ensures HTTPS-only transmission.
 
----
-
-## ADR-11: AI provider chain with fallback
-
-**Context:** Relying on a single AI provider creates a single point of failure. Development and production may need different provider configurations.
-
-**Decision:** Implement `AiProviderChain` that tries providers in order (OpenAI → Anthropic → mock) based on which API keys are configured. Log all attempts to `AiUsageLog`.
-
-**Rationale:** Fallback chains improve resilience — if OpenAI is down, Anthropic serves as backup. The mock provider ensures development always works without API keys. Logging every attempt (including failures) enables cost monitoring and debugging.
-
-**Consequences:** Adds complexity over a single provider. Response quality may vary between providers for the same prompt.
+**Consequences:** Navigating to the app from an external link (email, Slack) requires re-authentication. Acceptable for an internal support tool.
 
 ---
 
-## ADR-12: SSE for real-time updates instead of WebSockets
+## ADR-7: Zod Validation on All API Routes
 
-**Context:** Ticket detail pages need live updates when new messages arrive or status changes.
+**Status:** Accepted
 
-**Decision:** Use Server-Sent Events (SSE) via a `GET /api/tickets/[id]/events` endpoint with 30-second heartbeat keepalive.
+**Context:** API endpoints accept user input that must be validated before processing.
 
-**Rationale:** SSE is simpler to implement than WebSockets — it uses standard HTTP, works through proxies, and doesn't require a persistent bidirectional connection. For this use case (server pushes updates to client), SSE is sufficient.
+**Decision:** Use Zod schemas to validate all request bodies at the API layer.
 
-**Consequences:** Unidirectional only (server → client). If bidirectional communication is needed later, WebSockets would need to be added separately.
+**Rationale:** Zod provides runtime validation with TypeScript type inference. Defining schemas at the API boundary ensures no invalid data reaches the service layer. The `.safeParse()` pattern returns structured errors without throwing.
+
+**Consequences:** Schemas must be maintained alongside TypeScript types. Minor duplication between Zod schemas and Prisma model types.
 
 ---
 
-## ADR-13: Hardened session cookies
+## ADR-8: Centralized API Client
 
-**Context:** A security audit revealed that session cookies used `SameSite=Lax` and lacked the `Secure` flag.
+**Status:** Accepted
 
-**Decision:** Change session cookies to `SameSite=Strict` and add the `Secure` flag conditionally when `NODE_ENV === "production"`.
+**Context:** Client components were using scattered `fetch()` calls with inconsistent error handling.
 
-**Rationale:** `SameSite=Strict` prevents the cookie from being sent on any cross-site request, reducing CSRF risk. The `Secure` flag ensures the cookie is only transmitted over HTTPS in production.
+**Decision:** Create a single `apiClient<T>()` function for all client-side API calls.
 
-**Consequences:** `SameSite=Strict` may cause the cookie to not be sent when navigating to the app from an external link (user must re-login). This is acceptable for an internal support tool.
+**Rationale:** Centralizes JSON serialization, Content-Type headers, and error extraction. Provides a single point for future enhancements (auth headers, retries, request logging). All API responses use the `{ data: ... }` wrapper, so callers destructure consistently.
+
+**Consequences:** All client services depend on this function. Changes to error handling affect every API call.
+
+---
+
+## ADR-9: SSE for Real-Time Updates
+
+**Status:** Accepted
+
+**Context:** Ticket updates should appear in real-time without manual refresh.
+
+**Decision:** Use Server-Sent Events (SSE) instead of WebSockets.
+
+**Rationale:** SSE is simpler to implement (standard HTTP, no upgrade handshake), works through proxies and load balancers, and is sufficient for unidirectional server → client updates. A 30-second heartbeat prevents connection timeouts.
+
+**Consequences:** No client → server streaming. For bidirectional communication (e.g., live chat), WebSockets would be needed.
+
+---
+
+## ADR-10: Three-Tier RBAC
+
+**Status:** Accepted
+
+**Context:** Different team members need different access levels — admins manage settings, supervisors monitor operations, agents handle tickets.
+
+**Decision:** Implement three roles (admin, supervisor, agent) with 12 granular permissions.
+
+**Rationale:** Granular permissions provide fine-grained control without the complexity of a full ACL system. Permissions are checked at both the API layer (middleware) and the UI layer (conditional rendering) for defense in depth.
+
+**Consequences:** Adding a new role or permission requires updating the role-permission mapping in `role-service.ts` and testing the new access paths.
+
+---
+
+## ADR-11: Workflow Engine with JSON Rules
+
+**Status:** Accepted
+
+**Context:** Support teams need automated triage — routing tickets by subject, assigning to specialists, applying tags.
+
+**Decision:** Store workflow rules as JSON trigger/action pairs, executed manually or automatically on ticket events.
+
+**Rationale:** JSON rules are flexible (new operators and actions can be added without schema changes), inspectable (admins see exactly what the rule does), and testable (pure function matching). Loop prevention via execution context ensures rules don't trigger infinitely.
+
+**Consequences:** Complex rule logic (AND/OR conditions) requires extending the trigger model. No scheduled or time-delayed actions.
+
+---
+
+## ADR-12: Dark Mode via CSS Class Strategy
+
+**Status:** Accepted
+
+**Context:** Users expect dark mode support, especially for tools used during extended support shifts.
+
+**Decision:** Use Tailwind CSS `dark:` variant with a class-based toggle, persisted in localStorage and synced with system preferences.
+
+**Rationale:** Class-based dark mode gives users explicit control while respecting system preferences as the default. Tailwind's `dark:` utilities keep light/dark styles co-located in the same component.
+
+**Consequences:** Every component must include `dark:` variants for colors. The `ThemeProvider` component manages class toggling on the `<html>` element.
+
+---
+
+## ADR-13: Multi-Mailbox Email Architecture
+
+**Status:** Accepted
+
+**Context:** Support teams often manage multiple email addresses (support@, sales@, billing@). A single-mailbox design would force separate deployments per mailbox.
+
+**Decision:** Make `EmailConfig` a multi-record model with per-mailbox SMTP/IMAP credentials, a unique `fromAddress`, and `isDefault`/`isActive` flags. Track `mailboxId` on `EmailLog` and `Ticket`.
+
+**Rationale:**
+
+- **Unique `fromAddress`** prevents duplicate mailboxes and enables routing inbound replies back to the originating mailbox.
+- **`isDefault` flag** with automatic clearing (only one default at a time) ensures backward compatibility — existing code calling `getEmailConfig()` gets the default.
+- **`Promise.allSettled()` polling** ensures one failing mailbox doesn't block others during IMAP polling.
+- **`mailboxId` on EmailLog and Ticket** enables per-mailbox analytics, filtering, and audit trails.
+
+**Consequences:** Password management becomes more complex (multiple sets of credentials). Future work: encrypted credential storage, connection pool reuse across poll cycles.
+
+---
+
+## ADR-14: CSAT Ratings on Closed Tickets
+
+**Status:** Accepted
+
+**Context:** Measuring customer satisfaction requires a lightweight feedback mechanism.
+
+**Decision:** Add a CSAT widget (1–5 score + optional comment) that appears only on closed tickets, stored as a `CsatRating` with a unique constraint on `ticketId`.
+
+**Rationale:** One rating per ticket keeps the model simple. Restricting to closed tickets ensures the rating reflects the complete support experience. The unique constraint prevents duplicate submissions.
+
+**Consequences:** No mid-conversation satisfaction tracking. Ratings can't be updated after submission (by design — prevents score manipulation).
+
+---
+
+## ADR-15: Bulk Operations with Multi-Select
+
+**Status:** Accepted
+
+**Context:** Agents managing high-volume queues need to assign, re-prioritize, or close multiple tickets at once.
+
+**Decision:** Add checkbox multi-select to the ticket list with bulk assign, status change, and priority change operations.
+
+**Rationale:** Bulk operations use the same underlying service functions as single-ticket operations, ensuring consistent business logic (activity logging, workflow triggers). The UI shows selected count and available actions in a toolbar.
+
+**Consequences:** Bulk operations are not atomic — individual failures are possible. The UI reports success/failure counts rather than all-or-nothing.

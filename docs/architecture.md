@@ -1,181 +1,269 @@
 # Architecture
 
-## Overview
+## System Overview
 
-The application is a full-stack helpdesk built with Next.js 16. It uses the **App Router** for server-rendered pages and the **Pages Router** exclusively for API routes. All business logic lives in a feature-based `features/` directory, keeping pages and API handlers thin.
-
-## System Layers
+The application follows a **three-layer architecture** within a single Next.js deployment:
 
 ```
-┌─────────────────────────────────────────┐
-│  Browser (React 19, Tailwind CSS 4)     │
-│  └─ Client services (apiClient)         │
-├─────────────────────────────────────────┤
-│  API Routes (pages/api/)                │
-│  └─ Zod validation → service call       │
-├─────────────────────────────────────────┤
-│  Feature Services (features/*/services) │
-│  └─ Business logic, Prisma queries      │
-├─────────────────────────────────────────┤
-│  Database (MongoDB via Prisma 6)        │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                     Client Layer                     │
+│  App Router pages → React components → API client   │
+├─────────────────────────────────────────────────────┤
+│                      API Layer                       │
+│  Pages Router handlers → Zod validation → auth MW   │
+├─────────────────────────────────────────────────────┤
+│                    Service Layer                     │
+│  Business logic → Prisma ORM → MongoDB              │
+└─────────────────────────────────────────────────────┘
 ```
 
-## Request Flow
+**Request flow:** Component → `apiClient()` → API route → auth check → Zod validate → service → Prisma → MongoDB → JSON response → Component state.
 
-1. **Client component** calls a function from a client service (e.g., `sendReply()`)
-2. **Client service** uses the centralized `apiClient()` in `lib/api-client.ts` to make a typed fetch call
-3. **API route handler** in `pages/api/` validates the request body with Zod, calls a server-side service, and returns JSON
-4. **Server service** in `features/*/services/` executes business logic and Prisma queries
-5. **Response** flows back through the same layers
+---
 
 ## Directory Structure
 
-| Directory     | Purpose                                             | Runtime         |
-| ------------- | --------------------------------------------------- | --------------- |
-| `app/`        | Page components, layouts, loading/error states      | Server + Client |
-| `pages/api/`  | REST API route handlers (31 endpoints)              | Server only     |
-| `features/`   | Feature modules (10 modules, see below)             | Mixed           |
-| `components/` | Shared UI primitives (Button, Card, Skeleton, etc.) | Client          |
-| `lib/`        | Infrastructure (Prisma client, API client, auth)    | Mixed           |
-| `prisma/`     | Database schema (14 models) and seed script         | Server only     |
-| `.github/`    | CI pipeline (GitHub Actions)                        | CI              |
+| Directory            | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
+| `app/`               | App Router pages (server components, layouts)    |
+| `pages/api/`         | API routes (39 endpoints, Pages Router)          |
+| `features/`          | 14 feature modules (see below)                   |
+| `components/ui/`     | 14 shared UI primitives                          |
+| `components/layout/` | App header, navigation                           |
+| `lib/`               | Shared infrastructure (Prisma, API client, auth) |
+| `prisma/`            | Schema (16 models), seed script                  |
+| `docs/`              | Architecture docs, ADRs, roadmap                 |
+
+---
 
 ## Feature Module Convention
 
-Each feature in `features/` follows a consistent structure:
+Each of the 14 feature modules under `features/` follows a consistent structure:
 
 ```
-features/tickets/
-  components/       → React components (UI only)
-  services/
-    ticket-service.ts          → Server-side Prisma queries
-    ticket-client-service.ts   → Client-side API calls
-  types/
-    ticket.ts                  → TypeScript interfaces
-  utils/
-    highlight-text.tsx         → Pure functions (tested)
+features/<module>/
+  components/    → React UI components
+  services/      → Server-side business logic + client-side API calls
+  types/         → TypeScript interfaces
+  utils/         → Pure functions + tests
 ```
 
-### Feature Modules
+**Feature modules:** ai-drafts, analytics, audit, auth, csat, customers, email, email-logs, notifications, saved-replies, sla, tags, tickets, workflows.
 
-| Module           | Purpose                                       |
-| ---------------- | --------------------------------------------- |
-| `tickets/`       | Inbox, ticket detail, replies, internal notes |
-| `ai-drafts/`     | AI draft generation, provider chain, tones    |
-| `workflows/`     | Rule engine, triggers, actions                |
-| `auth/`          | Login, sessions, RBAC, permissions            |
-| `analytics/`     | Dashboard metrics and charts                  |
-| `audit/`         | Audit log viewer with filtering               |
-| `tags/`          | Ticket categorization                         |
-| `saved-replies/` | Response templates                            |
-| `sla/`           | SLA policy tracking and breach detection      |
-| `notifications/` | User notifications (stub)                     |
+This convention enforces separation of concerns: components never import Prisma, services never render JSX, and types are scoped to their domain.
 
-**Rules:**
-
-- Components never call Prisma or `fetch()` directly
-- Server services are imported only in API routes and other server services
-- Client services are imported only in client components
-- Types are shared across both runtimes
+---
 
 ## API Route Pattern
 
-Every API handler follows the same structure:
+Every API route follows a four-step pattern:
 
 ```typescript
 export default async function handler(req, res) {
   // 1. Method guard
-  if (req.method !== "POST") {
+  if (req.method !== "POST")
     return res.status(405).json({ message: "Method not allowed" });
-  }
-  // 2. Validate with Zod
-  const result = schema.safeParse(req.body);
-  if (!result.success) {
+
+  // 2. Auth + RBAC
+  const auth = await requireApiPermission(req, res, "tickets:write");
+  if (!auth.ok) return;
+
+  // 3. Zod validation
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success)
     return res
       .status(400)
-      .json({ message: "Invalid request", errors: result.error.flatten() });
-  }
-  // 3. Call service
-  const data = await someService(result.data);
-  // 4. Return response
-  return res.status(200).json({ data });
+      .json({ message: "Invalid input", errors: parsed.error.flatten() });
+
+  // 4. Service call → JSON response
+  const result = await someService(parsed.data);
+  return res.status(200).json({ data: result });
 }
 ```
 
+All responses use the `{ data: ... }` wrapper convention. The client `apiClient<T>()` function handles JSON serialization, error extraction, and type safety.
+
+---
+
 ## Authentication & Sessions
 
-- Passwords are hashed with bcryptjs (10 rounds)
-- Sessions are signed JWTs created with `jose` (HS256, 24h expiry)
-- The JWT is stored in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` in production)
-- Server components read sessions via `cookies()` from `next/headers`
-- API routes receive the cookie automatically with each request
-- A `SESSION_SECRET` environment variable is required
+- **Login:** bcrypt password verification → JWT creation via `jose` (HS256, 24h expiry)
+- **Storage:** HttpOnly cookie, `SameSite=Strict`, `Secure` in production
+- **Verification:** Every API route calls `requireApiAuth()` or `requireApiPermission()` which decodes and validates the JWT
+- **Page protection:** Server-side auth guards (`requireUser`, `requireSupervisor`, `requirePermission`) redirect unauthorized users
 
-## Role-Based Access Control
+No server-side session storage — tokens are stateless. Trade-off: no forced revocation without a blocklist.
 
-Three roles with hierarchical permissions:
+---
 
-| Role         | Scope                                                               |
-| ------------ | ------------------------------------------------------------------- |
-| `admin`      | All permissions — user management, workflows, analytics, audit logs |
-| `supervisor` | Read-only analytics, audit logs, ticket assignment, saved replies   |
-| `agent`      | Ticket read/reply, AI draft generation                              |
+## Role-Based Access Control (RBAC)
 
-11 granular permissions are defined in `role-service.ts`: `tickets:read`, `tickets:assign`, `tickets:manage-tags`, `workflows:read`, `workflows:manage`, `saved-replies:read`, `saved-replies:manage`, `analytics:read`, `ai-logs:read`, `audit-logs:read`, `users:manage`.
+Three roles with 12 granular permissions:
 
-Server-side guards:
+| Permission        | Admin | Supervisor | Agent |
+| ----------------- | ----- | ---------- | ----- |
+| `tickets:read`    | ✓     | ✓          | ✓     |
+| `tickets:write`   | ✓     | ✓          | ✓     |
+| `tickets:assign`  | ✓     | ✓          |       |
+| `tickets:delete`  | ✓     |            |       |
+| `ai:generate`     | ✓     | ✓          | ✓     |
+| `ai:view-logs`    | ✓     | ✓          |       |
+| `workflows:read`  | ✓     | ✓          |       |
+| `workflows:write` | ✓     |            |       |
+| `users:read`      | ✓     | ✓          |       |
+| `users:write`     | ✓     |            |       |
+| `analytics:read`  | ✓     | ✓          |       |
+| `email-logs:read` | ✓     | ✓          |       |
 
-- `requireUser()` — any authenticated user
-- `requireAdmin()` — admin only
-- `requireSupervisor()` — admin or supervisor
-- `requirePermission(permission)` — checks specific permission
+Permissions are defined in `features/auth/services/role-service.ts` and enforced at both the API layer (middleware) and the UI layer (conditional rendering).
 
-API routes use `requireApiAuth()` and `requireApiPermission()` from `lib/api-auth.ts`.
+---
 
 ## AI Provider System
 
-The AI draft feature uses a provider interface (`AiDraftProvider`) with a fallback chain:
+The AI draft generation uses a **provider chain** pattern:
 
-1. **OpenAI** — Chat Completions API (if `OPENAI_API_KEY` is set)
-2. **Anthropic** — Messages API via fetch (if `ANTHROPIC_API_KEY` is set)
-3. **Mock** — deterministic template responses (always available)
+```
+AiProviderChain → [OpenAiProvider, AnthropicProvider, MockAiProvider]
+```
 
-The `AiProviderChain` in `ai-provider-chain.ts` tries each configured provider in order. If one fails, it falls back to the next. All attempts are logged to `AiUsageLog` with provider name, model, token counts, and success/error status.
+Each provider implements the `AiDraftProvider` interface:
 
-### Tone Support
+```typescript
+interface AiDraftProvider {
+  name: string;
+  generateDraft(context: DraftContext): Promise<DraftResult>;
+}
+```
 
-Drafts can be generated in four tones: `professional`, `friendly`, `concise`, `empathetic`. The tone is injected into the system prompt for real providers and drives template selection for the mock provider.
+The chain tries providers in order, falling back on failure. All attempts (success and failure) are logged to `AiUsageLog` with provider name, model, token counts, latency, and errors. This enables cost tracking and provider comparison.
 
-### Ticket Classification
+**Tone system:** Agents select from professional, friendly, concise, or empathetic. The tone is passed as a system prompt modifier to the AI provider.
 
-`classification-service.ts` provides automatic ticket categorization using keyword-based rules with an optional OpenAI enhancement.
+---
+
+## Multi-Mailbox Email Architecture
+
+The email system supports multiple independent mailboxes, each with its own SMTP and IMAP configuration:
+
+```
+┌──────────────────────────────────────────────────┐
+│                EmailConfig (per mailbox)           │
+│  name, fromAddress (unique), SMTP creds, IMAP creds│
+│  isActive, isDefault                              │
+├──────────────────────────────────────────────────┤
+│                                                    │
+│  Outbound (SMTP)          Inbound (IMAP)          │
+│  ┌──────────────┐         ┌──────────────┐        │
+│  │ sendEmail()  │         │pollAllInboxes│        │
+│  │ + mailboxId  │         │  (parallel)  │        │
+│  └──────┬───────┘         └──────┬───────┘        │
+│         │                        │                 │
+│         ▼                        ▼                 │
+│  Nodemailer transport     IMAP → mailparser        │
+│         │                        │                 │
+│         ▼                        ▼                 │
+│  EmailLog (mailboxId)     processInboundEmail()   │
+│                           → Customer lookup        │
+│                           → Thread via In-Reply-To │
+│                           → Create/update Ticket   │
+│                           → Classify + workflows   │
+└──────────────────────────────────────────────────┘
+```
+
+### Key design decisions:
+
+- **One config = one mailbox.** Each `EmailConfig` record has its own SMTP and IMAP credentials, enabling departments (support, sales, billing) to have separate email addresses.
+- **`fromAddress` is unique.** Prevents duplicate mailbox registrations.
+- **`isDefault` flag** ensures backward compatibility — `getEmailConfig()` returns the default active mailbox for existing code paths.
+- **Parallel polling.** `pollAllInboxes()` uses `Promise.allSettled()` so one mailbox failure doesn't block others. Each result includes the mailbox name and any error.
+- **Mailbox tracking.** `EmailLog.mailboxId` and `Ticket.mailboxId` trace which mailbox originated each interaction.
+- **Email templates** are global (not per-mailbox), with variable placeholders (`{{customer_name}}`, `{{ticket_subject}}`, etc.) and a live preview editor.
+
+---
 
 ## Workflow Engine
 
-Workflow rules are stored as database records with:
+Workflows are JSON-based rules with triggers and actions:
 
-- A **trigger** (JSON string): `{ field, operator, value }`
-- An **actions** array (JSON): `[{ type, value }]`
+```json
+{
+  "trigger": { "field": "subject", "operator": "contains", "value": "billing" },
+  "actions": [
+    { "type": "assign-ticket", "value": "jordan@company.com" },
+    { "type": "change-status", "value": "pending" },
+    { "type": "add-tag", "value": "billing" }
+  ]
+}
+```
 
-The engine evaluates triggers against ticket data and executes matching actions. Supported actions: `change-status`, `assign-ticket`, `generate-draft`, `add-tag`. Workflows can run manually (per ticket) or automatically on trigger match. The engine includes loop prevention to avoid recursive execution. Results are logged as `ActivityLog` entries.
+**Execution modes:**
 
-## Naming Conventions
+- **Manual** — agents click "Run Workflow" on a ticket
+- **Automatic** — rules execute on ticket creation (via email ingestion or API)
 
-- **Files and folders**: kebab-case (`ticket-service.ts`, `ai-draft-panel.tsx`)
-- **Components**: PascalCase (`TicketList`, `AiDraftPanel`)
-- **Services**: camelCase functions (`fetchTickets()`, `createWorkflowRule()`)
-- **Types**: PascalCase interfaces (`Ticket`, `WorkflowRule`)
-- **API routes**: kebab-case paths (`/api/tickets/[ticket-id]/status`)
+**Loop prevention:** A workflow execution context tracks which rules have already fired, preventing infinite trigger chains.
 
-## Testing
+**Action types:** `change-status`, `assign-ticket`, `generate-draft`, `add-tag`.
 
-- **Framework:** Vitest 4 with path alias support
-- **Test files:** 6 suites covering role service, AI provider chain, mock AI provider, workflow utilities, API auth middleware, and API client
-- **Pattern:** Unit tests for pure logic and service layers; API route tests use mocked Prisma and session utilities
+---
+
+## Real-Time Updates
+
+- **SSE endpoint** (`/api/tickets/events`) streams ticket updates with a 30-second heartbeat
+- **Client hook** (`useTicketEvents`) subscribes to the stream and auto-refreshes ticket data
+- **Notifications** are stored in the database with read/unread state, surfaced via a notification bell in the header
+
+---
+
+## Database Schema
+
+16 Prisma models backed by MongoDB:
+
+| Model         | Purpose                                   |
+| ------------- | ----------------------------------------- |
+| User          | Support agents and admins                 |
+| Customer      | End users who submit tickets              |
+| Ticket        | Support requests with status and priority |
+| Message       | Conversation messages (replies + notes)   |
+| Draft         | AI-generated draft replies                |
+| WorkflowRule  | Automation rules (triggers + actions)     |
+| ActivityLog   | Audit trail for all ticket events         |
+| AiUsageLog    | AI provider call logging (cost tracking)  |
+| EmailConfig   | Multi-mailbox SMTP/IMAP configurations    |
+| EmailLog      | Outbound email delivery tracking          |
+| EmailTemplate | Reusable email templates with variables   |
+| Notification  | User notifications (read/unread)          |
+| Tag           | Ticket labels                             |
+| SavedReply    | Reusable response templates               |
+| SlaPolicy     | Service level agreement definitions       |
+| CsatRating    | Customer satisfaction scores              |
+
+---
+
+## Testing Strategy
+
+- **Unit tests** (Vitest 4): 42 tests across 7 files covering services, utilities, and middleware
+- **Test targets:** Role permissions, AI provider chain + fallback, mock provider responses, API auth middleware, API client error handling, utility functions, workflow rule matching
+- **CI pipeline** (GitHub Actions): lint → type-check → test → build on every push
+
+---
 
 ## Infrastructure
 
-- **CI:** GitHub Actions pipeline (`.github/workflows/ci.yml`) runs lint, type-check, tests, and build on push/PR to master
-- **Docker:** Multi-stage `Dockerfile` (Alpine, non-root user) with `docker-compose.yml` for local development (MongoDB 7 + Next.js)
-- **Database indexes:** Optimized indexes on Ticket, Message, ActivityLog, Notification, Draft, and EmailLog for common query patterns
+- **Docker:** Multi-stage Dockerfile with non-root user, Docker Compose with MongoDB
+- **CI:** GitHub Actions workflow running lint, tsc, vitest, and next build
+- **Database indexes:** Defined in Prisma schema for common query patterns (ticket lookups, email log filtering, customer search)
+
+---
+
+## Naming Conventions
+
+| Entity     | Convention        | Example                    |
+| ---------- | ----------------- | -------------------------- |
+| Files      | kebab-case        | `email-config-service.ts`  |
+| Components | PascalCase        | `EmailConfigForm`          |
+| Services   | camelCase exports | `getEmailConfigById()`     |
+| API routes | kebab-case paths  | `/api/email-config/[id]`   |
+| Types      | PascalCase        | `MailboxConfig`            |
+| DB fields  | camelCase         | `fromAddress`, `isDefault` |
