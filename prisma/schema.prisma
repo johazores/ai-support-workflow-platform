@@ -167,3 +167,20 @@ model CsatRating {
   comment   String?
   createdAt DateTime @default(now())
 }
+
+model EmailConfig {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  smtpHost      String
+  smtpPort      Int      @default(587)
+  smtpUser      String
+  smtpPass      String
+  imapHost      String
+  imapPort      Int      @default(993)
+  imapUser      String
+  imapPass      String
+  fromAddress   String
+  fromName      String   @default("Support")
+  isActive      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
