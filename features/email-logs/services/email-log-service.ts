@@ -2,10 +2,13 @@ import { prisma } from "@/lib/prisma";
 
 export async function listEmailLogs(opts?: {
   status?: string;
+  mailboxId?: string;
   limit?: number;
   offset?: number;
 }) {
-  const where = opts?.status ? { status: opts.status } : {};
+  const where: Record<string, unknown> = {};
+  if (opts?.status) where.status = opts.status;
+  if (opts?.mailboxId) where.mailboxId = opts.mailboxId;
 
   const [logs, total] = await Promise.all([
     prisma.emailLog.findMany({

@@ -13,6 +13,7 @@ type InboundEmailInput = {
   body: string;
   messageId: string;
   inReplyTo?: string;
+  mailboxId?: string;
 };
 
 export async function processInboundEmail(input: InboundEmailInput) {
@@ -52,6 +53,7 @@ export async function processInboundEmail(input: InboundEmailInput) {
         status: "open",
         priority: "normal",
         customerId: customer.id,
+        mailboxId: input.mailboxId ?? null,
       },
     });
 

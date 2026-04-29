@@ -33,6 +33,7 @@ model Ticket {
   priority   String    @default("normal")
   customerId String    @db.ObjectId
   customer   Customer  @relation(fields: [customerId], references: [id])
+  mailboxId  String?   @db.ObjectId
   assigneeName  String?
   assigneeEmail String?
   tagIds     String[]  @db.ObjectId
@@ -111,6 +112,7 @@ model EmailLog {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   ticketId  String   @db.ObjectId
   messageId String   @db.ObjectId
+  mailboxId String?  @db.ObjectId
   to        String
   subject   String
   status    String   @default("sent")
@@ -118,6 +120,7 @@ model EmailLog {
   createdAt DateTime @default(now())
 
   @@index([ticketId])
+  @@index([mailboxId])
 }
 
 model Notification {
@@ -170,6 +173,7 @@ model CsatRating {
 
 model EmailConfig {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
   smtpHost      String
   smtpPort      Int      @default(587)
   smtpUser      String
@@ -178,9 +182,10 @@ model EmailConfig {
   imapPort      Int      @default(993)
   imapUser      String
   imapPass      String
-  fromAddress   String
+  fromAddress   String   @unique
   fromName      String   @default("Support")
   isActive      Boolean  @default(false)
+  isDefault     Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

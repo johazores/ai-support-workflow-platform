@@ -2,11 +2,16 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { requireApiPermission } from "@/lib/api-auth";
 import {
-  getEmailConfig,
-  upsertEmailConfig,
+  listEmailConfigs,
+  createEmailConfig,
 } from "@/features/email/services/email-config-service";
 
+function maskPasswords<T extends Record<string, unknown>>(config: T) {
+  return { ...config, smtpPass: "••••••••", imapPass: "••••••••" };
+}
+
 const configSchema = z.object({
+  name: z.string().min(1).max(100),
   smtpHost: z.string().min(1).max(255),
   smtpPort: z.number().int().min(1).max(65535),
   smtpUser: z.string().min(1).max(255),
@@ -18,6 +23,7 @@ const configSchema = z.object({
   fromAddress: z.string().email().max(255),
   fromName: z.string().min(1).max(100),
   isActive: z.boolean(),
+  isDefault: z.boolean().default(false),
 });
 
 export default async function handler(
@@ -28,20 +34,13 @@ export default async function handler(
   if (!auth.ok) return;
 
   if (req.method === "GET") {
-    const config = await getEmailConfig();
-    if (!config) return res.status(200).json({ data: null });
-
-    // Mask passwords in response
+    const configs = await listEmailConfigs();
     return res.status(200).json({
-      data: {
-        ...config,
-        smtpPass: "••••••••",
-        imapPass: "••••••••",
-      },
+      data: configs.map(maskPasswords),
     });
   }
 
-  if (req.method === "PUT") {
+  if (req.method === "POST") {
     const parsed = configSchema.safeParse(req.body);
     if (!parsed.success) {
       return res
@@ -49,16 +48,10 @@ export default async function handler(
         .json({ message: "Invalid input", errors: parsed.error.flatten() });
     }
 
-    const config = await upsertEmailConfig(parsed.data);
-    return res.status(200).json({
-      data: {
-        ...config,
-        smtpPass: "••••••••",
-        imapPass: "••••••••",
-      },
-    });
+    const config = await createEmailConfig(parsed.data);
+    return res.status(201).json({ data: maskPasswords(config) });
   }
 
-  res.setHeader("Allow", ["GET", "PUT"]);
+  res.setHeader("Allow", ["GET", "POST"]);
   return res.status(405).json({ message: "Method not allowed" });
 }

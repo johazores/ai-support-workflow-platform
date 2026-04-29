@@ -1,6 +1,9 @@
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
-import { getEmailConfig } from "@/features/email/services/email-config-service";
+import {
+  getEmailConfig,
+  getEmailConfigById,
+} from "@/features/email/services/email-config-service";
 
 export async function sendEmail(opts: {
   to: string;
@@ -8,8 +11,11 @@ export async function sendEmail(opts: {
   html: string;
   ticketId: string;
   messageId: string;
+  mailboxId?: string;
 }) {
-  const config = await getEmailConfig();
+  const config = opts.mailboxId
+    ? await getEmailConfigById(opts.mailboxId)
+    : await getEmailConfig();
 
   if (!config || !config.isActive) {
     throw new Error("Email integration is not configured or inactive");
@@ -37,6 +43,7 @@ export async function sendEmail(opts: {
       data: {
         ticketId: opts.ticketId,
         messageId: opts.messageId,
+        mailboxId: config.id,
         to: opts.to,
         subject: opts.subject,
         status: "sent",
@@ -49,6 +56,7 @@ export async function sendEmail(opts: {
       data: {
         ticketId: opts.ticketId,
         messageId: opts.messageId,
+        mailboxId: config.id,
         to: opts.to,
         subject: opts.subject,
         status: "failed",
