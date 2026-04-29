@@ -4,6 +4,7 @@ import type { TicketStatus } from "@/features/tickets/types/ticket";
 import { AiDraftPanel } from "@/features/ai-drafts/components/ai-draft-panel";
 import { CustomerHistory } from "@/features/customers/components/customer-history";
 import { CsatWidget } from "@/features/csat/components/csat-widget";
+import { TicketPrioritySelect } from "@/features/tickets/components/ticket-priority-select";
 import { TicketStatusSelect } from "@/features/tickets/components/ticket-status-select";
 import { TicketAssigneeSelect } from "@/features/tickets/components/ticket-assignee-select";
 import { RunWorkflowButton } from "@/features/workflows/components/run-workflow-button";
@@ -175,7 +176,10 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
 
             <div className="flex items-center justify-between">
               <p className="text-slate-500">Priority</p>
-              <PriorityBadge priority={ticket.priority} />
+              <TicketPrioritySelect
+                ticketId={ticket.id}
+                currentPriority={ticket.priority}
+              />
             </div>
 
             <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
@@ -250,30 +254,13 @@ export async function TicketDetail({ ticketId }: TicketDetailProps) {
   );
 }
 
-const priorityStyles: Record<string, string> = {
-  urgent: "bg-red-50 text-red-700 ring-red-200",
-  high: "bg-orange-50 text-orange-700 ring-orange-200",
-  normal: "bg-slate-100 text-slate-700 ring-slate-200",
-  low: "bg-slate-50 text-slate-500 ring-slate-200",
-};
-
-function PriorityBadge({ priority }: { priority: string }) {
-  const style = priorityStyles[priority] ?? priorityStyles.normal;
-  return (
-    <span
-      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium capitalize ring-1 ${style}`}
-    >
-      {priority}
-    </span>
-  );
-}
-
 const activityDotColors: Record<string, string> = {
   status_changed: "bg-blue-400",
   reply_sent: "bg-green-400",
   internal_note_added: "bg-amber-400",
   ticket_assigned: "bg-purple-400",
   workflow_executed: "bg-indigo-400",
+  priority_changed: "bg-orange-400",
   "customer-reply": "bg-teal-400",
   "new-ticket": "bg-emerald-400",
 };
