@@ -250,12 +250,13 @@ export function EmailTemplateBuilder() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Delete Template"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"?`}
         confirmLabel="Delete"
-        variant="danger"
+        variant="destructive"
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
-      />
+      >
+        Are you sure you want to delete &ldquo;{deleteTarget?.name}&rdquo;?
+      </ConfirmDialog>
     </div>
   );
 }
