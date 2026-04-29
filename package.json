@@ -23,7 +23,9 @@
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.3",
+    "imap": "^0.8.19",
     "jose": "^6.2.3",
+    "mailparser": "^3.9.8",
     "next": "16.2.4",
     "nodemailer": "^8.0.7",
     "openai": "^6.34.0",
@@ -35,6 +37,8 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
+    "@types/imap": "^0.8.43",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",
