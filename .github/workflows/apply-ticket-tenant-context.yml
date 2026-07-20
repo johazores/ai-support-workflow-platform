@@ -1,4 +1,4 @@
-name: Apply Tenant Runtime Guard
+name: Apply Tenant Runtime Updates
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-tenant-runtime-guard
+  group: apply-tenant-runtime-updates
   cancel-in-progress: true
 
 jobs:
@@ -24,15 +24,15 @@ jobs:
           ref: agent/saas-foundation
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Reject cross-tenant workflow execution
+      - name: Apply tenant runtime updates
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('features/workflows/services/workflow-execution-service.ts')
-          value = path.read_text()
-          old = '''  const defaultOrganization = await ensureDefaultOrganization();
+          execution_path = Path('features/workflows/services/workflow-execution-service.ts')
+          execution = execution_path.read_text()
+          old_block = '''  const defaultOrganization = await ensureDefaultOrganization();
           const organizationId =
             context?.organizationId || ticket.organizationId || defaultOrganization.id;
 
@@ -43,7 +43,7 @@ jobs:
             });
           }
           '''
-          new = '''  if (
+          new_block = '''  if (
             context?.organizationId &&
             ticket.organizationId &&
             ticket.organizationId !== context.organizationId
@@ -62,22 +62,38 @@ jobs:
             });
           }
           '''
-          if old in value:
-              value = value.replace(old, new, 1)
-              path.write_text(value)
-          elif new not in value:
+          if old_block in execution:
+              execution = execution.replace(old_block, new_block, 1)
+          elif new_block not in execution:
               raise SystemExit('Expected workflow tenant block was not found')
+
+          execution = execution.replace(
+              '  await addTagToTicket(ticket.id, action.value);',
+              '  await addTagToTicket(ticket.id, action.value, organizationId);',
+              1,
+          )
+          execution_path.write_text(execution)
+
+          schema_path = Path('prisma/schema.prisma')
+          schema = schema_path.read_text()
+          schema = schema.replace('  name           String   @unique\n', '  name           String\n', 1)
+          schema = schema.replace(
+              '  @@index([organizationId])\n}\n\nmodel SavedReply {',
+              '  @@unique([organizationId, name])\n  @@index([organizationId])\n}\n\nmodel SavedReply {',
+              1,
+          )
+          schema_path.write_text(schema)
           PY
 
-      - name: Commit runtime guard
+      - name: Commit tenant runtime updates
         shell: bash
         run: |
-          if git diff --quiet features/workflows/services/workflow-execution-service.ts; then
+          if git diff --quiet features/workflows/services/workflow-execution-service.ts prisma/schema.prisma; then
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add features/workflows/services/workflow-execution-service.ts
-          git commit -m "security: reject cross-tenant workflow execution"
+          git add features/workflows/services/workflow-execution-service.ts prisma/schema.prisma
+          git commit -m "security: complete tenant runtime constraints"
           git push origin HEAD:agent/saas-foundation
