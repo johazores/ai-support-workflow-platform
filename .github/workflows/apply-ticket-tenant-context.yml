@@ -30,20 +30,11 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          execution_path = Path('features/workflows/services/workflow-execution-service.ts')
+          execution_path = Path("features/workflows/services/workflow-execution-service.ts")
           execution = execution_path.read_text()
-          old_block = '''  const defaultOrganization = await ensureDefaultOrganization();
-          const organizationId =
-            context?.organizationId || ticket.organizationId || defaultOrganization.id;
-
-          if (ticket.organizationId !== organizationId) {
-            await prisma.ticket.update({
-              where: { id: ticket.id },
-              data: { organizationId },
-            });
-          }
-          '''
-          new_block = '''  if (
+          start_marker = "  const defaultOrganization = await ensureDefaultOrganization();"
+          end_marker = "  const rules = await prisma.workflowRule.findMany({"
+          replacement = '''  if (
             context?.organizationId &&
             ticket.organizationId &&
             ticket.organizationId !== context.organizationId
@@ -61,29 +52,68 @@ jobs:
               data: { organizationId },
             });
           }
-          '''
-          if old_block in execution:
-              execution = execution.replace(old_block, new_block, 1)
-          elif new_block not in execution:
-              raise SystemExit('Expected workflow tenant block was not found')
+
+'''
+
+          if "ticket.organizationId !== context.organizationId" not in execution:
+              start = execution.index(start_marker)
+              end = execution.index(end_marker)
+              execution = execution[:start] + replacement + execution[end:]
 
           execution = execution.replace(
-              '  await addTagToTicket(ticket.id, action.value);',
-              '  await addTagToTicket(ticket.id, action.value, organizationId);',
+              "  await addTagToTicket(ticket.id, action.value);",
+              "  await addTagToTicket(ticket.id, action.value, organizationId);",
               1,
           )
           execution_path.write_text(execution)
 
-          schema_path = Path('prisma/schema.prisma')
+          schema_path = Path("prisma/schema.prisma")
           schema = schema_path.read_text()
-          schema = schema.replace('  name           String   @unique\n', '  name           String\n', 1)
-          schema = schema.replace(
-              '  @@index([organizationId])\n}\n\nmodel SavedReply {',
-              '  @@unique([organizationId, name])\n  @@index([organizationId])\n}\n\nmodel SavedReply {',
-              1,
+
+          def update_model(schema_value, model_name, next_model, replacements, unique_line):
+              start = schema_value.index(f"model {model_name} {{")
+              end = schema_value.index(f"model {next_model} {{", start)
+              block = schema_value[start:end]
+              for old, new in replacements:
+                  block = block.replace(old, new, 1)
+              if unique_line not in block:
+                  final_brace = block.rfind("}")
+                  block = block[:final_brace] + f"  {unique_line}\n" + block[final_brace:]
+              return schema_value[:start] + block + schema_value[end:]
+
+          schema = update_model(
+              schema,
+              "Customer",
+              "Ticket",
+              [("  email          String   @unique\n", "  email          String\n")],
+              "@@unique([organizationId, email])",
+          )
+          schema = update_model(
+              schema,
+              "Tag",
+              "SavedReply",
+              [("  name           String   @unique\n", "  name           String\n")],
+              "@@unique([organizationId, name])",
+          )
+          schema = update_model(
+              schema,
+              "SlaPolicy",
+              "CsatRating",
+              [("  priority              String   @unique\n", "  priority              String\n")],
+              "@@unique([organizationId, priority])",
+          )
+          schema = update_model(
+              schema,
+              "EmailConfig",
+              "EmailTemplate",
+              [("  fromAddress    String   @unique\n", "  fromAddress    String\n")],
+              "@@unique([organizationId, fromAddress])",
           )
           schema_path.write_text(schema)
           PY
+
+      - name: Format updated files
+        run: npx prettier --write features/workflows/services/workflow-execution-service.ts prisma/schema.prisma
 
       - name: Commit tenant runtime updates
         shell: bash
