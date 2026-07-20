@@ -17,10 +17,14 @@ import { SlaCountdown } from "@/features/sla/components/sla-countdown";
 import { formatDateTime, formatRelativeTime } from "@/lib/utils";
 type TicketDetailProps = {
   ticketId: string;
+  organizationId: string;
 };
 
-export async function TicketDetail({ ticketId }: TicketDetailProps) {
-  const ticket = await getTicketById(ticketId);
+export async function TicketDetail({
+  ticketId,
+  organizationId,
+}: TicketDetailProps) {
+  const ticket = await getTicketById(ticketId, organizationId);
 
   if (!ticket) {
     return (
