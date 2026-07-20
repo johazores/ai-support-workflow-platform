@@ -1,0 +1,425 @@
+diff --git a/features/auth/services/user-management-service.ts b/features/auth/services/user-management-service.ts
+index 8d8a2a1..6da686a 100644
+--- a/features/auth/services/user-management-service.ts
++++ b/features/auth/services/user-management-service.ts
+@@ -1,58 +1,319 @@
++import { clerkClient } from "@clerk/nextjs/server";
+ import { prisma } from "@/lib/prisma";
+ import { hashPassword } from "@/features/auth/services/password-service";
++import { isClerkConfigured } from "@/features/auth/services/clerk-config";
+ 
+ export type UserSummary = {
+   id: string;
+   name: string;
+   email: string;
+   role: string;
++  status: string;
+   createdAt: Date;
+ };
+ 
+-export async function listUsers(): Promise<UserSummary[]> {
+-  return prisma.user.findMany({
+-    select: { id: true, name: true, email: true, role: true, createdAt: true },
++const assignableRoles = new Set(["admin", "supervisor", "agent"]);
++
++function normalizeEmail(email: string) {
++  return email.trim().toLowerCase();
++}
++
++function validateRole(role: string) {
++  if (!assignableRoles.has(role)) {
++    throw new Error("Invalid organization role");
++  }
++}
++
++async function assertOrganizationIsActive(organizationId: string) {
++  const organization = await prisma.organization.findUnique({
++    where: { id: organizationId },
++    select: { status: true },
++  });
++
++  if (!organization || organization.status !== "active") {
++    throw new Error("Organization is unavailable");
++  }
++}
++
++async function assertNotLastAdmin(
++  organizationId: string,
++  userId: string,
++  nextRoleOrStatus: { role?: string; status?: string },
++) {
++  const membership = await prisma.organizationMember.findUnique({
++    where: { organizationId_userId: { organizationId, userId } },
++  });
++
++  if (!membership || membership.role !== "admin" || membership.status !== "active") {
++    return;
++  }
++
++  const removesAdmin =
++    (nextRoleOrStatus.role && nextRoleOrStatus.role !== "admin") ||
++    (nextRoleOrStatus.status && nextRoleOrStatus.status !== "active");
++
++  if (!removesAdmin) return;
++
++  const activeAdminCount = await prisma.organizationMember.count({
++    where: { organizationId, role: "admin", status: "active" },
++  });
++
++  if (activeAdminCount <= 1) {
++    throw new Error("The organization must keep at least one active admin");
++  }
++}
++
++async function mapMembershipsToUsers(
++  organizationId: string,
++): Promise<UserSummary[]> {
++  const memberships = await prisma.organizationMember.findMany({
++    where: { organizationId, status: { in: ["active", "invited"] } },
+     orderBy: { createdAt: "desc" },
+   });
++
++  if (memberships.length === 0) return [];
++
++  const users = await prisma.user.findMany({
++    where: { id: { in: memberships.map((membership) => membership.userId) } },
++    select: { id: true, name: true, email: true, createdAt: true },
++  });
++  const usersById = new Map(users.map((user) => [user.id, user]));
++
++  return memberships.flatMap((membership) => {
++    const user = usersById.get(membership.userId);
++    if (!user) return [];
++
++    return [
++      {
++        ...user,
++        role: membership.role,
++        status: membership.status,
++      },
++    ];
++  });
++}
++
++export async function listUsers(organizationId: string) {
++  return mapMembershipsToUsers(organizationId);
+ }
+ 
+-export async function getUserById(id: string): Promise<UserSummary | null> {
+-  return prisma.user.findUnique({
+-    where: { id },
+-    select: { id: true, name: true, email: true, role: true, createdAt: true },
++export async function getUserById(
++  organizationId: string,
++  userId: string,
++): Promise<UserSummary | null> {
++  const membership = await prisma.organizationMember.findUnique({
++    where: { organizationId_userId: { organizationId, userId } },
++  });
++
++  if (!membership || !["active", "invited"].includes(membership.status)) {
++    return null;
++  }
++
++  const user = await prisma.user.findUnique({
++    where: { id: userId },
++    select: { id: true, name: true, email: true, createdAt: true },
+   });
++
++  return user
++    ? { ...user, role: membership.role, status: membership.status }
++    : null;
+ }
+ 
+ export async function createUser(input: {
++  organizationId: string;
++  inviterUserId: string;
+   name: string;
+   email: string;
+-  password: string;
++  password?: string;
+   role: string;
+ }): Promise<UserSummary> {
+-  const passwordHash = await hashPassword(input.password);
++  validateRole(input.role);
++  await assertOrganizationIsActive(input.organizationId);
+ 
+-  return prisma.user.create({
+-    data: {
+-      name: input.name,
+-      email: input.email,
+-      passwordHash,
++  const email = normalizeEmail(input.email);
++  const name = input.name.trim();
++  const clerkEnabled = isClerkConfigured();
++
++  let user = await prisma.user.findUnique({ where: { email } });
++
++  if (user) {
++    const existingMembership = await prisma.organizationMember.findUnique({
++      where: {
++        organizationId_userId: {
++          organizationId: input.organizationId,
++          userId: user.id,
++        },
++      },
++    });
++
++    if (existingMembership?.status === "active") {
++      throw new Error("This user already belongs to the organization");
++    }
++  } else {
++    user = await prisma.user.create({
++      data: {
++        name,
++        email,
++        passwordHash: null,
++        role: input.role,
++        status: clerkEnabled ? "invited" : "active",
++        defaultOrganizationId: input.organizationId,
++      },
++    });
++  }
++
++  if (clerkEnabled && !user.clerkUserId) {
++    const client = await clerkClient();
++    await client.invitations.createInvitation({
++      emailAddress: email,
++      ignoreExisting: true,
++      notify: true,
++      redirectUrl: process.env.NEXT_PUBLIC_APP_URL
++        ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/sign-up`
++        : "/sign-up",
++      publicMetadata: {
++        organizationId: input.organizationId,
++        organizationRole: input.role,
++        invitedName: name,
++        inviterUserId: input.inviterUserId,
++      },
++    });
++  } else {
++    if (!input.password || input.password.length < 8) {
++      throw new Error("A temporary password is required without Clerk");
++    }
++
++    user = await prisma.user.update({
++      where: { id: user.id },
++      data: {
++        name,
++        passwordHash: await hashPassword(input.password),
++        status: "active",
++      },
++    });
++  }
++
++  const membershipStatus = clerkEnabled && !user.clerkUserId ? "invited" : "active";
++  const membership = await prisma.organizationMember.upsert({
++    where: {
++      organizationId_userId: {
++        organizationId: input.organizationId,
++        userId: user.id,
++      },
++    },
++    update: { role: input.role, status: membershipStatus },
++    create: {
++      organizationId: input.organizationId,
++      userId: user.id,
+       role: input.role,
++      status: membershipStatus,
+     },
+-    select: { id: true, name: true, email: true, role: true, createdAt: true },
+   });
++
++  await prisma.user.update({
++    where: { id: user.id },
++    data: {
++      name,
++      status: membershipStatus === "active" ? "active" : user.status,
++      defaultOrganizationId:
++        user.defaultOrganizationId ?? input.organizationId,
++    },
++  });
++
++  return {
++    id: user.id,
++    name,
++    email: user.email,
++    role: membership.role,
++    status: membership.status,
++    createdAt: user.createdAt,
++  };
+ }
+ 
+ export async function updateUserRole(
+-  id: string,
++  organizationId: string,
++  userId: string,
+   role: string,
+ ): Promise<UserSummary> {
+-  return prisma.user.update({
+-    where: { id },
++  validateRole(role);
++  await assertNotLastAdmin(organizationId, userId, { role });
++
++  const membership = await prisma.organizationMember.findUnique({
++    where: { organizationId_userId: { organizationId, userId } },
++  });
++  if (!membership || membership.status === "inactive") {
++    throw new Error("User not found");
++  }
++
++  const updatedMembership = await prisma.organizationMember.update({
++    where: { id: membership.id },
+     data: { role },
+-    select: { id: true, name: true, email: true, role: true, createdAt: true },
+   });
++  const user = await prisma.user.findUnique({
++    where: { id: userId },
++    select: {
++      id: true,
++      name: true,
++      email: true,
++      createdAt: true,
++      defaultOrganizationId: true,
++    },
++  });
++  if (!user) throw new Error("User not found");
++
++  if (user.defaultOrganizationId === organizationId) {
++    await prisma.user.update({ where: { id: userId }, data: { role } });
++  }
++
++  if (user.defaultOrganizationId === organizationId && user.email) {
++    const fullUser = await prisma.user.findUnique({ where: { id: userId } });
++    if (fullUser?.clerkUserId && isClerkConfigured()) {
++      const client = await clerkClient();
++      await client.users.updateUserMetadata(fullUser.clerkUserId, {
++        publicMetadata: {
++          organizationId,
++          organizationRole: role,
++        },
++      });
++    }
++  }
++
++  return {
++    id: user.id,
++    name: user.name,
++    email: user.email,
++    createdAt: user.createdAt,
++    role: updatedMembership.role,
++    status: updatedMembership.status,
++  };
+ }
+ 
+-export async function deleteUser(id: string): Promise<void> {
+-  await prisma.user.delete({ where: { id } });
++export async function deleteUser(
++  organizationId: string,
++  userId: string,
++): Promise<void> {
++  await assertNotLastAdmin(organizationId, userId, { status: "inactive" });
++
++  const membership = await prisma.organizationMember.findUnique({
++    where: { organizationId_userId: { organizationId, userId } },
++  });
++  if (!membership || membership.status === "inactive") {
++    throw new Error("User not found");
++  }
++
++  await prisma.organizationMember.update({
++    where: { id: membership.id },
++    data: { status: "inactive" },
++  });
++
++  const activeMemberships = await prisma.organizationMember.count({
++    where: { userId, status: "active" },
++  });
++
++  if (activeMemberships === 0) {
++    await prisma.user.update({
++      where: { id: userId },
++      data: { status: "inactive" },
++    });
++  }
+ }
+diff --git a/features/csat/services/csat-service.ts b/features/csat/services/csat-service.ts
+index 81d7b7a..96bdd73 100644
+--- a/features/csat/services/csat-service.ts
++++ b/features/csat/services/csat-service.ts
+@@ -1,30 +1,65 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
++
++async function requireTenantTicket(organizationId: string, ticketId: string) {
++  const scope = await getTenantRecordScope(organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
++    select: { id: true },
++  });
++  if (!ticket) throw new Error("Ticket not found");
++  return ticket;
++}
+ 
+ export async function submitCsatRating(
++  organizationId: string,
+   ticketId: string,
+   score: number,
+   comment?: string,
+ ) {
++  await requireTenantTicket(organizationId, ticketId);
++
+   return prisma.csatRating.upsert({
+     where: { ticketId },
+-    create: { ticketId, score, comment: comment || null },
+-    update: { score, comment: comment || null },
++    create: {
++      organizationId,
++      ticketId,
++      score,
++      comment: comment?.trim() || null,
++    },
++    update: {
++      organizationId,
++      score,
++      comment: comment?.trim() || null,
++    },
+   });
+ }
+ 
+-export async function getCsatRating(ticketId: string) {
+-  return prisma.csatRating.findUnique({ where: { ticketId } });
++export async function getCsatRating(
++  organizationId: string,
++  ticketId: string,
++) {
++  await requireTenantTicket(organizationId, ticketId);
++  const scope = await getTenantRecordScope(organizationId);
++
++  return prisma.csatRating.findFirst({
++    where: { ticketId, ...scope },
++  });
+ }
+ 
+-export async function getCsatStats() {
+-  const ratings = await prisma.csatRating.findMany();
+-  if (ratings.length === 0) return { average: 0, total: 0, distribution: {} };
++export async function getCsatStats(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
++  const ratings = await prisma.csatRating.findMany({ where: scope });
++  if (ratings.length === 0) {
++    return { average: 0, total: 0, distribution: {} };
++  }
+ 
+   const total = ratings.length;
+-  const sum = ratings.reduce((acc, r) => acc + r.score, 0);
++  const sum = ratings.reduce((accumulator, rating) => accumulator + rating.score, 0);
+   const distribution: Record<number, number> = {};
+-  for (const r of ratings) {
+-    distribution[r.score] = (distribution[r.score] || 0) + 1;
++
++  for (const rating of ratings) {
++    distribution[rating.score] = (distribution[rating.score] || 0) + 1;
+   }
+ 
+   return { average: sum / total, total, distribution };
