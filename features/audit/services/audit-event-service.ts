@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type AuditEventInput = {
@@ -8,7 +9,7 @@ type AuditEventInput = {
   userId?: string;
   targetType?: string;
   targetId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonObject;
   ipAddress?: string;
   userAgent?: string;
 };
