@@ -40,10 +40,8 @@ jobs:
           exec > >(tee migration-validation.log) 2>&1
 
           status=0
-          for patch in .github/patches/saas-security-migration.*.patch; do
-            echo "Applying ${patch}"
-            git apply --index --whitespace=nowarn "${patch}" || { status=$?; break; }
-          done
+          cat .github/patches/saas-security-migration.*.patch > /tmp/saas-security-migration.patch
+          git apply --index --whitespace=nowarn /tmp/saas-security-migration.patch || status=$?
 
           if [ "$status" -eq 0 ]; then npm ci || status=$?; fi
           if [ "$status" -eq 0 ]; then npx prisma generate || status=$?; fi
