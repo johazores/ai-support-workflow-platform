@@ -20,7 +20,10 @@ const providerSchema = z.object({
   credentialLabel: z.string().trim().max(100).optional(),
 });
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const auth = await requireRootApiAuth(req, res);
   if (!auth.ok) return;
 

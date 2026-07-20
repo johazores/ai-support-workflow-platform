@@ -3,7 +3,10 @@ import { requireRootApiAuth } from "@/lib/root-api-auth";
 import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import { testProviderConnection } from "@/features/providers/services/provider-test-service";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const auth = await requireRootApiAuth(req, res);
   if (!auth.ok) return;
 

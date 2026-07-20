@@ -92,9 +92,7 @@ export async function createEmailConfig(data: EmailConfigInput) {
     await prisma.emailConfig.updateMany({
       where: {
         isDefault: true,
-        ...(data.organizationId
-          ? { organizationId: data.organizationId }
-          : {}),
+        ...(data.organizationId ? { organizationId: data.organizationId } : {}),
       },
       data: { isDefault: false },
     });

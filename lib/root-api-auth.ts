@@ -23,7 +23,9 @@ export async function requireRootApiAuth(
   const rootAdmin = await parseRootSession(getRootTokenFromRequest(req));
 
   if (!rootAdmin) {
-    res.status(401).json({ message: "Root administrator authentication required" });
+    res
+      .status(401)
+      .json({ message: "Root administrator authentication required" });
     return { ok: false, rootAdmin: null };
   }
 

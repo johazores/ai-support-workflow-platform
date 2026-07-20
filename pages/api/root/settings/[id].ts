@@ -3,7 +3,10 @@ import { requireRootApiAuth } from "@/lib/root-api-auth";
 import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import { deleteSystemSetting } from "@/features/system-settings/services/system-setting-service";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const auth = await requireRootApiAuth(req, res);
   if (!auth.ok) return;
 

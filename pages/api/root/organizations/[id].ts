@@ -6,7 +6,10 @@ import { updateOrganizationStatus } from "@/features/organizations/services/root
 
 const schema = z.object({ status: z.enum(["active", "suspended"]) });
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const auth = await requireRootApiAuth(req, res);
   if (!auth.ok) return;
 

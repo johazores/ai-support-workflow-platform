@@ -10,7 +10,9 @@ export async function listWorkflowExecutions(
     take: Math.min(options?.limit ?? 50, 100),
   });
 
-  const workflowIds = [...new Set(executions.map((execution) => execution.workflowId))];
+  const workflowIds = [
+    ...new Set(executions.map((execution) => execution.workflowId)),
+  ];
   const legacyRules = await prisma.workflowRule.findMany({
     where: { id: { in: workflowIds } },
   });

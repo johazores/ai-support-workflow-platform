@@ -33,7 +33,9 @@ export async function listSystemSettings() {
   }));
 }
 
-export async function getSystemSetting<T = unknown>(key: string): Promise<T | null> {
+export async function getSystemSetting<T = unknown>(
+  key: string,
+): Promise<T | null> {
   const setting = await prisma.systemSetting.findUnique({ where: { key } });
   if (!setting) return null;
 

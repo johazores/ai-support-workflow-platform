@@ -51,8 +51,8 @@ export function RootLoginForm() {
           Root Administrator
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Sign in with the local platform-owner account. This session is separate
-          from customer authentication.
+          Sign in with the local platform-owner account. This session is
+          separate from customer authentication.
         </p>
       </div>
 

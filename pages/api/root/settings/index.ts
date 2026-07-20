@@ -8,14 +8,22 @@ import {
 } from "@/features/system-settings/services/system-setting-service";
 
 const settingSchema = z.object({
-  key: z.string().trim().min(1).max(150).regex(/^[a-z0-9._-]+$/),
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(150)
+    .regex(/^[a-z0-9._-]+$/),
   category: z.string().trim().min(1).max(100),
   value: z.unknown(),
   isSecret: z.boolean(),
   description: z.string().trim().max(500).optional(),
 });
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const auth = await requireRootApiAuth(req, res);
   if (!auth.ok) return;
 

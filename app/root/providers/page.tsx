@@ -23,8 +23,9 @@ export default async function RootProvidersPage() {
           Provider Management
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Enable providers, configure default models, rotate encrypted credentials,
-          set priority, and test connectivity without changing application code.
+          Enable providers, configure default models, rotate encrypted
+          credentials, set priority, and test connectivity without changing
+          application code.
         </p>
       </div>
 

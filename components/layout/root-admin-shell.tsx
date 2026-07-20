@@ -21,7 +21,10 @@ export function RootAdminShell({ rootAdmin, children }: RootAdminShellProps) {
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div>
-            <Link href="/root" className="font-semibold text-slate-950 dark:text-white">
+            <Link
+              href="/root"
+              className="font-semibold text-slate-950 dark:text-white"
+            >
               Platform Control Plane
             </Link>
             <p className="mt-0.5 text-xs text-slate-500">

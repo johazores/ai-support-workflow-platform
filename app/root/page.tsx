@@ -16,8 +16,16 @@ export default async function RootAdminDashboardPage() {
     ]);
 
   const metrics = [
-    { label: "Organizations", value: organizations, href: "/root/organizations" },
-    { label: "Providers", value: `${activeProviders}/${providers}`, href: "/root/providers" },
+    {
+      label: "Organizations",
+      value: organizations,
+      href: "/root/organizations",
+    },
+    {
+      label: "Providers",
+      value: `${activeProviders}/${providers}`,
+      href: "/root/providers",
+    },
     { label: "Workflow executions", value: executions, href: "/root" },
     { label: "Audit events", value: auditEvents, href: "/root/audit-logs" },
   ];
@@ -32,8 +40,9 @@ export default async function RootAdminDashboardPage() {
           Root Administration
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Manage platform-wide providers, encrypted configuration, organizations,
-          system health, and security activity independently from customer accounts.
+          Manage platform-wide providers, encrypted configuration,
+          organizations, system health, and security activity independently from
+          customer accounts.
         </p>
       </div>
 
@@ -56,8 +65,9 @@ export default async function RootAdminDashboardPage() {
             Configuration status
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Provider credentials and sensitive environment values are managed through
-            encrypted records. Bootstrap-only secrets remain deployment settings.
+            Provider credentials and sensitive environment values are managed
+            through encrypted records. Bootstrap-only secrets remain deployment
+            settings.
           </p>
           <Link
             href="/root/settings"
@@ -72,8 +82,9 @@ export default async function RootAdminDashboardPage() {
             Security boundary
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Root sessions use a dedicated signing secret, persisted revocation records,
-            login lockout, and a separate cookie from product-user sessions.
+            Root sessions use a dedicated signing secret, persisted revocation
+            records, login lockout, and a separate cookie from product-user
+            sessions.
           </p>
           <Link
             href="/root/audit-logs"

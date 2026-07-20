@@ -74,7 +74,10 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
     } catch (error) {
       setMessage({
         type: "error",
-        text: error instanceof ApiError ? error.message : "Failed to save provider.",
+        text:
+          error instanceof ApiError
+            ? error.message
+            : "Failed to save provider.",
       });
     } finally {
       setIsSaving(false);
@@ -230,9 +233,14 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
                         {provider.isEnabled ? "Enabled" : "Disabled"}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{provider.key}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {provider.key}
+                    </p>
                   </div>
-                  <Button variant="secondary" onClick={() => beginEdit(provider)}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => beginEdit(provider)}
+                  >
                     Configure
                   </Button>
                 </div>

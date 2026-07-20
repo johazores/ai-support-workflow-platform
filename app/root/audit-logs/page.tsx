@@ -58,7 +58,11 @@ export default async function RootAuditLogsPage() {
                 {events.map((event) => (
                   <tr key={event.id}>
                     <td className="whitespace-nowrap px-5 py-4 text-slate-500">
-                      {event.createdAt.toISOString().replace("T", " ").slice(0, 19)} UTC
+                      {event.createdAt
+                        .toISOString()
+                        .replace("T", " ")
+                        .slice(0, 19)}{" "}
+                      UTC
                     </td>
                     <td className="px-5 py-4 text-slate-700 dark:text-slate-300">
                       {event.actorType}

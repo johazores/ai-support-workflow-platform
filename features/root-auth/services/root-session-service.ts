@@ -46,9 +46,7 @@ export async function createRootSession(
   rootAdmin: { id: string; username: string; displayName: string },
 ) {
   const tokenId = crypto.randomUUID();
-  const expiresAt = new Date(
-    Date.now() + ROOT_SESSION_HOURS * 60 * 60 * 1000,
-  );
+  const expiresAt = new Date(Date.now() + ROOT_SESSION_HOURS * 60 * 60 * 1000);
   const metadata = getRequestMetadata(req);
 
   await prisma.rootSession.create({

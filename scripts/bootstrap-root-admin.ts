@@ -6,7 +6,8 @@ const prisma = new PrismaClient();
 async function main() {
   const username = process.env.ROOT_ADMIN_USERNAME?.trim().toLowerCase();
   const password = process.env.ROOT_ADMIN_PASSWORD;
-  const displayName = process.env.ROOT_ADMIN_DISPLAY_NAME?.trim() || "Root Admin";
+  const displayName =
+    process.env.ROOT_ADMIN_DISPLAY_NAME?.trim() || "Root Admin";
 
   if (!username) {
     throw new Error("ROOT_ADMIN_USERNAME is required");

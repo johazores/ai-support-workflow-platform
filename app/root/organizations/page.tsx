@@ -23,7 +23,8 @@ export default async function RootOrganizationsPage() {
           Organizations
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Review tenant usage and suspend or reactivate access at the platform level.
+          Review tenant usage and suspend or reactivate access at the platform
+          level.
         </p>
       </div>
 

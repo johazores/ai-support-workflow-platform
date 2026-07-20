@@ -87,7 +87,9 @@ function buildTestRequest(provider: {
 }
 
 export async function testProviderConnection(providerId: string) {
-  const provider = await prisma.provider.findUnique({ where: { id: providerId } });
+  const provider = await prisma.provider.findUnique({
+    where: { id: providerId },
+  });
   if (!provider) throw new Error("Provider not found");
 
   const credentialRecord = await prisma.providerCredential.findFirst({

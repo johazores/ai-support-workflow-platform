@@ -98,8 +98,8 @@ export default async function AdminPage() {
                 Admin Dashboard
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-                Manage automation, support operations, team access, and tenant-level
-                integrations for this organization.
+                Manage automation, support operations, team access, and
+                tenant-level integrations for this organization.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm dark:border-slate-800 dark:bg-slate-900">

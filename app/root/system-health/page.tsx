@@ -19,15 +19,16 @@ export default async function RootSystemHealthPage() {
     databaseStatus = "unavailable";
   }
 
-  const [failedProviders, failedExecutions, activeRootSessions] = await Promise.all([
-    prisma.providerCredential.count({
-      where: { isActive: true, lastTestStatus: "failed" },
-    }),
-    prisma.workflowExecution.count({ where: { status: "failed" } }),
-    prisma.rootSession.count({
-      where: { revokedAt: null, expiresAt: { gt: new Date() } },
-    }),
-  ]).catch(() => [0, 0, 0] as const);
+  const [failedProviders, failedExecutions, activeRootSessions] =
+    await Promise.all([
+      prisma.providerCredential.count({
+        where: { isActive: true, lastTestStatus: "failed" },
+      }),
+      prisma.workflowExecution.count({ where: { status: "failed" } }),
+      prisma.rootSession.count({
+        where: { revokedAt: null, expiresAt: { gt: new Date() } },
+      }),
+    ]).catch(() => [0, 0, 0] as const);
 
   const checks = [
     {
@@ -69,8 +70,8 @@ export default async function RootSystemHealthPage() {
           System Health
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Live database connectivity, provider failures, workflow failures, and Root
-          Admin session visibility.
+          Live database connectivity, provider failures, workflow failures, and
+          Root Admin session visibility.
         </p>
       </div>
 
@@ -101,8 +102,9 @@ export default async function RootSystemHealthPage() {
           Probe endpoints
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Use <code>/api/health</code> for process liveness and <code>/api/readiness</code>{" "}
-          for database readiness checks in hosting or container orchestration.
+          Use <code>/api/health</code> for process liveness and{" "}
+          <code>/api/readiness</code> for database readiness checks in hosting
+          or container orchestration.
         </p>
       </Card>
     </RootAdminShell>

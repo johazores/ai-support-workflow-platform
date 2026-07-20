@@ -31,7 +31,8 @@ export function RootOrganizationList({
   } | null>(null);
 
   async function toggleStatus(organization: OrganizationSummary) {
-    const nextStatus = organization.status === "active" ? "suspended" : "active";
+    const nextStatus =
+      organization.status === "active" ? "suspended" : "active";
     setUpdatingId(organization.id);
     setMessage(null);
 
@@ -68,8 +69,8 @@ export function RootOrganizationList({
             No organizations yet
           </h2>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-            The first legacy workspace is created automatically when an existing user
-            signs in.
+            The first legacy workspace is created automatically when an existing
+            user signs in.
           </p>
         </Card>
       ) : (
@@ -91,11 +92,15 @@ export function RootOrganizationList({
                     {organization.status}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">/{organization.slug}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  /{organization.slug}
+                </p>
               </div>
 
               <Button
-                variant={organization.status === "active" ? "danger" : "secondary"}
+                variant={
+                  organization.status === "active" ? "danger" : "secondary"
+                }
                 onClick={() => toggleStatus(organization)}
                 isLoading={updatingId === organization.id}
               >

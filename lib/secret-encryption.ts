@@ -12,7 +12,9 @@ function getEncryptionKey() {
 
   const key = Buffer.from(encodedKey, "base64");
   if (key.length !== 32) {
-    throw new Error("CONFIG_ENCRYPTION_KEY must contain 32 base64-encoded bytes");
+    throw new Error(
+      "CONFIG_ENCRYPTION_KEY must contain 32 base64-encoded bytes",
+    );
   }
 
   return key;

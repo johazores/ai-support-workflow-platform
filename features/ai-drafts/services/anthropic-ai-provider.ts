@@ -30,8 +30,10 @@ Rules:
 
 export const anthropicProvider: AiDraftProvider = {
   async generateDraft(input: GenerateDraftInput) {
-    const configuredProvider = await getEnabledProviderConfiguration("anthropic");
-    const apiKey = configuredProvider?.credential ?? process.env.ANTHROPIC_API_KEY;
+    const configuredProvider =
+      await getEnabledProviderConfiguration("anthropic");
+    const apiKey =
+      configuredProvider?.credential ?? process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
       throw new Error("Anthropic is not configured");
@@ -41,7 +43,8 @@ export const anthropicProvider: AiDraftProvider = {
       configuredProvider?.defaultModel ||
       process.env.ANTHROPIC_MODEL ||
       "claude-sonnet-4-20250514";
-    const baseUrl = configuredProvider?.baseUrl || "https://api.anthropic.com/v1";
+    const baseUrl =
+      configuredProvider?.baseUrl || "https://api.anthropic.com/v1";
 
     const response = await fetch(`${baseUrl}/messages`, {
       method: "POST",
@@ -61,7 +64,9 @@ export const anthropicProvider: AiDraftProvider = {
     });
 
     if (!response.ok) {
-      throw new Error(`Anthropic API request failed with HTTP ${response.status}`);
+      throw new Error(
+        `Anthropic API request failed with HTTP ${response.status}`,
+      );
     }
 
     const data = (await response.json()) as {

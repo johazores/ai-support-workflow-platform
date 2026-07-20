@@ -21,7 +21,8 @@ function buildProviderChain(): AiProviderChain {
   ];
 
   const allowMock =
-    process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_AI === "true";
+    process.env.NODE_ENV !== "production" &&
+    process.env.ALLOW_MOCK_AI === "true";
 
   if (allowMock) {
     providers.push({

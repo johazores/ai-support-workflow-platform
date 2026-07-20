@@ -27,8 +27,8 @@ export default async function WorkflowsAdminPage() {
               Workflows
             </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Rules are isolated to the active organization and all mutations are
-              authorized server-side.
+              Rules are isolated to the active organization and all mutations
+              are authorized server-side.
             </p>
           </div>
 

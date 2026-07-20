@@ -23,8 +23,9 @@ export default async function RootSettingsPage() {
           Environment Management
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Manage runtime settings through the database. Sensitive values are encrypted
-          with AES-256-GCM and normal read endpoints return masked values only.
+          Manage runtime settings through the database. Sensitive values are
+          encrypted with AES-256-GCM and normal read endpoints return masked
+          values only.
         </p>
       </div>
 

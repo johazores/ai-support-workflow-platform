@@ -15,7 +15,9 @@ function formatJson(value: unknown) {
     : JSON.stringify(value, null, 2);
 }
 
-export default async function WorkflowExecutionDetailPage({ params }: PageProps) {
+export default async function WorkflowExecutionDetailPage({
+  params,
+}: PageProps) {
   const user = await requireSupervisor();
   const resolvedParams = await params;
   const execution = await getWorkflowExecution(

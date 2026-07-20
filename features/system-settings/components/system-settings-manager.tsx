@@ -32,7 +32,9 @@ const EMPTY_FORM = {
   description: "",
 };
 
-export function SystemSettingsManager({ settings }: SystemSettingsManagerProps) {
+export function SystemSettingsManager({
+  settings,
+}: SystemSettingsManagerProps) {
   const router = useRouter();
   const [form, setForm] = useState(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
@@ -93,7 +95,8 @@ export function SystemSettingsManager({ settings }: SystemSettingsManagerProps) 
     } catch (error) {
       setMessage({
         type: "error",
-        text: error instanceof ApiError ? error.message : "Failed to save setting.",
+        text:
+          error instanceof ApiError ? error.message : "Failed to save setting.",
       });
     } finally {
       setIsSaving(false);
@@ -112,7 +115,10 @@ export function SystemSettingsManager({ settings }: SystemSettingsManagerProps) 
     } catch (error) {
       setMessage({
         type: "error",
-        text: error instanceof ApiError ? error.message : "Failed to delete setting.",
+        text:
+          error instanceof ApiError
+            ? error.message
+            : "Failed to delete setting.",
       });
     } finally {
       setDeletingId(null);
@@ -139,8 +145,8 @@ export function SystemSettingsManager({ settings }: SystemSettingsManagerProps) 
               No database-managed settings yet
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Add the first setting using the form. Bootstrap secrets remain in the
-              deployment environment.
+              Add the first setting using the form. Bootstrap secrets remain in
+              the deployment environment.
             </p>
           </Card>
         ) : (
@@ -172,7 +178,10 @@ export function SystemSettingsManager({ settings }: SystemSettingsManagerProps) 
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="secondary" onClick={() => editSetting(setting)}>
+                        <Button
+                          variant="secondary"
+                          onClick={() => editSetting(setting)}
+                        >
                           Edit
                         </Button>
                         <Button
@@ -223,7 +232,9 @@ export function SystemSettingsManager({ settings }: SystemSettingsManagerProps) 
           <TextArea
             label={form.isSecret ? "Secret value" : "Value"}
             value={form.value}
-            onChange={(event) => setForm({ ...form, value: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, value: event.target.value })
+            }
             placeholder={form.isSecret ? "Enter a new secret" : "Text or JSON"}
             rows={4}
             required

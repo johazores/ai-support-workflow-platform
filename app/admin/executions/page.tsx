@@ -35,7 +35,8 @@ export default async function WorkflowExecutionsPage() {
               Execution History
             </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Inspect persisted workflow runs and their result for this organization.
+              Inspect persisted workflow runs and their result for this
+              organization.
             </p>
           </div>
 
