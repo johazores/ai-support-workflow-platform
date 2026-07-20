@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [feat/saas-foundation]
+  pull_request:
+    branches: [master]
 
 permissions:
   contents: write
@@ -14,7 +16,7 @@ concurrency:
 
 jobs:
   apply:
-    if: github.repository == 'johazores/ai-support-workflow-platform' && github.actor != 'github-actions[bot]'
+    if: github.repository == 'johazores/ai-support-workflow-platform' && github.actor != 'github-actions[bot]' && (github.ref == 'refs/heads/feat/saas-foundation' || github.head_ref == 'feat/saas-foundation')
     runs-on: ubuntu-latest
 
     steps:
@@ -67,6 +69,9 @@ jobs:
               echo '```'
             } > docs/MIGRATION_VALIDATION_FAILURE.md
             git add docs/MIGRATION_VALIDATION_FAILURE.md
+            if git diff --cached --quiet; then
+              exit "$status"
+            fi
             git commit -m "ci: record SaaS migration validation failure"
             git push origin HEAD:feat/saas-foundation
             exit "$status"
