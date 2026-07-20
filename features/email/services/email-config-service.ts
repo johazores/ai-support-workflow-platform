@@ -14,6 +14,12 @@ function decryptMailbox(config: EmailConfig): EmailConfig {
   };
 }
 
+function organizationWhere(organizationId?: string) {
+  return organizationId
+    ? { OR: [{ organizationId }, { organizationId: null }] }
+    : {};
+}
+
 function isMaskedSecret(value: string) {
   return value.includes("•") || value === "********";
 }
@@ -23,19 +29,22 @@ function encryptNewSecret(value: string) {
 }
 
 /** Get a mailbox config for server-side connection use. */
-export async function getEmailConfigById(id: string) {
-  const config = await prisma.emailConfig.findUnique({ where: { id } });
+export async function getEmailConfigById(id: string, organizationId?: string) {
+  const config = await prisma.emailConfig.findFirst({
+    where: { id, ...organizationWhere(organizationId) },
+  });
   return config ? decryptMailbox(config) : null;
 }
 
 /** Get the default active mailbox for server-side connection use. */
-export async function getEmailConfig() {
+export async function getEmailConfig(organizationId?: string) {
+  const tenantFilter = organizationWhere(organizationId);
   const config =
     (await prisma.emailConfig.findFirst({
-      where: { isDefault: true, isActive: true },
+      where: { ...tenantFilter, isDefault: true, isActive: true },
     })) ??
     (await prisma.emailConfig.findFirst({
-      where: { isActive: true },
+      where: { ...tenantFilter, isActive: true },
       orderBy: { updatedAt: "desc" },
     }));
 
@@ -43,14 +52,17 @@ export async function getEmailConfig() {
 }
 
 /** List stored mailbox metadata. Password values remain encrypted. */
-export async function listEmailConfigs() {
-  return prisma.emailConfig.findMany({ orderBy: { createdAt: "asc" } });
+export async function listEmailConfigs(organizationId?: string) {
+  return prisma.emailConfig.findMany({
+    where: organizationWhere(organizationId),
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 /** Get all active mailboxes with decrypted passwords for IMAP polling. */
-export async function getActiveEmailConfigs() {
+export async function getActiveEmailConfigs(organizationId?: string) {
   const configs = await prisma.emailConfig.findMany({
-    where: { isActive: true },
+    where: { ...organizationWhere(organizationId), isActive: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -101,8 +113,17 @@ export async function createEmailConfig(data: EmailConfigInput) {
 export async function updateEmailConfig(
   id: string,
   data: Partial<EmailConfigInput>,
+  organizationId?: string,
 ) {
-  const updateData: Partial<EmailConfigInput> = { ...data };
+  const existing = await prisma.emailConfig.findFirst({
+    where: { id, ...organizationWhere(organizationId) },
+  });
+  if (!existing) throw new Error("Mailbox not found");
+
+  const updateData: Partial<EmailConfigInput> = {
+    ...data,
+    ...(organizationId ? { organizationId } : {}),
+  };
 
   if (updateData.smtpPass) {
     if (isMaskedSecret(updateData.smtpPass)) delete updateData.smtpPass;
@@ -115,14 +136,15 @@ export async function updateEmailConfig(
   }
 
   if (data.isDefault) {
-    const existing = await prisma.emailConfig.findUnique({ where: { id } });
     await prisma.emailConfig.updateMany({
       where: {
         isDefault: true,
         id: { not: id },
-        ...(existing?.organizationId
-          ? { organizationId: existing.organizationId }
-          : {}),
+        ...(organizationId
+          ? { organizationId }
+          : existing.organizationId
+            ? { organizationId: existing.organizationId }
+            : {}),
       },
       data: { isDefault: false },
     });
@@ -131,7 +153,11 @@ export async function updateEmailConfig(
   return prisma.emailConfig.update({ where: { id }, data: updateData });
 }
 
-export async function deleteEmailConfig(id: string) {
+export async function deleteEmailConfig(id: string, organizationId?: string) {
+  const existing = await prisma.emailConfig.findFirst({
+    where: { id, ...organizationWhere(organizationId) },
+  });
+  if (!existing) throw new Error("Mailbox not found");
   return prisma.emailConfig.delete({ where: { id } });
 }
 
