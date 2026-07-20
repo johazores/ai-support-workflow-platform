@@ -11,16 +11,12 @@ export const metadata: Metadata = {
 
 export default async function RootSystemHealthPage() {
   const rootAdmin = await requireRootAdmin();
-  const startedAt = Date.now();
 
   let databaseStatus: "healthy" | "unavailable" = "healthy";
-  let databaseLatencyMs = 0;
   try {
     await prisma.organization.count();
-    databaseLatencyMs = Date.now() - startedAt;
   } catch {
     databaseStatus = "unavailable";
-    databaseLatencyMs = Date.now() - startedAt;
   }
 
   const [failedProviders, failedExecutions, activeRootSessions] = await Promise.all([
@@ -37,7 +33,10 @@ export default async function RootSystemHealthPage() {
     {
       label: "Database",
       value: databaseStatus,
-      detail: `${databaseLatencyMs} ms response`,
+      detail:
+        databaseStatus === "healthy"
+          ? "Database query completed successfully"
+          : "Database query failed",
       healthy: databaseStatus === "healthy",
     },
     {
