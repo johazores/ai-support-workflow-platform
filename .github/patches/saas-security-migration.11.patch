@@ -1,0 +1,395 @@
+diff --git a/pages/api/sla-policies/index.ts b/pages/api/sla-policies/index.ts
+index f6e47fa..4f02576 100644
+--- a/pages/api/sla-policies/index.ts
++++ b/pages/api/sla-policies/index.ts
+@@ -1,16 +1,20 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+-import { requireApiPermission } from "@/lib/api-auth";
+-import { getAllSlaPolicies } from "@/features/sla/services/sla-service";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
++import {
++  getAllSlaPolicies,
++  seedSlaPolicies,
++} from "@/features/sla/services/sla-service";
+ 
+ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  const auth = await requireApiPermission(req, res, "workflows:manage");
++  const auth = await requireTenantApiPermission(req, res, "workflows:manage");
+   if (!auth.ok) return;
+ 
+   if (req.method === "GET") {
+-    const policies = await getAllSlaPolicies();
++    await seedSlaPolicies(auth.user.organizationId);
++    const policies = await getAllSlaPolicies(auth.user.organizationId);
+     return res.status(200).json({ data: policies });
+   }
+ 
+diff --git a/pages/api/tickets/[ticket-id]/csat.ts b/pages/api/tickets/[ticket-id]/csat.ts
+index e537d05..38b6948 100644
+--- a/pages/api/tickets/[ticket-id]/csat.ts
++++ b/pages/api/tickets/[ticket-id]/csat.ts
+@@ -1,10 +1,10 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+-import { requireApiAuth } from "@/lib/api-auth";
++import { z } from "zod";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import {
+   getCsatRating,
+   submitCsatRating,
+ } from "@/features/csat/services/csat-service";
+-import { z } from "zod";
+ 
+ const submitSchema = z.object({
+   score: z.number().int().min(1).max(5),
+@@ -15,33 +15,41 @@ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  const auth = await requireApiAuth(req, res);
++  const permission = req.method === "GET" ? "tickets:read" : "tickets:write";
++  const auth = await requireTenantApiPermission(req, res, permission);
+   if (!auth.ok) return;
+ 
+-  const { ticketId } = req.query;
++  const ticketId = req.query["ticket-id"];
+   if (typeof ticketId !== "string") {
+     return res.status(400).json({ message: "Invalid ticket ID" });
+   }
+ 
+-  if (req.method === "GET") {
+-    const rating = await getCsatRating(ticketId);
+-    return res.status(200).json({ data: rating });
+-  }
+-
+-  if (req.method === "POST") {
+-    const parsed = submitSchema.safeParse(req.body);
+-    if (!parsed.success) {
+-      return res
+-        .status(400)
+-        .json({ message: "Invalid input", errors: parsed.error.flatten() });
++  try {
++    if (req.method === "GET") {
++      const rating = await getCsatRating(auth.user.organizationId, ticketId);
++      return res.status(200).json({ data: rating });
+     }
+ 
+-    const rating = await submitCsatRating(
+-      ticketId,
+-      parsed.data.score,
+-      parsed.data.comment,
+-    );
+-    return res.status(200).json({ data: rating });
++    if (req.method === "POST") {
++      const parsed = submitSchema.safeParse(req.body);
++      if (!parsed.success) {
++        return res.status(400).json({
++          message: "Invalid input",
++          errors: parsed.error.flatten(),
++        });
++      }
++
++      const rating = await submitCsatRating(
++        auth.user.organizationId,
++        ticketId,
++        parsed.data.score,
++        parsed.data.comment,
++      );
++      return res.status(200).json({ data: rating });
++    }
++  } catch (error) {
++    const message = error instanceof Error ? error.message : "Request failed";
++    return res.status(message === "Ticket not found" ? 404 : 500).json({ message });
+   }
+ 
+   res.setHeader("Allow", ["GET", "POST"]);
+diff --git a/pages/api/tickets/[ticket-id]/events.ts b/pages/api/tickets/[ticket-id]/events.ts
+index 06a448d..efa34e2 100644
+--- a/pages/api/tickets/[ticket-id]/events.ts
++++ b/pages/api/tickets/[ticket-id]/events.ts
+@@ -1,70 +1,73 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
++import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+-// In-memory set of active SSE connections per ticket
+ const ticketConnections = new Map<string, Set<NextApiResponse>>();
+ 
++function connectionKey(organizationId: string, ticketId: string) {
++  return `${organizationId}:${ticketId}`;
++}
++
+ export function broadcastTicketUpdate(
++  organizationId: string,
+   ticketId: string,
+   event: string,
+   data: unknown,
+ ) {
+-  const connections = ticketConnections.get(ticketId);
+-
++  const connections = ticketConnections.get(
++    connectionKey(organizationId, ticketId),
++  );
+   if (!connections) return;
+ 
+   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+-
+-  for (const res of connections) {
+-    res.write(payload);
+-  }
++  for (const response of connections) response.write(payload);
+ }
+ 
+-export default function handler(req: NextApiRequest, res: NextApiResponse) {
++export default async function handler(
++  req: NextApiRequest,
++  res: NextApiResponse,
++) {
+   if (req.method !== "GET") {
+     res.setHeader("Allow", ["GET"]);
+     return res.status(405).json({ message: "Method not allowed" });
+   }
+ 
+-  const ticketId = req.query["ticket-id"] as string;
++  const auth = await requireTenantApiPermission(req, res, "tickets:read");
++  if (!auth.ok) return;
+ 
+-  if (!ticketId) {
++  const ticketId = req.query["ticket-id"];
++  if (typeof ticketId !== "string") {
+     return res.status(400).json({ message: "Missing ticket-id" });
+   }
+ 
+-  // Set SSE headers
++  const scope = await getTenantRecordScope(auth.user.organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
++    select: { id: true },
++  });
++  if (!ticket) return res.status(404).json({ message: "Ticket not found" });
++
+   res.writeHead(200, {
+     "Content-Type": "text/event-stream",
+     "Cache-Control": "no-cache, no-transform",
+     Connection: "keep-alive",
++    "X-Accel-Buffering": "no",
+   });
+-
+-  // Send initial keepalive
+   res.write(": connected\n\n");
+ 
+-  // Register connection
+-  if (!ticketConnections.has(ticketId)) {
+-    ticketConnections.set(ticketId, new Set());
+-  }
+-
+-  ticketConnections.get(ticketId)!.add(res);
++  const key = connectionKey(auth.user.organizationId, ticketId);
++  const connections = ticketConnections.get(key) ?? new Set<NextApiResponse>();
++  connections.add(res);
++  ticketConnections.set(key, connections);
+ 
+-  // Send heartbeat every 30 seconds to keep connection alive
+   const heartbeat = setInterval(() => {
+-    res.write(": heartbeat\n\n");
+-  }, 30_000);
++    if (!res.writableEnded) res.write(": heartbeat\n\n");
++  }, 25_000);
+ 
+-  // Cleanup on disconnect
+   req.on("close", () => {
+     clearInterval(heartbeat);
+-
+-    const connections = ticketConnections.get(ticketId);
+-
+-    if (connections) {
+-      connections.delete(res);
+-
+-      if (connections.size === 0) {
+-        ticketConnections.delete(ticketId);
+-      }
+-    }
++    connections.delete(res);
++    if (connections.size === 0) ticketConnections.delete(key);
+   });
+ }
+diff --git a/pages/api/tickets/[ticket-id]/priority.ts b/pages/api/tickets/[ticket-id]/priority.ts
+index a607d07..311eef6 100644
+--- a/pages/api/tickets/[ticket-id]/priority.ts
++++ b/pages/api/tickets/[ticket-id]/priority.ts
+@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
+ import { z } from "zod";
+ import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ const updatePrioritySchema = z.object({
+   priority: z.enum(["low", "normal", "high", "urgent"]),
+@@ -31,14 +32,9 @@ export default async function handler(
+       .json({ message: "Invalid input", errors: parsed.error.flatten() });
+   }
+ 
++  const scope = await getTenantRecordScope(auth.user.organizationId);
+   const existing = await prisma.ticket.findFirst({
+-    where: {
+-      id: ticketId,
+-      OR: [
+-        { organizationId: auth.user.organizationId },
+-        { organizationId: null },
+-      ],
+-    },
++    where: { id: ticketId, ...scope },
+   });
+   if (!existing) return res.status(404).json({ message: "Ticket not found" });
+ 
+diff --git a/pages/api/tickets/[ticket-id]/sla.ts b/pages/api/tickets/[ticket-id]/sla.ts
+index ba63dc6..50fe814 100644
+--- a/pages/api/tickets/[ticket-id]/sla.ts
++++ b/pages/api/tickets/[ticket-id]/sla.ts
+@@ -1,6 +1,6 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+ import { getSlaStatus } from "@/features/sla/services/sla-service";
+-import { requireApiAuth } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ 
+ export default async function handler(
+   req: NextApiRequest,
+@@ -11,20 +11,14 @@ export default async function handler(
+     return res.status(405).json({ message: "Method not allowed" });
+   }
+ 
+-  const auth = await requireApiAuth(req, res);
++  const auth = await requireTenantApiPermission(req, res, "tickets:read");
+   if (!auth.ok) return;
+ 
+   const ticketId = req.query["ticket-id"];
+-
+   if (typeof ticketId !== "string") {
+     return res.status(400).json({ message: "Invalid ticket ID" });
+   }
+ 
+-  const status = await getSlaStatus(ticketId);
+-
+-  if (!status) {
+-    return res.status(200).json({ data: null });
+-  }
+-
++  const status = await getSlaStatus(auth.user.organizationId, ticketId);
+   return res.status(200).json({ data: status });
+ }
+diff --git a/pages/api/tickets/bulk.ts b/pages/api/tickets/bulk.ts
+index 072b8f6..1ce4192 100644
+--- a/pages/api/tickets/bulk.ts
++++ b/pages/api/tickets/bulk.ts
+@@ -1,13 +1,21 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+ import { z } from "zod";
+-import { requireApiAuth } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+-const bulkSchema = z.object({
+-  ticketIds: z.array(z.string()).min(1).max(50),
+-  action: z.enum(["change-status", "change-priority", "assign"]),
+-  value: z.string().min(1),
+-});
++const bulkSchema = z.discriminatedUnion("action", [
++  z.object({
++    ticketIds: z.array(z.string().min(1)).min(1).max(50),
++    action: z.literal("change-status"),
++    value: z.enum(["open", "pending", "resolved", "closed"]),
++  }),
++  z.object({
++    ticketIds: z.array(z.string().min(1)).min(1).max(50),
++    action: z.literal("change-priority"),
++    value: z.enum(["low", "normal", "high", "urgent"]),
++  }),
++]);
+ 
+ export default async function handler(
+   req: NextApiRequest,
+@@ -18,36 +26,39 @@ export default async function handler(
+     return res.status(405).json({ message: "Method not allowed" });
+   }
+ 
+-  const auth = await requireApiAuth(req, res);
++  const auth = await requireTenantApiPermission(req, res, "tickets:write");
+   if (!auth.ok) return;
+ 
+   const parsed = bulkSchema.safeParse(req.body);
+   if (!parsed.success) {
+-    return res
+-      .status(400)
+-      .json({ message: "Invalid input", errors: parsed.error.flatten() });
++    return res.status(400).json({
++      message: "Invalid input",
++      errors: parsed.error.flatten(),
++    });
+   }
+ 
+-  const { ticketIds, action, value } = parsed.data;
+-
+-  let data: Record<string, string> = {};
+-  let logMessage = "";
++  const organizationId = auth.user.organizationId;
++  const scope = await getTenantRecordScope(organizationId);
++  const requestedIds = [...new Set(parsed.data.ticketIds)];
++  const tickets = await prisma.ticket.findMany({
++    where: { id: { in: requestedIds }, ...scope },
++    select: { id: true },
++  });
++  const ticketIds = tickets.map((ticket) => ticket.id);
+ 
+-  switch (action) {
+-    case "change-status":
+-      data = { status: value };
+-      logMessage = `Bulk status changed to ${value}`;
+-      break;
+-    case "change-priority":
+-      data = { priority: value };
+-      logMessage = `Bulk priority changed to ${value}`;
+-      break;
+-    case "assign":
+-      data = { assigneeName: value };
+-      logMessage = `Bulk assigned to ${value}`;
+-      break;
++  if (ticketIds.length === 0) {
++    return res.status(404).json({ message: "No matching tickets found" });
+   }
+ 
++  const data =
++    parsed.data.action === "change-status"
++      ? { organizationId, status: parsed.data.value }
++      : { organizationId, priority: parsed.data.value };
++  const logMessage =
++    parsed.data.action === "change-status"
++      ? `Bulk status changed to ${parsed.data.value}`
++      : `Bulk priority changed to ${parsed.data.value}`;
++
+   await prisma.ticket.updateMany({
+     where: { id: { in: ticketIds } },
+     data,
+@@ -55,11 +66,17 @@ export default async function handler(
+ 
+   await prisma.activityLog.createMany({
+     data: ticketIds.map((ticketId) => ({
++      organizationId,
+       ticketId,
+-      type: `bulk_${action.replace("-", "_")}`,
++      type: `bulk_${parsed.data.action.replace("-", "_")}`,
+       message: logMessage,
+     })),
+   });
+ 
+-  return res.status(200).json({ data: { updated: ticketIds.length } });
++  return res.status(200).json({
++    data: {
++      updated: ticketIds.length,
++      skipped: requestedIds.length - ticketIds.length,
++    },
++  });
+ }
