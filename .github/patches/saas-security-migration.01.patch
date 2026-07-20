@@ -1,8 +1,8 @@
 diff --git a/features/ai-drafts/services/ai-usage-query-service.ts b/features/ai-drafts/services/ai-usage-query-service.ts
-index f7a64d0..5d833fd 100644
+index 9c837d4..eca5832 100644
 --- a/features/ai-drafts/services/ai-usage-query-service.ts
 +++ b/features/ai-drafts/services/ai-usage-query-service.ts
-@@ -1,10 +1,13 @@
+@@ -1,10 +1,11 @@
  import { prisma } from "@/lib/prisma";
 +import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
  
@@ -20,10 +20,10 @@ index f7a64d0..5d833fd 100644
    });
  }
 diff --git a/features/ai-drafts/services/classification-service.ts b/features/ai-drafts/services/classification-service.ts
-index 7824baf..7fe01af 100644
+index 94a4122..3357006 100644
 --- a/features/ai-drafts/services/classification-service.ts
 +++ b/features/ai-drafts/services/classification-service.ts
-@@ -1,36 +1,10 @@
+@@ -1,65 +1,35 @@
 -import type { AiDraftProvider } from "@/features/ai-drafts/types/ai-provider";
 -import { mockAiProvider } from "@/features/ai-drafts/services/mock-ai-provider";
 -import { openAiProvider } from "@/features/ai-drafts/services/openai-ai-provider";
@@ -47,12 +47,11 @@ index 7824baf..7fe01af 100644
  function classifyByKeywords(subject: string, body: string): Classification {
    const text = `${subject} ${body}`.toLowerCase();
  
--  if (
+   if (
 -    text.includes("urgent") ||
 -    text.includes("emergency") ||
 -    text.includes("down") ||
 -    text.includes("outage")
-+  if (
 +    ["urgent", "emergency", "down", "outage", "security breach"].some(
 +      (term) => text.includes(term),
 +    )
@@ -97,7 +96,8 @@ index 7824baf..7fe01af 100644
 +  if (["feature", "request", "suggestion"].some((term) => text.includes(term))) {
      return { priority: "low", category: "feature-request" };
    }
-@@ -40,68 +14,24 @@ function classifyByKeywords(subject: string, body: string): Classification {
+ 
+@@ -67,49 +37,22 @@ function classifyByKeywords(subject: string, body: string): Classification {
  }
  
  export async function classifyTicket(
@@ -138,15 +138,14 @@ index 7824baf..7fe01af 100644
 -      // Fall through to keyword-based classification
 -    }
 -  }
--
--  // Keyword-based fallback (always available, no API call)
 +  const scope = await getTenantRecordScope(organizationId);
 +  const ticket = await prisma.ticket.findFirst({
 +    where: { id: ticketId, ...scope },
 +    select: { id: true },
 +  });
 +  if (!ticket) throw new Error("Ticket not found");
-+
+ 
+-  // Keyword-based fallback (always available, no API call)
    const classification = classifyByKeywords(subject, body);
 -
    await prisma.ticket.update({
@@ -159,41 +158,38 @@ index 7824baf..7fe01af 100644
    return classification;
  }
 diff --git a/features/ai-drafts/services/draft-service.ts b/features/ai-drafts/services/draft-service.ts
-index fe00f49..122a873 100644
+index 122a873..6ccec67 100644
 --- a/features/ai-drafts/services/draft-service.ts
 +++ b/features/ai-drafts/services/draft-service.ts
-@@ -1,17 +1,25 @@
+@@ -1,4 +1,5 @@
  import { prisma } from "@/lib/prisma";
 +import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
  
  type SaveDraftInput = {
-+  organizationId: string;
-   ticketId: string;
-   body: string;
+   organizationId: string;
+@@ -7,14 +8,9 @@ type SaveDraftInput = {
  };
  
  export async function saveDraft(input: SaveDraftInput) {
 +  const scope = await getTenantRecordScope(input.organizationId);
-+  const ticket = await prisma.ticket.findFirst({
+   const ticket = await prisma.ticket.findFirst({
+-    where: {
+-      id: input.ticketId,
+-      OR: [
+-        { organizationId: input.organizationId },
+-        { organizationId: null },
+-      ],
+-    },
 +    where: { id: input.ticketId, ...scope },
-+    select: { id: true },
-+  });
-+  if (!ticket) throw new Error("Ticket not found");
-+
-   return prisma.draft.create({
-     data: {
--      ticketId: input.ticketId,
-+      organizationId: input.organizationId,
-+      ticketId: ticket.id,
-       body: input.body,
-     },
    });
- }
+   if (!ticket) throw new Error("Ticket not found");
+ 
 diff --git a/features/ai-drafts/services/mock-ai-provider.test.ts b/features/ai-drafts/services/mock-ai-provider.test.ts
-index 6a11889..088984d 100644
+index 739462e..4293dd0 100644
 --- a/features/ai-drafts/services/mock-ai-provider.test.ts
 +++ b/features/ai-drafts/services/mock-ai-provider.test.ts
-@@ -4,6 +4,7 @@ describe("mock-ai-provider", () => {
+@@ -4,6 +4,7 @@ import { mockAiProvider } from "@/features/ai-drafts/services/mock-ai-provider";
+ describe("mock-ai-provider", () => {
    it("generates a professional draft by default", async () => {
      const result = await mockAiProvider.generateDraft({
 +      organizationId: "507f1f77bcf86cd799439011",
@@ -233,93 +229,55 @@ index 6a11889..088984d 100644
        customerName: "Eve",
        customerMessage: "Test message.",
 diff --git a/features/ai-drafts/services/send-draft-service.ts b/features/ai-drafts/services/send-draft-service.ts
-index e20d950..0bbb6e9 100644
+index 61afdfd..2fab865 100644
 --- a/features/ai-drafts/services/send-draft-service.ts
 +++ b/features/ai-drafts/services/send-draft-service.ts
-@@ -1,25 +1,31 @@
+@@ -1,4 +1,5 @@
  import { prisma } from "@/lib/prisma";
 +import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
-+import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
+ import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
  import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
  
- type SendDraftInput = {
-+  organizationId: string;
-   draftId: string;
+@@ -8,14 +9,9 @@ type SendDraftInput = {
  };
  
  export async function sendDraft(input: SendDraftInput) {
--  const draft = await prisma.draft.findUnique({
++  const scope = await getTenantRecordScope(input.organizationId);
+   const draft = await prisma.draft.findFirst({
 -    where: {
 -      id: input.draftId,
+-      OR: [
+-        { organizationId: input.organizationId },
+-        { organizationId: null },
+-      ],
 -    },
-+  const scope = await getTenantRecordScope(input.organizationId);
-+  const draft = await prisma.draft.findFirst({
 +    where: { id: input.draftId, ...scope },
-+    include: {
-+      ticket: {
-+        include: { customer: true },
-+      },
-+    },
+     include: {
+       ticket: {
+         include: { customer: true },
+@@ -64,6 +60,7 @@ export async function sendDraft(input: SendDraftInput) {
    });
  
--  if (!draft) {
-+  if (!draft || (draft.ticket.organizationId && draft.ticket.organizationId !== input.organizationId)) {
-     throw new Error("Draft not found");
-   }
- 
-   const message = await prisma.message.create({
-     data: {
-+      organizationId: input.organizationId,
-       ticketId: draft.ticketId,
-       author: "support",
-       body: draft.body,
-@@ -34,6 +40,7 @@ export async function sendDraft(input: SendDraftInput) {
-     where: {
-       id: draft.ticketId,
-     },
-     data: {
-+      organizationId: input.organizationId,
-       status: "pending",
-     },
-   });
-@@ -42,15 +49,29 @@ export async function sendDraft(input: SendDraftInput) {
-     data: {
-+      organizationId: input.organizationId,
-       ticketId: draft.ticketId,
-       type: "reply_sent",
-       message: "Support reply sent from saved draft.",
-     },
-   });
- 
-   await prisma.activityLog.create({
-     data: {
-+      organizationId: input.organizationId,
-       ticketId: draft.ticketId,
-       type: "status_changed",
-       message: "Ticket status changed to pending after reply was sent.",
-     },
-   });
-+
-+  await sendTicketEmail({
+   await sendTicketEmail({
 +    organizationId: input.organizationId,
-+    ticketId: draft.ticketId,
-+    messageId: message.id,
-+    to: draft.ticket.customer.email,
-+    subject: `Re: ${draft.ticket.subject}`,
-+    body: draft.body,
-+  });
-+
-+  broadcastTicketUpdate(input.organizationId, draft.ticketId, "message-created", {
-+    messageId: message.id,
-+  });
+     ticketId: draft.ticketId,
+     messageId: message.id,
+     to: draft.ticket.customer.email,
+@@ -71,7 +68,7 @@ export async function sendDraft(input: SendDraftInput) {
+     body: draft.body,
+   });
  
-   return message;
- }
+-  broadcastTicketUpdate(draft.ticketId, "message-created", {
++  broadcastTicketUpdate(input.organizationId, draft.ticketId, "message-created", {
+     messageId: message.id,
+   });
+ 
 diff --git a/features/ai-drafts/types/ai-provider.ts b/features/ai-drafts/types/ai-provider.ts
-index a4a39a3..634e381 100644
+index eb3c009..eda7e83 100644
 --- a/features/ai-drafts/types/ai-provider.ts
 +++ b/features/ai-drafts/types/ai-provider.ts
-@@ -2,7 +2,7 @@ export type DraftTone = "professional" | "friendly" | "concise" | "empathetic";
+@@ -1,7 +1,7 @@
+ export type DraftTone = "professional" | "friendly" | "concise" | "empathetic";
  
  export type GenerateDraftInput = {
 -  organizationId?: string;
@@ -327,3 +285,53 @@ index a4a39a3..634e381 100644
    subject: string;
    customerName: string;
    customerMessage: string;
+diff --git a/features/analytics/services/analytics-service.ts b/features/analytics/services/analytics-service.ts
+index a85d289..ab465cf 100644
+--- a/features/analytics/services/analytics-service.ts
++++ b/features/analytics/services/analytics-service.ts
+@@ -1,4 +1,5 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export type TicketVolumePoint = {
+   date: string;
+@@ -24,18 +25,23 @@ export type AnalyticsData = {
+   priorityBreakdown: PriorityBreakdown[];
+ };
+ 
+-export async function getAnalytics(days = 30): Promise<AnalyticsData> {
++export async function getAnalytics(
++  organizationId: string,
++  days = 30,
++): Promise<AnalyticsData> {
+   const since = new Date();
+   since.setDate(since.getDate() - days);
+ 
++  const scope = await getTenantRecordScope(organizationId);
+   const [totalTickets, openTickets, tickets, allTickets] = await Promise.all([
+-    prisma.ticket.count(),
+-    prisma.ticket.count({ where: { status: "open" } }),
++    prisma.ticket.count({ where: scope }),
++    prisma.ticket.count({ where: { AND: [scope, { status: "open" }] } }),
+     prisma.ticket.findMany({
+-      where: { createdAt: { gte: since } },
++      where: { AND: [scope, { createdAt: { gte: since } }] },
+       select: { createdAt: true },
+     }),
+     prisma.ticket.findMany({
++      where: scope,
+       select: { status: true, priority: true },
+     }),
+   ]);
+@@ -86,9 +92,11 @@ export async function getAnalytics(days = 30): Promise<AnalyticsData> {
+   // Average first response time (time from ticket creation to first non-customer message)
+   const ticketsWithMessages = await prisma.ticket.findMany({
+     where: {
++      AND: [scope, {
+       messages: {
+         some: { author: { not: "customer" } },
+       },
++      }],
+     },
+     select: {
+       createdAt: true,
