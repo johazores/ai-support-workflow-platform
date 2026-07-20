@@ -4,62 +4,36 @@ import { anthropicProvider } from "@/features/ai-drafts/services/anthropic-ai-pr
 import { AiProviderChain } from "@/features/ai-drafts/services/ai-provider-chain";
 import type { GenerateDraftInput } from "@/features/ai-drafts/types/ai-provider";
 
-type ProviderEntry = {
-  name: string;
-  model: string;
-  provider: {
-    generateDraft: (input: GenerateDraftInput) => Promise<{ draft: string }>;
-  };
-};
+type ProviderEntry = ConstructorParameters<typeof AiProviderChain>[0][number];
 
 function buildProviderChain(): AiProviderChain {
-  const providers: ProviderEntry[] = [];
-
-  // Add configured providers in priority order
-  if (process.env.AI_PROVIDER === "openai" || process.env.OPENAI_API_KEY) {
-    providers.push({
+  const providers: ProviderEntry[] = [
+    {
       name: "openai",
-      model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+      model: process.env.OPENAI_MODEL ?? "database-configured",
       provider: openAiProvider,
-    });
-  }
-
-  if (
-    process.env.AI_PROVIDER === "anthropic" ||
-    process.env.ANTHROPIC_API_KEY
-  ) {
-    providers.push({
+    },
+    {
       name: "anthropic",
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
+      model: process.env.ANTHROPIC_MODEL ?? "database-configured",
       provider: anthropicProvider,
+    },
+  ];
+
+  const allowMock =
+    process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_AI === "true";
+
+  if (allowMock) {
+    providers.push({
+      name: "mock",
+      model: "mock-model",
+      provider: mockAiProvider,
     });
   }
-
-  // Mock provider always available as final fallback
-  providers.push({
-    name: "mock",
-    model: "mock-model",
-    provider: mockAiProvider,
-  });
 
   return new AiProviderChain(providers);
 }
 
 export async function generateAiDraftReply(input: GenerateDraftInput) {
-  const chain = buildProviderChain();
-
-  try {
-    return await chain.generate(input);
-  } catch {
-    return {
-      draft: `Hi ${input.customerName},
-
-Thanks for your message regarding "${input.subject}".
-
-We are currently reviewing your request and will get back to you shortly.
-
-Kind regards,
-Support Team`,
-    };
-  }
+  return buildProviderChain().generate(input);
 }
