@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import {
@@ -5,7 +6,7 @@ import {
   syncClerkIdentity,
 } from "@/features/auth/services/clerk-user-service";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const event = await verifyWebhook(request);
 
