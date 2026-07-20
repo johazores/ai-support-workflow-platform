@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/features/auth/services/password-service";
 import { ensureLegacyOrganizationForUser } from "@/features/organizations/services/organization-service";
 
-type LoginInput = {
+ type LoginInput = {
   email: string;
   password: string;
 };
@@ -14,7 +14,7 @@ export async function validateUserLogin(input: LoginInput) {
     },
   });
 
-  if (!user || user.status !== "active") return null;
+  if (!user || user.status !== "active" || !user.passwordHash) return null;
 
   const isValidPassword = await verifyPassword(
     input.password,
@@ -36,5 +36,6 @@ export async function validateUserLogin(input: LoginInput) {
     email: user.email,
     role: organization.role,
     organizationId: organization.organizationId,
+    authProvider: "legacy" as const,
   };
 }
