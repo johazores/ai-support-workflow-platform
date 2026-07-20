@@ -8,10 +8,10 @@ on:
     branches: [master]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: apply-saas-security-migration
+  group: apply-saas-security-migration-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/saas-foundation
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -79,7 +80,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-diagnostics
+          name: migration-diagnostics-${{ github.event_name }}
           path: |
             migration-validation.log
             migration-validation-failure.md
@@ -91,7 +92,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: validated-migration
+          name: validated-migration-${{ github.event_name }}
           path: |
             validated-files.tar.gz
             validated-files.txt
@@ -99,3 +100,17 @@ jobs:
             base-tree-sha.txt
             migration-status.txt
           retention-days: 7
+
+      - name: Publish validated migration
+        if: success() && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f docs/MIGRATION_VALIDATION_FAILURE.md migration-validation.log
+          git rm -rf .github/patches
+          git rm -f .github/workflows/apply-saas-security-migration.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "security: complete tenant and authentication migration"
+          git push origin HEAD:feat/saas-foundation
