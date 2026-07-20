@@ -14,6 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create source snapshot
+        shell: bash
+        run: |
+          tar -czf source-snapshot.tar.gz \
+            app pages features components lib prisma docs scripts \
+            package.json package-lock.json tsconfig.json next.config.ts \
+            eslint.config.mjs postcss.config.mjs vitest.config.ts \
+            .env.example .github/workflows
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-snapshot
+          path: source-snapshot.tar.gz
+          retention-days: 2
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -117,7 +133,22 @@ jobs:
         run: npx prisma generate
 
       - name: Run Tests
-        run: npx vitest run --reporter=verbose
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          npx vitest run --reporter=verbose 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   build:
     name: Build
