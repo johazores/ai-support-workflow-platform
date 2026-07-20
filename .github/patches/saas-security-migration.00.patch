@@ -1,0 +1,397 @@
+diff --git a/.github/workflows/apply-ticket-tenant-context.yml b/.github/workflows/apply-ticket-tenant-context.yml
+deleted file mode 100644
+index 0f85e1a..0000000
+--- a/.github/workflows/apply-ticket-tenant-context.yml
++++ /dev/null
+@@ -1,129 +0,0 @@
+-name: Apply Tenant Runtime Updates
+-
+-on:
+-  push:
+-    branches: [agent/saas-foundation]
+-  pull_request:
+-    branches: [master]
+-
+-permissions:
+-  contents: write
+-
+-concurrency:
+-  group: apply-tenant-runtime-updates
+-  cancel-in-progress: true
+-
+-jobs:
+-  apply:
+-    if: github.repository == 'johazores/ai-support-workflow-platform' && (github.ref == 'refs/heads/agent/saas-foundation' || github.head_ref == 'agent/saas-foundation')
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-        with:
+-          ref: agent/saas-foundation
+-          token: ${{ secrets.GITHUB_TOKEN }}
+-
+-      - name: Apply tenant runtime updates
+-        shell: bash
+-        run: |
+-          python - <<'PY'
+-          from pathlib import Path
+-
+-          execution_path = Path("features/workflows/services/workflow-execution-service.ts")
+-          execution = execution_path.read_text()
+-          start_marker = "  const defaultOrganization = await ensureDefaultOrganization();"
+-          end_marker = "  const rules = await prisma.workflowRule.findMany({"
+-          replacement = '''  if (
+-            context?.organizationId &&
+-            ticket.organizationId &&
+-            ticket.organizationId !== context.organizationId
+-          ) {
+-            return { executed: false, message: "Ticket not found." };
+-          }
+-
+-          const defaultOrganization = await ensureDefaultOrganization();
+-          const organizationId =
+-            context?.organizationId || ticket.organizationId || defaultOrganization.id;
+-
+-          if (!ticket.organizationId) {
+-            await prisma.ticket.update({
+-              where: { id: ticket.id },
+-              data: { organizationId },
+-            });
+-          }
+-
+-'''
+-
+-          if "ticket.organizationId !== context.organizationId" not in execution:
+-              start = execution.index(start_marker)
+-              end = execution.index(end_marker)
+-              execution = execution[:start] + replacement + execution[end:]
+-
+-          execution = execution.replace(
+-              "  await addTagToTicket(ticket.id, action.value);",
+-              "  await addTagToTicket(ticket.id, action.value, organizationId);",
+-              1,
+-          )
+-          execution_path.write_text(execution)
+-
+-          schema_path = Path("prisma/schema.prisma")
+-          schema = schema_path.read_text()
+-
+-          def update_model(schema_value, model_name, next_model, replacements, unique_line):
+-              start = schema_value.index(f"model {model_name} {{")
+-              end = schema_value.index(f"model {next_model} {{", start)
+-              block = schema_value[start:end]
+-              for old, new in replacements:
+-                  block = block.replace(old, new, 1)
+-              if unique_line not in block:
+-                  final_brace = block.rfind("}")
+-                  block = block[:final_brace] + f"  {unique_line}\n" + block[final_brace:]
+-              return schema_value[:start] + block + schema_value[end:]
+-
+-          schema = update_model(
+-              schema,
+-              "Customer",
+-              "Ticket",
+-              [("  email          String   @unique\n", "  email          String\n")],
+-              "@@unique([organizationId, email])",
+-          )
+-          schema = update_model(
+-              schema,
+-              "Tag",
+-              "SavedReply",
+-              [("  name           String   @unique\n", "  name           String\n")],
+-              "@@unique([organizationId, name])",
+-          )
+-          schema = update_model(
+-              schema,
+-              "SlaPolicy",
+-              "CsatRating",
+-              [("  priority              String   @unique\n", "  priority              String\n")],
+-              "@@unique([organizationId, priority])",
+-          )
+-          schema = update_model(
+-              schema,
+-              "EmailConfig",
+-              "EmailTemplate",
+-              [("  fromAddress    String   @unique\n", "  fromAddress    String\n")],
+-              "@@unique([organizationId, fromAddress])",
+-          )
+-          schema_path.write_text(schema)
+-          PY
+-
+-      - name: Format updated files
+-        run: npx prettier --write features/workflows/services/workflow-execution-service.ts prisma/schema.prisma
+-
+-      - name: Commit tenant runtime updates
+-        shell: bash
+-        run: |
+-          if git diff --quiet features/workflows/services/workflow-execution-service.ts prisma/schema.prisma; then
+-            exit 0
+-          fi
+-
+-          git config user.name "github-actions[bot]"
+-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+-          git add features/workflows/services/workflow-execution-service.ts prisma/schema.prisma
+-          git commit -m "security: complete tenant runtime constraints"
+-          git push origin HEAD:agent/saas-foundation
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 2cf91cf..1d97a7b 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -6,6 +6,13 @@ on:
+   pull_request:
+     branches: [master, main]
+ 
++permissions:
++  contents: read
++
++concurrency:
++  group: ci-${{ github.workflow }}-${{ github.ref }}
++  cancel-in-progress: true
++
+ jobs:
+   lint-and-typecheck:
+     name: Lint & Type Check
+@@ -14,22 +21,6 @@ jobs:
+     steps:
+       - uses: actions/checkout@v4
+ 
+-      - name: Create source snapshot
+-        shell: bash
+-        run: |
+-          tar -czf source-snapshot.tar.gz \
+-            app pages features components lib prisma docs scripts \
+-            package.json package-lock.json tsconfig.json next.config.ts \
+-            eslint.config.mjs postcss.config.mjs vitest.config.ts \
+-            .env.example .github/workflows
+-
+-      - name: Upload source snapshot
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: source-snapshot
+-          path: source-snapshot.tar.gz
+-          retention-days: 2
+-
+       - uses: actions/setup-node@v4
+         with:
+           node-version: 22
+@@ -43,77 +34,16 @@ jobs:
+       - name: Validate Prisma Schema
+         run: npx prisma validate
+         env:
+-          DATABASE_URL: "mongodb://localhost:27017/ci-placeholder"
++          DATABASE_URL: mongodb://localhost:27017/ci-placeholder
+ 
+       - name: Type Check
+-        id: typecheck
+-        shell: bash
+-        run: |
+-          set +e
+-          npm run type-check -- --pretty false 2>&1 | tee typecheck.log
+-          status=${PIPESTATUS[0]}
+-          exit $status
+-
+-      - name: Upload Type Check Report
+-        if: always()
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: typecheck-report
+-          path: typecheck.log
+-          if-no-files-found: ignore
+-          retention-days: 7
++        run: npm run type-check -- --pretty false
+ 
+       - name: Lint
+-        id: lint
+-        if: always() && steps.typecheck.outcome == 'success'
+-        shell: bash
+-        run: |
+-          set +e
+-          npx eslint . --max-warnings 0 2>&1 | tee lint.log
+-          status=${PIPESTATUS[0]}
+-          exit $status
+-
+-      - name: Upload Lint Report
+-        if: always()
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: lint-report
+-          path: lint.log
+-          if-no-files-found: ignore
+-          retention-days: 7
++        run: npx eslint . --max-warnings 0
+ 
+       - name: Format Check
+-        id: format
+-        if: always() && steps.typecheck.outcome == 'success'
+-        shell: bash
+-        run: |
+-          set +e
+-          npx prettier --write . 2>&1 | tee format.log
+-          git diff --name-only --diff-filter=ACM > formatted-files.txt
+-          if [ -s formatted-files.txt ]; then
+-            tar -czf formatted-files.tar.gz -T formatted-files.txt
+-          fi
+-          git diff --exit-code
+-          status=$?
+-          exit $status
+-
+-      - name: Upload Format Report
+-        if: always()
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: format-report
+-          path: format.log
+-          if-no-files-found: ignore
+-          retention-days: 7
+-
+-      - name: Upload Formatted Files
+-        if: always()
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: formatted-files
+-          path: formatted-files.tar.gz
+-          if-no-files-found: ignore
+-          retention-days: 7
++        run: npm run format:check
+ 
+   test:
+     name: Tests
+@@ -133,22 +63,7 @@ jobs:
+         run: npx prisma generate
+ 
+       - name: Run Tests
+-        id: tests
+-        shell: bash
+-        run: |
+-          set +e
+-          npx vitest run --reporter=verbose 2>&1 | tee test.log
+-          status=${PIPESTATUS[0]}
+-          exit $status
+-
+-      - name: Upload Test Report
+-        if: always()
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: test-report
+-          path: test.log
+-          if-no-files-found: ignore
+-          retention-days: 7
++        run: npx vitest run --reporter=verbose
+ 
+   build:
+     name: Build
+@@ -171,7 +86,7 @@ jobs:
+       - name: Build
+         run: npx next build
+         env:
+-          DATABASE_URL: "mongodb://localhost:27017/ci-placeholder"
+-          SESSION_SECRET: "ci-test-secret-do-not-use-in-production"
+-          ROOT_SESSION_SECRET: "ci-root-session-secret-do-not-use-in-production"
+-          CONFIG_ENCRYPTION_KEY: "Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE="
++          DATABASE_URL: mongodb://localhost:27017/ci-placeholder
++          SESSION_SECRET: ci-test-secret-do-not-use-in-production
++          ROOT_SESSION_SECRET: ci-root-session-secret-do-not-use-in-production
++          CONFIG_ENCRYPTION_KEY: Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE=
+diff --git a/.github/workflows/rename-saas-foundation-branch.yml b/.github/workflows/rename-saas-foundation-branch.yml
+deleted file mode 100644
+index 07a09b0..0000000
+--- a/.github/workflows/rename-saas-foundation-branch.yml
++++ /dev/null
+@@ -1,28 +0,0 @@
+-name: Rename SaaS Foundation Branch
+-
+-on:
+-  push:
+-    branches: [agent/saas-foundation]
+-
+-permissions:
+-  contents: write
+-
+-jobs:
+-  rename:
+-    if: github.repository == 'johazores/ai-support-workflow-platform'
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - name: Rename branch and preserve pull request
+-        env:
+-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-        shell: bash
+-        run: |
+-          set -euo pipefail
+-
+-          curl --fail-with-body --location --request POST \
+-            --header "Accept: application/vnd.github+json" \
+-            --header "Authorization: Bearer ${GH_TOKEN}" \
+-            --header "X-GitHub-Api-Version: 2022-11-28" \
+-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/agent%2Fsaas-foundation/rename" \
+-            --data '{"new_name":"feat/saas-foundation"}'
+diff --git a/app/admin/ai-logs/page.tsx b/app/admin/ai-logs/page.tsx
+index b2954a9..d00adf2 100644
+--- a/app/admin/ai-logs/page.tsx
++++ b/app/admin/ai-logs/page.tsx
+@@ -41,7 +41,7 @@ export default async function AiLogsPage() {
+             </h1>
+           </div>
+ 
+-          <AiUsageLogList />
++          <AiUsageLogList organizationId={user.organizationId} />
+         </section>
+       </main>
+     </>
+diff --git a/app/api/webhooks/clerk/route.ts b/app/api/webhooks/clerk/route.ts
+index 2603ad1..70b4d88 100644
+--- a/app/api/webhooks/clerk/route.ts
++++ b/app/api/webhooks/clerk/route.ts
+@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
+         clerkUserId: event.data.id,
+         email: primaryEmail.email_address,
+         name,
++        metadata: event.data.public_metadata,
+       });
+ 
+       await recordAuditEvent({
+diff --git a/features/ai-drafts/components/ai-usage-log-list.tsx b/features/ai-drafts/components/ai-usage-log-list.tsx
+index 3198d0b..002ac6f 100644
+--- a/features/ai-drafts/components/ai-usage-log-list.tsx
++++ b/features/ai-drafts/components/ai-usage-log-list.tsx
+@@ -2,8 +2,12 @@ import { getAiUsageLogs } from "@/features/ai-drafts/services/ai-usage-query-ser
+ import { formatDateTime } from "@/lib/utils";
+ import { EmptyState } from "@/components/ui/empty-state";
+ 
+-export async function AiUsageLogList() {
+-  const logs = await getAiUsageLogs();
++export async function AiUsageLogList({
++  organizationId,
++}: {
++  organizationId: string;
++}) {
++  const logs = await getAiUsageLogs(organizationId);
+ 
+   return (
+     <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+diff --git a/features/ai-drafts/services/ai-provider-chain.test.ts b/features/ai-drafts/services/ai-provider-chain.test.ts
+index 11e3324..15b31b4 100644
+--- a/features/ai-drafts/services/ai-provider-chain.test.ts
++++ b/features/ai-drafts/services/ai-provider-chain.test.ts
+@@ -9,6 +9,12 @@ vi.mock("@/lib/prisma", () => ({
+     aiUsageLog: {
+       create: vi.fn().mockResolvedValue({}),
+     },
++    provider: {
++      findUnique: vi.fn().mockResolvedValue(null),
++    },
++    providerUsageRecord: {
++      create: vi.fn().mockResolvedValue({}),
++    },
+   },
+ }));
+ 
+@@ -26,6 +32,7 @@ function createMockProvider(
+ 
+ describe("AiProviderChain", () => {
+   const input = {
++    organizationId: "507f1f77bcf86cd799439011",
+     subject: "Test",
+     customerName: "User",
+     customerMessage: "Hello",
