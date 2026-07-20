@@ -11,6 +11,7 @@ const navigation = [
   { href: "/root/providers", label: "Providers" },
   { href: "/root/settings", label: "Environment" },
   { href: "/root/organizations", label: "Organizations" },
+  { href: "/root/system-health", label: "System Health" },
   { href: "/root/audit-logs", label: "Audit Logs" },
 ];
 
