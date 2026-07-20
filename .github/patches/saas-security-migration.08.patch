@@ -1,0 +1,434 @@
+diff --git a/features/tags/services/tag-service.ts b/features/tags/services/tag-service.ts
+index d43768a..0fae771 100644
+--- a/features/tags/services/tag-service.ts
++++ b/features/tags/services/tag-service.ts
+@@ -1,15 +1,12 @@
+ import { prisma } from "@/lib/prisma";
+ import { ensureDefaultOrganization } from "@/features/organizations/services/organization-service";
+-
+-function tenantFilter(organizationId: string) {
+-  return {
+-    OR: [{ organizationId }, { organizationId: null }],
+-  };
+-}
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export async function getAllTags(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
++
+   return prisma.tag.findMany({
+-    where: tenantFilter(organizationId),
++    where: scope,
+     orderBy: { name: "asc" },
+   });
+ }
+@@ -21,10 +18,11 @@ type CreateTagInput = {
+ };
+ 
+ export async function createTag(input: CreateTagInput) {
++  const normalizedName = input.name.trim();
+   const existing = await prisma.tag.findFirst({
+     where: {
+       organizationId: input.organizationId,
+-      name: input.name,
++      name: normalizedName,
+     },
+   });
+   if (existing) throw new Error("Tag name already exists");
+@@ -32,7 +30,7 @@ export async function createTag(input: CreateTagInput) {
+   return prisma.tag.create({
+     data: {
+       organizationId: input.organizationId,
+-      name: input.name,
++      name: normalizedName,
+       color: input.color ?? "slate",
+     },
+   });
+@@ -43,15 +41,16 @@ export async function setTicketTags(
+   ticketId: string,
+   tagIds: string[],
+ ) {
++  const scope = await getTenantRecordScope(organizationId);
+   const ticket = await prisma.ticket.findFirst({
+-    where: { id: ticketId, ...tenantFilter(organizationId) },
++    where: { id: ticketId, ...scope },
+   });
+   if (!ticket) throw new Error("Ticket not found");
+ 
+   const tags = await prisma.tag.findMany({
+     where: {
+       id: { in: tagIds },
+-      ...tenantFilter(organizationId),
++      ...scope,
+     },
+     select: { id: true },
+   });
+@@ -69,8 +68,9 @@ export async function getTagsForTicket(
+   organizationId: string,
+   ticketId: string,
+ ) {
++  const scope = await getTenantRecordScope(organizationId);
+   const ticket = await prisma.ticket.findFirst({
+-    where: { id: ticketId, ...tenantFilter(organizationId) },
++    where: { id: ticketId, ...scope },
+     select: { tagIds: true },
+   });
+ 
+@@ -79,7 +79,7 @@ export async function getTagsForTicket(
+   return prisma.tag.findMany({
+     where: {
+       id: { in: ticket.tagIds },
+-      ...tenantFilter(organizationId),
++      ...scope,
+     },
+     orderBy: { name: "asc" },
+   });
+@@ -107,9 +107,14 @@ export async function addTagToTicket(
+   const defaultOrganization = await ensureDefaultOrganization();
+   const organizationId =
+     requestedOrganizationId || ticket.organizationId || defaultOrganization.id;
++  const scope = await getTenantRecordScope(organizationId);
++
++  if (!ticket.organizationId && organizationId !== defaultOrganization.id) {
++    throw new Error("Ticket not found");
++  }
+ 
+   const tag = await prisma.tag.findFirst({
+-    where: { id: tagId, ...tenantFilter(organizationId) },
++    where: { id: tagId, ...scope },
+     select: { id: true },
+   });
+ 
+diff --git a/features/tickets/services/email-ingestion-service.ts b/features/tickets/services/email-ingestion-service.ts
+index 4af88e0..b53739d 100644
+--- a/features/tickets/services/email-ingestion-service.ts
++++ b/features/tickets/services/email-ingestion-service.ts
+@@ -5,67 +5,99 @@ import {
+   notifyAdmins,
+ } from "@/features/notifications/services/notification-service";
+ import { classifyTicket } from "@/features/ai-drafts/services/classification-service";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type InboundEmailInput = {
++  organizationId: string;
+   from: string;
+   fromName: string;
+   subject: string;
+   body: string;
+   messageId: string;
+   inReplyTo?: string;
+-  mailboxId?: string;
++  mailboxId: string;
+ };
+ 
+ export async function processInboundEmail(input: InboundEmailInput) {
+-  // Find or create customer by email
+-  let customer = await prisma.customer.findUnique({
+-    where: { email: input.from },
++  const scope = await getTenantRecordScope(input.organizationId);
++  const normalizedEmail = input.from.trim().toLowerCase();
++
++  const duplicate = await prisma.message.findFirst({
++    where: {
++      externalMessageId: input.messageId,
++      ...scope,
++    },
++    select: { id: true, ticketId: true },
++  });
++  if (duplicate) {
++    return {
++      ticketId: duplicate.ticketId,
++      messageId: duplicate.id,
++      isNewTicket: false,
++      duplicate: true,
++    };
++  }
++
++  let customer = await prisma.customer.findFirst({
++    where: { email: normalizedEmail, ...scope },
+   });
+ 
+   if (!customer) {
+     customer = await prisma.customer.create({
+       data: {
+-        name: input.fromName || input.from,
+-        email: input.from,
++        organizationId: input.organizationId,
++        name: input.fromName.trim() || normalizedEmail,
++        email: normalizedEmail,
+       },
+     });
++  } else if (!customer.organizationId) {
++    customer = await prisma.customer.update({
++      where: { id: customer.id },
++      data: { organizationId: input.organizationId },
++    });
+   }
+ 
+-  // Try to find existing thread via inReplyTo
+   let ticketId: string | null = null;
+-
+   if (input.inReplyTo) {
+     const parentMessage = await prisma.message.findFirst({
+-      where: { externalMessageId: input.inReplyTo },
++      where: { externalMessageId: input.inReplyTo, ...scope },
+       select: { ticketId: true },
+     });
+ 
+     if (parentMessage) {
+-      ticketId = parentMessage.ticketId;
++      const parentTicket = await prisma.ticket.findFirst({
++        where: { id: parentMessage.ticketId, ...scope },
++        select: { id: true },
++      });
++      ticketId = parentTicket?.id ?? null;
+     }
+   }
+ 
+-  // If no thread found, create a new ticket
++  const isNewTicket = !ticketId;
+   if (!ticketId) {
+     const ticket = await prisma.ticket.create({
+       data: {
+-        subject: input.subject,
++        organizationId: input.organizationId,
++        subject: input.subject.trim(),
+         status: "open",
+         priority: "normal",
+         customerId: customer.id,
+-        mailboxId: input.mailboxId ?? null,
++        mailboxId: input.mailboxId,
+       },
+     });
+-
+     ticketId = ticket.id;
+ 
+-    // Auto-classify new tickets by priority
+-    await classifyTicket(ticketId, input.subject, input.body);
++    await classifyTicket(
++      input.organizationId,
++      ticket.id,
++      input.subject,
++      input.body,
++    );
+   }
+ 
+-  // Create the message
+   const message = await prisma.message.create({
+     data: {
++      organizationId: input.organizationId,
+       ticketId,
+       author: "customer",
+       body: input.body,
+@@ -74,44 +106,52 @@ export async function processInboundEmail(input: InboundEmailInput) {
+     },
+   });
+ 
+-  // Re-open ticket if it was resolved/closed
+-  const ticket = await prisma.ticket.findUnique({
+-    where: { id: ticketId },
+-    select: { status: true },
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
++    select: { id: true, status: true },
+   });
++  if (!ticket) throw new Error("Ticket not found");
+ 
+-  if (ticket && (ticket.status === "resolved" || ticket.status === "closed")) {
++  if (ticket.status === "resolved" || ticket.status === "closed") {
+     await prisma.ticket.update({
+-      where: { id: ticketId },
+-      data: { status: "open" },
++      where: { id: ticket.id },
++      data: { organizationId: input.organizationId, status: "open" },
+     });
+ 
+     await prisma.activityLog.create({
+       data: {
+-        ticketId,
++        organizationId: input.organizationId,
++        ticketId: ticket.id,
+         type: "status_changed",
+         message: "Ticket re-opened by new customer email.",
+       },
+     });
+   }
+ 
+-  await executeWorkflowRules(ticketId);
++  await executeWorkflowRules(ticket.id, {
++    organizationId: input.organizationId,
++    triggerType: isNewTicket ? "email.received" : "email.replied",
++  });
+ 
+-  // Notify relevant users
+-  if (input.inReplyTo) {
+-    await notifyAssignee(ticketId, {
+-      type: "customer-reply",
+-      title: "New customer reply",
+-      message: `${input.fromName} replied to a ticket.`,
+-    });
+-  } else {
+-    await notifyAdmins({
++  if (isNewTicket) {
++    await notifyAdmins(input.organizationId, {
+       type: "new-ticket",
+       title: "New ticket from email",
+       message: `${input.fromName}: ${input.subject}`,
+-      ticketId,
++      ticketId: ticket.id,
++    });
++  } else {
++    await notifyAssignee(input.organizationId, ticket.id, {
++      type: "customer-reply",
++      title: "New customer reply",
++      message: `${input.fromName} replied to a ticket.`,
+     });
+   }
+ 
+-  return { ticketId, messageId: message.id, isNewTicket: !input.inReplyTo };
++  return {
++    ticketId: ticket.id,
++    messageId: message.id,
++    isNewTicket,
++    duplicate: false,
++  };
+ }
+diff --git a/features/tickets/services/email-send-service.ts b/features/tickets/services/email-send-service.ts
+index 1fc52df..75e7c55 100644
+--- a/features/tickets/services/email-send-service.ts
++++ b/features/tickets/services/email-send-service.ts
+@@ -1,60 +1,51 @@
+ import { prisma } from "@/lib/prisma";
+-import { getEmailProvider } from "@/lib/email-client";
++import { sendEmail } from "@/features/email/services/smtp-service";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type SendTicketEmailInput = {
++  organizationId: string;
+   ticketId: string;
+   messageId: string;
+   to: string;
+   subject: string;
+   body: string;
+   inReplyTo?: string;
++  mailboxId?: string;
+ };
+ 
+ export async function sendTicketEmail(input: SendTicketEmailInput) {
+-  const provider = getEmailProvider();
+-
+-  try {
+-    const result = await provider.send({
+-      to: input.to,
+-      subject: input.subject,
+-      body: input.body,
+-      inReplyTo: input.inReplyTo,
+-    });
+-
+-    // Store the external message ID on the message for threading
+-    await prisma.message.update({
+-      where: { id: input.messageId },
+-      data: { externalMessageId: result.messageId },
+-    });
+-
+-    await prisma.emailLog.create({
+-      data: {
+-        ticketId: input.ticketId,
+-        messageId: input.messageId,
+-        to: input.to,
+-        subject: input.subject,
+-        status: "sent",
+-      },
+-    });
+-
+-    return { success: true, externalMessageId: result.messageId };
+-  } catch (error) {
+-    const errorMessage =
+-      error instanceof Error ? error.message : "Unknown error";
+-
+-    await prisma.emailLog.create({
+-      data: {
+-        ticketId: input.ticketId,
+-        messageId: input.messageId,
+-        to: input.to,
+-        subject: input.subject,
+-        status: "failed",
+-        error: errorMessage,
+-      },
+-    });
+-
+-    console.error("Failed to send email", error);
+-
+-    return { success: false, error: errorMessage };
+-  }
++  const scope = await getTenantRecordScope(input.organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: input.ticketId, ...scope },
++    select: { id: true, mailboxId: true },
++  });
++  if (!ticket) throw new Error("Ticket not found");
++
++  const message = await prisma.message.findFirst({
++    where: {
++      id: input.messageId,
++      ticketId: ticket.id,
++      organizationId: input.organizationId,
++    },
++    select: { id: true },
++  });
++  if (!message) throw new Error("Message not found");
++
++  const result = await sendEmail({
++    organizationId: input.organizationId,
++    ticketId: ticket.id,
++    messageId: message.id,
++    mailboxId: input.mailboxId ?? ticket.mailboxId ?? undefined,
++    to: input.to,
++    subject: input.subject,
++    html: input.body.replace(/\n/g, "<br />"),
++    inReplyTo: input.inReplyTo,
++  });
++
++  await prisma.message.update({
++    where: { id: message.id },
++    data: { externalMessageId: result.messageId },
++  });
++
++  return { success: true, externalMessageId: result.messageId };
+ }
+diff --git a/features/tickets/services/internal-note-service.ts b/features/tickets/services/internal-note-service.ts
+index e4aae51..f9c30f7 100644
+--- a/features/tickets/services/internal-note-service.ts
++++ b/features/tickets/services/internal-note-service.ts
+@@ -1,4 +1,5 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
+ 
+ type AddInternalNoteInput = {
+@@ -8,14 +9,9 @@ type AddInternalNoteInput = {
+ };
+ 
+ export async function addInternalNote(input: AddInternalNoteInput) {
++  const scope = await getTenantRecordScope(input.organizationId);
+   const ticket = await prisma.ticket.findFirst({
+-    where: {
+-      id: input.ticketId,
+-      OR: [
+-        { organizationId: input.organizationId },
+-        { organizationId: null },
+-      ],
+-    },
++    where: { id: input.ticketId, ...scope },
+   });
+   if (!ticket) throw new Error("Ticket not found");
+ 
+@@ -37,7 +33,7 @@ export async function addInternalNote(input: AddInternalNoteInput) {
+     },
+   });
+ 
+-  broadcastTicketUpdate(ticket.id, "message-created", {
++  broadcastTicketUpdate(input.organizationId, ticket.id, "message-created", {
+     messageId: message.id,
+   });
+ 
