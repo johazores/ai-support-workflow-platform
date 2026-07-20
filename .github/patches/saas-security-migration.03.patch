@@ -1,0 +1,235 @@
+diff --git a/features/auth/services/clerk-user-service.ts b/features/auth/services/clerk-user-service.ts
+index 12756dc..10854e3 100644
+--- a/features/auth/services/clerk-user-service.ts
++++ b/features/auth/services/clerk-user-service.ts
+@@ -1,22 +1,141 @@
+ import { prisma } from "@/lib/prisma";
+-import { ensureLegacyOrganizationForUser } from "@/features/organizations/services/organization-service";
++import {
++  ensureLegacyOrganizationForUser,
++  requireOrganizationMembership,
++} from "@/features/organizations/services/organization-service";
+ import type { SessionUser } from "@/features/auth/services/session-service";
+ 
++export type ClerkInvitationMetadata = {
++  organizationId?: string;
++  organizationRole?: string;
++  invitedName?: string;
++};
++
+ type ClerkIdentityInput = {
+   clerkUserId: string;
+   email: string;
+   name: string;
++  metadata?: ClerkInvitationMetadata;
+ };
+ 
++const allowedRoles = new Set(["admin", "supervisor", "agent"]);
++
+ function normalizeEmail(email: string) {
+   return email.trim().toLowerCase();
+ }
+ 
++function normalizeMetadata(
++  metadata?: Record<string, unknown> | ClerkInvitationMetadata | null,
++): ClerkInvitationMetadata {
++  return {
++    organizationId:
++      typeof metadata?.organizationId === "string"
++        ? metadata.organizationId
++        : undefined,
++    organizationRole:
++      typeof metadata?.organizationRole === "string" &&
++      allowedRoles.has(metadata.organizationRole)
++        ? metadata.organizationRole
++        : undefined,
++    invitedName:
++      typeof metadata?.invitedName === "string"
++        ? metadata.invitedName
++        : undefined,
++  };
++}
++
++async function activateInvitedOrganization(
++  userId: string,
++  metadata?: ClerkInvitationMetadata,
++) {
++  const normalized = normalizeMetadata(metadata);
++  if (!normalized.organizationId) return null;
++
++  const organization = await prisma.organization.findUnique({
++    where: { id: normalized.organizationId },
++    select: { id: true, status: true },
++  });
++  if (!organization || organization.status !== "active") return null;
++
++  const membership = await prisma.organizationMember.findUnique({
++    where: {
++      organizationId_userId: {
++        organizationId: organization.id,
++        userId,
++      },
++    },
++  });
++  if (!membership || membership.status === "inactive") return null;
++
++  const role = normalized.organizationRole ?? membership.role;
++  const activatedMembership = await prisma.organizationMember.update({
++    where: { id: membership.id },
++    data: { role, status: "active" },
++  });
++
++  await prisma.user.update({
++    where: { id: userId },
++    data: {
++      defaultOrganizationId: organization.id,
++      role,
++      status: "active",
++    },
++  });
++
++  return {
++    organizationId: organization.id,
++    role: activatedMembership.role,
++  };
++}
++
++async function resolveActiveOrganization(user: {
++  id: string;
++  role: string;
++  defaultOrganizationId?: string | null;
++}) {
++  if (user.defaultOrganizationId) {
++    const current = await requireOrganizationMembership(
++      user.id,
++      user.defaultOrganizationId,
++    );
++    if (current) return current;
++  }
++
++  const membership = await prisma.organizationMember.findFirst({
++    where: { userId: user.id, status: "active" },
++    orderBy: { createdAt: "asc" },
++  });
++  if (membership) {
++    const organization = await prisma.organization.findUnique({
++      where: { id: membership.organizationId },
++      select: { status: true },
++    });
++    if (organization?.status === "active") {
++      await prisma.user.update({
++        where: { id: user.id },
++        data: {
++          defaultOrganizationId: membership.organizationId,
++          role: membership.role,
++          status: "active",
++        },
++      });
++      return {
++        organizationId: membership.organizationId,
++        role: membership.role,
++      };
++    }
++  }
++
++  return ensureLegacyOrganizationForUser(user);
++}
++
+ export async function syncClerkIdentity(
+   input: ClerkIdentityInput,
+ ): Promise<SessionUser> {
+   const email = normalizeEmail(input.email);
+-  const name = input.name.trim() || email.split("@")[0] || "User";
++  const metadata = normalizeMetadata(input.metadata);
++  const name =
++    input.name.trim() || metadata.invitedName?.trim() || email.split("@")[0] || "User";
+ 
+   let user = await prisma.user.findUnique({
+     where: { clerkUserId: input.clerkUserId },
+@@ -41,18 +160,24 @@ export async function syncClerkIdentity(
+             email,
+             name,
+             passwordHash: null,
+-            role: "agent",
++            role: metadata.organizationRole ?? "agent",
+             status: "active",
++            defaultOrganizationId: metadata.organizationId,
+           },
+         });
+-  } else if (user.email !== email || user.name !== name) {
++  } else {
+     user = await prisma.user.update({
+       where: { id: user.id },
+-      data: { email, name },
++      data: { email, name, status: "active" },
+     });
+   }
+ 
+-  const organization = await ensureLegacyOrganizationForUser(user);
++  const invitedOrganization = await activateInvitedOrganization(
++    user.id,
++    metadata,
++  );
++  const organization =
++    invitedOrganization ?? (await resolveActiveOrganization(user));
+ 
+   return {
+     id: user.id,
+@@ -70,7 +195,7 @@ export async function getInternalClerkUser(
+   const user = await prisma.user.findUnique({ where: { clerkUserId } });
+   if (!user || user.status !== "active") return null;
+ 
+-  const organization = await ensureLegacyOrganizationForUser(user);
++  const organization = await resolveActiveOrganization(user);
+ 
+   return {
+     id: user.id,
+diff --git a/features/auth/services/user-client-service.ts b/features/auth/services/user-client-service.ts
+index 15a0dc5..46cbe4b 100644
+--- a/features/auth/services/user-client-service.ts
++++ b/features/auth/services/user-client-service.ts
+@@ -1,25 +1,30 @@
+ import { apiClient } from "@/lib/api-client";
+ 
+-type User = {
++export type ManagedUser = {
+   id: string;
+   name: string;
+   email: string;
+   role: string;
++  status: string;
+   createdAt: string;
+ };
+ 
++export type InvitationMode = "clerk" | "password";
++
+ export async function fetchUsers() {
+-  const result = await apiClient<{ data: User[] }>("/api/users");
+-  return result.data;
++  return apiClient<{
++    data: ManagedUser[];
++    invitationMode: InvitationMode;
++  }>("/api/users");
+ }
+ 
+ export async function createUser(input: {
+   name: string;
+   email: string;
+-  password: string;
++  password?: string;
+   role: string;
+ }) {
+-  const result = await apiClient<{ data: User }>("/api/users", {
++  const result = await apiClient<{ data: ManagedUser }>("/api/users", {
+     method: "POST",
+     body: input,
+   });
+@@ -27,7 +32,7 @@ export async function createUser(input: {
+ }
+ 
+ export async function updateUserRole(id: string, role: string) {
+-  const result = await apiClient<{ data: User }>(`/api/users/${id}`, {
++  const result = await apiClient<{ data: ManagedUser }>(`/api/users/${id}`, {
+     method: "PATCH",
+     body: { role },
+   });
