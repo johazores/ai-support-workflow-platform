@@ -3,6 +3,7 @@ import type {
   AiDraftProvider,
   GenerateDraftInput,
 } from "@/features/ai-drafts/types/ai-provider";
+import { getEnabledProviderConfiguration } from "@/features/providers/services/provider-service";
 
 const toneInstructions: Record<string, string> = {
   professional: "Use a formal, business-appropriate tone.",
@@ -14,8 +15,7 @@ const toneInstructions: Record<string, string> = {
 function buildPrompt(input: GenerateDraftInput) {
   const tone = input.tone ?? "professional";
 
-  return `
-Write a customer support reply.
+  return `Write a customer support reply.
 
 Customer name: ${input.customerName}
 Ticket subject: ${input.subject}
@@ -26,18 +26,30 @@ Tone: ${toneInstructions[tone] ?? toneInstructions.professional}
 Rules:
 - Do not overpromise.
 - Keep it short.
-- Sign as Support Team.
-`;
+- Sign as Support Team.`;
 }
 
 export const openAiProvider: AiDraftProvider = {
   async generateDraft(input: GenerateDraftInput) {
+    const configuredProvider = await getEnabledProviderConfiguration("openai");
+    const apiKey = configuredProvider?.credential ?? process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("OpenAI is not configured");
+    }
+
     const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey,
+      baseURL: configuredProvider?.baseUrl || undefined,
     });
 
+    const model =
+      configuredProvider?.defaultModel ||
+      process.env.OPENAI_MODEL ||
+      "gpt-4.1-mini";
+
     const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+      model,
       messages: [
         {
           role: "system",
@@ -49,10 +61,7 @@ export const openAiProvider: AiDraftProvider = {
     });
 
     const draft = response.choices[0]?.message?.content;
-
-    if (!draft) {
-      throw new Error("OpenAI returned an empty response");
-    }
+    if (!draft) throw new Error("OpenAI returned an empty response");
 
     return { draft };
   },
