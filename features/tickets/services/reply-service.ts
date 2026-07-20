@@ -3,55 +3,62 @@ import { sendTicketEmail } from "@/features/tickets/services/email-send-service"
 import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
 type SendManualReplyInput = {
+  organizationId: string;
   ticketId: string;
   body: string;
 };
 
 export async function sendManualReply(input: SendManualReplyInput) {
+  const ticket = await prisma.ticket.findFirst({
+    where: {
+      id: input.ticketId,
+      OR: [
+        { organizationId: input.organizationId },
+        { organizationId: null },
+      ],
+    },
+    include: { customer: true },
+  });
+
+  if (!ticket) throw new Error("Ticket not found");
+
   const message = await prisma.message.create({
     data: {
-      ticketId: input.ticketId,
+      organizationId: input.organizationId,
+      ticketId: ticket.id,
       author: "support",
       body: input.body,
     },
   });
 
   await prisma.ticket.update({
-    where: {
-      id: input.ticketId,
-    },
+    where: { id: ticket.id },
     data: {
+      organizationId: input.organizationId,
       status: "pending",
     },
   });
 
   await prisma.activityLog.create({
     data: {
-      ticketId: input.ticketId,
+      organizationId: input.organizationId,
+      ticketId: ticket.id,
       type: "reply_sent",
       message: "Manual support reply sent.",
     },
   });
 
-  broadcastTicketUpdate(input.ticketId, "message-created", {
+  broadcastTicketUpdate(ticket.id, "message-created", {
     messageId: message.id,
   });
 
-  // Dispatch email to customer
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: input.ticketId },
-    include: { customer: true },
+  await sendTicketEmail({
+    ticketId: ticket.id,
+    messageId: message.id,
+    to: ticket.customer.email,
+    subject: `Re: ${ticket.subject}`,
+    body: input.body,
   });
-
-  if (ticket) {
-    await sendTicketEmail({
-      ticketId: input.ticketId,
-      messageId: message.id,
-      to: ticket.customer.email,
-      subject: `Re: ${ticket.subject}`,
-      body: input.body,
-    });
-  }
 
   return message;
 }
