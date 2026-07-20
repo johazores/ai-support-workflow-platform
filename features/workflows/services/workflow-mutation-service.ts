@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
+function organizationWhere(organizationId: string) {
+  return { OR: [{ organizationId }, { organizationId: null }] };
+}
+
 type CreateWorkflowRuleInput = {
+  organizationId: string;
   name: string;
   description?: string;
   trigger: string;
@@ -10,6 +15,7 @@ type CreateWorkflowRuleInput = {
 export async function createWorkflowRule(input: CreateWorkflowRuleInput) {
   return prisma.workflowRule.create({
     data: {
+      organizationId: input.organizationId,
       name: input.name,
       description: input.description ?? "",
       trigger: input.trigger,
@@ -19,29 +25,43 @@ export async function createWorkflowRule(input: CreateWorkflowRuleInput) {
 }
 
 type UpdateWorkflowStatusInput = {
+  organizationId: string;
   workflowId: string;
   isActive: boolean;
 };
 
 export async function updateWorkflowStatus(input: UpdateWorkflowStatusInput) {
-  return prisma.workflowRule.update({
+  const workflow = await prisma.workflowRule.findFirst({
     where: {
       id: input.workflowId,
+      ...organizationWhere(input.organizationId),
     },
+  });
+
+  if (!workflow) throw new Error("Workflow not found");
+
+  return prisma.workflowRule.update({
+    where: { id: workflow.id },
     data: {
+      organizationId: input.organizationId,
       isActive: input.isActive,
     },
   });
 }
 
 type DeleteWorkflowInput = {
+  organizationId: string;
   workflowId: string;
 };
 
 export async function deleteWorkflowRule(input: DeleteWorkflowInput) {
-  return prisma.workflowRule.delete({
+  const workflow = await prisma.workflowRule.findFirst({
     where: {
       id: input.workflowId,
+      ...organizationWhere(input.organizationId),
     },
   });
+
+  if (!workflow) throw new Error("Workflow not found");
+  return prisma.workflowRule.delete({ where: { id: workflow.id } });
 }
