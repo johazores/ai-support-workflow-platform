@@ -1,4 +1,4 @@
-name: Apply Ticket Tenant Context
+name: Apply Tenant Runtime Guard
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-ticket-tenant-context
+  group: apply-tenant-runtime-guard
   cancel-in-progress: true
 
 jobs:
@@ -24,34 +24,60 @@ jobs:
           ref: agent/saas-foundation
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pass tenant context into ticket detail
+      - name: Reject cross-tenant workflow execution
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('features/tickets/components/ticket-detail.tsx')
+          path = Path('features/workflows/services/workflow-execution-service.ts')
           value = path.read_text()
-          value = value.replace(
-              'type TicketDetailProps = {\n  ticketId: string;\n};',
-              'type TicketDetailProps = {\n  ticketId: string;\n  organizationId: string;\n};',
-          )
-          value = value.replace(
-              'export async function TicketDetail({ ticketId }: TicketDetailProps) {\n  const ticket = await getTicketById(ticketId);',
-              'export async function TicketDetail({\n  ticketId,\n  organizationId,\n}: TicketDetailProps) {\n  const ticket = await getTicketById(ticketId, organizationId);',
-          )
-          path.write_text(value)
+          old = '''  const defaultOrganization = await ensureDefaultOrganization();
+          const organizationId =
+            context?.organizationId || ticket.organizationId || defaultOrganization.id;
+
+          if (ticket.organizationId !== organizationId) {
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: { organizationId },
+            });
+          }
+          '''
+          new = '''  if (
+            context?.organizationId &&
+            ticket.organizationId &&
+            ticket.organizationId !== context.organizationId
+          ) {
+            return { executed: false, message: "Ticket not found." };
+          }
+
+          const defaultOrganization = await ensureDefaultOrganization();
+          const organizationId =
+            context?.organizationId || ticket.organizationId || defaultOrganization.id;
+
+          if (!ticket.organizationId) {
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: { organizationId },
+            });
+          }
+          '''
+          if old in value:
+              value = value.replace(old, new, 1)
+              path.write_text(value)
+          elif new not in value:
+              raise SystemExit('Expected workflow tenant block was not found')
           PY
 
-      - name: Commit tenant context
+      - name: Commit runtime guard
         shell: bash
         run: |
-          if git diff --quiet features/tickets/components/ticket-detail.tsx; then
+          if git diff --quiet features/workflows/services/workflow-execution-service.ts; then
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add features/tickets/components/ticket-detail.tsx
-          git commit -m "security: scope ticket details to organization"
+          git add features/workflows/services/workflow-execution-service.ts
+          git commit -m "security: reject cross-tenant workflow execution"
           git push origin HEAD:agent/saas-foundation
