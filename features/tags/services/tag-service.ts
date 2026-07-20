@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureDefaultOrganization } from "@/features/organizations/services/organization-service";
 
 function tenantFilter(organizationId: string) {
   return {
@@ -87,20 +88,31 @@ export async function getTagsForTicket(
 export async function addTagToTicket(
   ticketId: string,
   tagId: string,
-  organizationId: string,
+  requestedOrganizationId?: string,
 ) {
-  const [ticket, tag] = await Promise.all([
-    prisma.ticket.findFirst({
-      where: { id: ticketId, ...tenantFilter(organizationId) },
-      select: { id: true, tagIds: true },
-    }),
-    prisma.tag.findFirst({
-      where: { id: tagId, ...tenantFilter(organizationId) },
-      select: { id: true },
-    }),
-  ]);
-
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: { id: true, tagIds: true, organizationId: true },
+  });
   if (!ticket) throw new Error("Ticket not found");
+
+  if (
+    requestedOrganizationId &&
+    ticket.organizationId &&
+    ticket.organizationId !== requestedOrganizationId
+  ) {
+    throw new Error("Ticket not found");
+  }
+
+  const defaultOrganization = await ensureDefaultOrganization();
+  const organizationId =
+    requestedOrganizationId || ticket.organizationId || defaultOrganization.id;
+
+  const tag = await prisma.tag.findFirst({
+    where: { id: tagId, ...tenantFilter(organizationId) },
+    select: { id: true },
+  });
+
   if (!tag) throw new Error("Tag not found");
   if (ticket.tagIds.includes(tagId)) return;
 
