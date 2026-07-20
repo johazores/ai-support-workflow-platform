@@ -48,10 +48,42 @@ jobs:
           retention-days: 7
 
       - name: Lint
-        run: npx eslint . --max-warnings 0
+        id: lint
+        if: always() && steps.typecheck.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          npx eslint . --max-warnings 0 2>&1 | tee lint.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: lint.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Format Check
-        run: npm run format:check
+        id: format
+        if: always() && steps.typecheck.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          npm run format:check 2>&1 | tee format.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Format Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: format-report
+          path: format.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   test:
     name: Tests
