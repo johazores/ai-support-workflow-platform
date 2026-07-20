@@ -1,0 +1,43 @@
+diff --git a/features/tickets/components/mention-input.tsx b/features/tickets/components/mention-input.tsx
+index 45ef4ba..bed05cc 100644
+--- a/features/tickets/components/mention-input.tsx
++++ b/features/tickets/components/mention-input.tsx
+@@ -28,7 +28,7 @@ export function MentionInput({
+ 
+   useEffect(() => {
+     fetchUsers()
+-      .then(setUsers)
++      .then((result) => setUsers(result.data))
+       .catch(() => {});
+   }, []);
+ 
+diff --git a/prisma/seed.ts b/prisma/seed.ts
+index 5244c8e..db29f2a 100644
+--- a/prisma/seed.ts
++++ b/prisma/seed.ts
+@@ -399,11 +399,21 @@ async function main() {
+   ];
+ 
+   for (const policy of slaPolicies) {
+-    await prisma.slaPolicy.upsert({
+-      where: { priority: policy.priority },
+-      update: {},
+-      create: policy,
++    const existingPolicy = await prisma.slaPolicy.findFirst({
++      where: { organizationId: null, priority: policy.priority },
++      select: { id: true },
+     });
++
++    if (existingPolicy) {
++      await prisma.slaPolicy.update({
++        where: { id: existingPolicy.id },
++        data: policy,
++      });
++    } else {
++      await prisma.slaPolicy.create({
++        data: { organizationId: null, ...policy },
++      });
++    }
+   }
+ 
+   console.log("Seed complete: 4 SLA policies");
