@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "supervisor" | "agent";
 
-type Permission =
+export type Permission =
   | "tickets:read"
   | "tickets:assign"
   | "tickets:manage-tags"
@@ -12,7 +12,9 @@ type Permission =
   | "ai-logs:read"
   | "audit-logs:read"
   | "email-logs:read"
-  | "users:manage";
+  | "email-settings:manage"
+  | "users:manage"
+  | "organization:manage";
 
 const rolePermissions: Record<UserRole, Permission[]> = {
   admin: [
@@ -27,7 +29,9 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     "ai-logs:read",
     "audit-logs:read",
     "email-logs:read",
+    "email-settings:manage",
     "users:manage",
+    "organization:manage",
   ],
   supervisor: [
     "tickets:read",
@@ -50,11 +54,8 @@ const rolePermissions: Record<UserRole, Permission[]> = {
 };
 
 export function hasPermission(role: string, permission: Permission): boolean {
-  const perms = rolePermissions[role as UserRole];
-
-  if (!perms) return false;
-
-  return perms.includes(permission);
+  const permissions = rolePermissions[role as UserRole];
+  return permissions?.includes(permission) ?? false;
 }
 
 export function getPermissions(role: string): Permission[] {
