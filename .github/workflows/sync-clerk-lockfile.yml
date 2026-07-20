@@ -1,4 +1,4 @@
-name: Sync Clerk Lockfile
+name: Sync Clerk Foundation
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  lockfile:
+  sync:
     if: github.repository == 'johazores/ai-support-workflow-platform'
     runs-on: ubuntu-latest
 
@@ -25,15 +25,35 @@ jobs:
       - name: Sync package lock
         run: npm install --package-lock-only
 
-      - name: Commit lockfile
+      - name: Allow Clerk-only product users
         shell: bash
         run: |
-          if git diff --quiet package-lock.json; then
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('prisma/schema.prisma')
+          value = path.read_text()
+          updated = value.replace(
+              '  passwordHash          String\n',
+              '  passwordHash          String?\n',
+              1,
+          )
+          if updated == value:
+              if '  passwordHash          String?\n' not in value:
+                  raise SystemExit('User.passwordHash field was not found')
+          else:
+              path.write_text(updated)
+          PY
+
+      - name: Commit synchronized files
+        shell: bash
+        run: |
+          if git diff --quiet package-lock.json prisma/schema.prisma; then
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore: add Clerk dependency lockfile"
+          git add package-lock.json prisma/schema.prisma
+          git commit -m "chore: prepare Clerk product authentication"
           git push origin HEAD:agent/saas-foundation
