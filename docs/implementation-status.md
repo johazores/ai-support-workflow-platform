@@ -1,0 +1,39 @@
+# SaaS Implementation Status
+
+This document tracks the current migration from the original single-workspace support application to a production-oriented SaaS platform.
+
+## Implemented
+
+- Organization and membership models with a legacy default-workspace migration path
+- Independent Root Admin authentication, sessions, lockout, revocation, and audit events
+- Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
+- AES-256-GCM encryption for provider, SMTP, IMAP, and system secrets
+- Central provider catalog, credential rotation, connection testing, priority, and model configuration
+- Clerk product-user authentication with sign-in, sign-up, account controls, App Router support, Pages API support, and verified lifecycle webhooks
+- Legacy JWT authentication retained only as a migration fallback when Clerk is unavailable
+- Tenant-aware authorization middleware for API routes and protected pages
+- Tenant-scoped ticket listing, details, assignment, status, priority, replies, internal notes, tags, AI drafts, saved drafts, and saved replies
+- Durable workflow execution records, step records, execution inspection, idempotency, and failure reporting
+- Database-managed OpenAI and Anthropic configuration with explicit provider failure behavior
+- Health and readiness endpoints
+- Security response headers
+- CI validation for Prisma, TypeScript, ESLint, Prettier, tests, and production builds
+
+## Active Migration Work
+
+- Apply tenant-safe composite uniqueness to customers, tags, SLA policies, and mailboxes
+- Complete tenant scoping for remaining analytics, notifications, email templates/logs, CSAT, bulk operations, and inbound email paths
+- Resolve compiler and test changes caused by stricter service signatures
+- Remove temporary migration workflows after their one-time commits complete
+
+## Remaining Product Work
+
+- Versioned visual workflow graph editor with drag-and-drop nodes and connections
+- Queue-backed retries, delays, resumability, cancellation, and webhook delivery
+- Stripe plans, subscriptions, usage entitlements, and billing portal
+- Attachment storage and secure upload/download
+- Complete Clerk organization onboarding and invitation flows
+- End-to-end browser tests and deployment smoke tests
+- Production observability integrations and alerting
+
+No feature should be marked production-ready until its tenant isolation, authorization, failure states, tests, and operational behavior have been validated end-to-end.
