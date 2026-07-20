@@ -1,0 +1,250 @@
+diff --git a/features/audit/services/audit-service.ts b/features/audit/services/audit-service.ts
+index c96271c..88251d1 100644
+--- a/features/audit/services/audit-service.ts
++++ b/features/audit/services/audit-service.ts
+@@ -1,4 +1,6 @@
++import type { Prisma } from "@prisma/client";
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type AuditLogEntry = {
+   id: string;
+@@ -17,21 +19,21 @@ type PaginatedAuditLogs = {
+ 
+ const PAGE_SIZE = 25;
+ 
+-export async function getAuditLogs(params?: {
+-  cursor?: string;
+-  type?: string;
+-  ticketId?: string;
+-}): Promise<PaginatedAuditLogs> {
+-  const where: Record<string, unknown> = {};
++export async function getAuditLogs(
++  organizationId: string,
++  params?: {
++    cursor?: string;
++    type?: string;
++    ticketId?: string;
++  },
++): Promise<PaginatedAuditLogs> {
++  const scope = await getTenantRecordScope(organizationId);
++  const filters: Prisma.ActivityLogWhereInput[] = [scope];
+ 
+-  if (params?.type) {
+-    where.type = params.type;
+-  }
+-
+-  if (params?.ticketId) {
+-    where.ticketId = params.ticketId;
+-  }
++  if (params?.type) filters.push({ type: params.type });
++  if (params?.ticketId) filters.push({ ticketId: params.ticketId });
+ 
++  const where: Prisma.ActivityLogWhereInput = { AND: filters };
+   const [logs, total] = await Promise.all([
+     prisma.activityLog.findMany({
+       where,
+@@ -47,7 +49,7 @@ export async function getAuditLogs(params?: {
+ 
+   const hasMore = logs.length > PAGE_SIZE;
+   const page = hasMore ? logs.slice(0, PAGE_SIZE) : logs;
+-  const nextCursor = hasMore ? page[page.length - 1].id : null;
++  const nextCursor = hasMore ? page.at(-1)?.id ?? null : null;
+ 
+   return {
+     logs: page.map((log) => ({
+@@ -63,11 +65,15 @@ export async function getAuditLogs(params?: {
+   };
+ }
+ 
+-export async function getAuditLogTypes(): Promise<string[]> {
++export async function getAuditLogTypes(
++  organizationId: string,
++): Promise<string[]> {
++  const scope = await getTenantRecordScope(organizationId);
+   const logs = await prisma.activityLog.findMany({
++    where: scope,
+     distinct: ["type"],
+     select: { type: true },
+   });
+ 
+-  return logs.map((l) => l.type);
++  return logs.map((log) => log.type);
+ }
+diff --git a/features/auth/components/user-manager.tsx b/features/auth/components/user-manager.tsx
+index 1db0504..e4f194c 100644
+--- a/features/auth/components/user-manager.tsx
++++ b/features/auth/components/user-manager.tsx
+@@ -13,15 +13,11 @@ import {
+   createUser,
+   updateUserRole,
+   deleteUser,
++  type InvitationMode,
++  type ManagedUser,
+ } from "@/features/auth/services/user-client-service";
+ 
+-type User = {
+-  id: string;
+-  name: string;
+-  email: string;
+-  role: string;
+-  createdAt: string;
+-};
++type User = ManagedUser;
+ 
+ const roles = ["admin", "supervisor", "agent"] as const;
+ 
+@@ -29,6 +25,8 @@ export function UserManager() {
+   const { toast } = useToast();
+   const [users, setUsers] = useState<User[]>([]);
+   const [loading, setLoading] = useState(true);
++  const [invitationMode, setInvitationMode] =
++    useState<InvitationMode>("password");
+   const [showForm, setShowForm] = useState(false);
+   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+   const [isDeleting, setIsDeleting] = useState(false);
+@@ -42,7 +40,10 @@ export function UserManager() {
+ 
+   useEffect(() => {
+     fetchUsers()
+-      .then(setUsers)
++      .then((result) => {
++        setUsers(result.data);
++        setInvitationMode(result.invitationMode);
++      })
+       .catch(() => toast("Failed to load users", "error"))
+       .finally(() => setLoading(false));
+   }, [toast]);
+@@ -52,14 +53,24 @@ export function UserManager() {
+     setIsCreating(true);
+ 
+     try {
+-      const user = await createUser({ name, email, password, role });
++      const user = await createUser({
++        name,
++        email,
++        password: invitationMode === "password" ? password : undefined,
++        role,
++      });
+       setUsers((prev) => [user, ...prev]);
+       setShowForm(false);
+       setName("");
+       setEmail("");
+       setPassword("");
+       setRole("agent");
+-      toast("User created successfully", "success");
++      toast(
++        invitationMode === "clerk"
++          ? "Invitation sent successfully"
++          : "User created successfully",
++        "success",
++      );
+     } catch (err) {
+       toast(
+         err instanceof Error ? err.message : "Failed to create user",
+@@ -125,7 +136,7 @@ export function UserManager() {
+           className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700"
+         >
+           <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
+-            Create New User
++            {invitationMode === "clerk" ? "Invite Team Member" : "Create New User"}
+           </h3>
+           <div className="grid gap-4 sm:grid-cols-2">
+             <Input
+@@ -143,15 +154,22 @@ export function UserManager() {
+               required
+               fullWidth
+             />
+-            <Input
+-              label="Password"
+-              type="password"
+-              value={password}
+-              onChange={(e) => setPassword(e.target.value)}
+-              required
+-              helperText="Minimum 8 characters"
+-              fullWidth
+-            />
++            {invitationMode === "password" ? (
++              <Input
++                label="Temporary Password"
++                type="password"
++                value={password}
++                onChange={(e) => setPassword(e.target.value)}
++                required
++                helperText="Minimum 8 characters"
++                fullWidth
++              />
++            ) : (
++              <div className="rounded-xl bg-blue-50 p-4 text-sm leading-6 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
++                Clerk will email a secure invitation. No password is stored by
++                this application.
++              </div>
++            )}
+             <Select
+               label="Role"
+               value={role}
+@@ -165,7 +183,7 @@ export function UserManager() {
+           </div>
+           <div className="mt-4 flex justify-end">
+             <Button type="submit" isLoading={isCreating}>
+-              Create User
++              {invitationMode === "clerk" ? "Send Invitation" : "Create User"}
+             </Button>
+           </div>
+         </form>
+@@ -193,7 +211,10 @@ export function UserManager() {
+                     Role
+                   </th>
+                   <th className="px-5 py-3 text-left font-medium text-slate-500 dark:text-slate-400">
+-                    Created
++                    Status
++                  </th>
++                  <th className="px-5 py-3 text-left font-medium text-slate-500 dark:text-slate-400">
++                    Added
+                   </th>
+                   <th className="px-5 py-3 text-right font-medium text-slate-500 dark:text-slate-400">
+                     Actions
+@@ -226,6 +247,11 @@ export function UserManager() {
+                         className="w-32"
+                       />
+                     </td>
++                    <td className="px-5 py-3">
++                      <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-slate-700 dark:bg-slate-700 dark:text-slate-200">
++                        {user.status}
++                      </span>
++                    </td>
+                     <td className="px-5 py-3 text-slate-500 dark:text-slate-400">
+                       {formatDateTime(user.createdAt)}
+                     </td>
+@@ -249,15 +275,15 @@ export function UserManager() {
+ 
+       <ConfirmDialog
+         open={!!deleteTarget}
+-        title="Delete user"
++        title="Remove team member"
+         variant="destructive"
+-        confirmLabel="Delete"
++        confirmLabel="Remove"
+         isLoading={isDeleting}
+         onConfirm={handleDelete}
+         onCancel={() => setDeleteTarget(null)}
+       >
+-        Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
+-        This cannot be undone.
++        Remove <strong>{deleteTarget?.name}</strong> from this organization?
++        Their access to other organizations will not be affected.
+       </ConfirmDialog>
+     </div>
+   );
+diff --git a/features/auth/services/clerk-session-service.ts b/features/auth/services/clerk-session-service.ts
+index 2eb0952..6a94508 100644
+--- a/features/auth/services/clerk-session-service.ts
++++ b/features/auth/services/clerk-session-service.ts
+@@ -33,6 +33,7 @@ async function resolveClerkSessionUser(
+     clerkUserId,
+     email: primaryEmail.emailAddress,
+     name,
++    metadata: clerkUser.publicMetadata,
+   });
+ }
+ 
