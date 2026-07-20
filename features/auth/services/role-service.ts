@@ -2,8 +2,10 @@ export type UserRole = "admin" | "supervisor" | "agent";
 
 export type Permission =
   | "tickets:read"
+  | "tickets:write"
   | "tickets:assign"
   | "tickets:manage-tags"
+  | "ai:generate"
   | "workflows:read"
   | "workflows:manage"
   | "saved-replies:read"
@@ -19,8 +21,10 @@ export type Permission =
 const rolePermissions: Record<UserRole, Permission[]> = {
   admin: [
     "tickets:read",
+    "tickets:write",
     "tickets:assign",
     "tickets:manage-tags",
+    "ai:generate",
     "workflows:read",
     "workflows:manage",
     "saved-replies:read",
@@ -35,8 +39,10 @@ const rolePermissions: Record<UserRole, Permission[]> = {
   ],
   supervisor: [
     "tickets:read",
+    "tickets:write",
     "tickets:assign",
     "tickets:manage-tags",
+    "ai:generate",
     "workflows:read",
     "saved-replies:read",
     "saved-replies:manage",
@@ -47,8 +53,10 @@ const rolePermissions: Record<UserRole, Permission[]> = {
   ],
   agent: [
     "tickets:read",
+    "tickets:write",
     "tickets:assign",
     "tickets:manage-tags",
+    "ai:generate",
     "saved-replies:read",
   ],
 };
