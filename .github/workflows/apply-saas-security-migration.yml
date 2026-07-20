@@ -1,0 +1,79 @@
+name: Apply SaaS Security Migration
+
+on:
+  push:
+    branches: [feat/saas-foundation]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-saas-security-migration
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.repository == 'johazores/ai-support-workflow-platform' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/saas-foundation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply migration patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in .github/patches/saas-security-migration.*.patch; do
+            echo "Applying ${patch}"
+            git apply --index --whitespace=nowarn "${patch}"
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Validate Prisma Schema
+        run: npx prisma validate
+        env:
+          DATABASE_URL: mongodb://localhost:27017/ci-placeholder
+
+      - name: Format source
+        run: npx prettier --write app pages features components lib prisma docs scripts package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs postcss.config.mjs vitest.config.ts .env.example .github/workflows
+
+      - name: Type Check
+        run: npm run type-check -- --pretty false
+
+      - name: Lint
+        run: npx eslint . --max-warnings 0
+
+      - name: Tests
+        run: npx vitest run --reporter=verbose
+
+      - name: Production Build
+        run: npx next build
+        env:
+          DATABASE_URL: mongodb://localhost:27017/ci-placeholder
+          SESSION_SECRET: ci-test-secret-do-not-use-in-production
+          ROOT_SESSION_SECRET: ci-root-session-secret-do-not-use-in-production
+          CONFIG_ENCRYPTION_KEY: Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE=
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -rf .github/patches
+          git rm -f .github/workflows/apply-saas-security-migration.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "security: complete tenant and authentication migration"
+          git push origin HEAD:feat/saas-foundation
