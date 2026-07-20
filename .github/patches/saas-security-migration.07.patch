@@ -1,0 +1,368 @@
+diff --git a/features/notifications/services/notification-service.ts b/features/notifications/services/notification-service.ts
+index 67394ed..d811286 100644
+--- a/features/notifications/services/notification-service.ts
++++ b/features/notifications/services/notification-service.ts
+@@ -1,6 +1,8 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type CreateNotificationInput = {
++  organizationId: string;
+   userId: string;
+   type: string;
+   title: string;
+@@ -9,8 +11,20 @@ type CreateNotificationInput = {
+ };
+ 
+ export async function createNotification(input: CreateNotificationInput) {
++  const membership = await prisma.organizationMember.findUnique({
++    where: {
++      organizationId_userId: {
++        organizationId: input.organizationId,
++        userId: input.userId,
++      },
++    },
++    select: { status: true },
++  });
++  if (!membership || membership.status !== "active") return null;
++
+   return prisma.notification.create({
+     data: {
++      organizationId: input.organizationId,
+       userId: input.userId,
+       type: input.type,
+       title: input.title,
+@@ -20,66 +34,87 @@ export async function createNotification(input: CreateNotificationInput) {
+   });
+ }
+ 
+-export async function getNotifications(userId: string) {
++export async function getNotifications(
++  organizationId: string,
++  userId: string,
++) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.notification.findMany({
+-    where: { userId },
++    where: { userId, ...scope },
+     orderBy: { createdAt: "desc" },
+     take: 30,
+   });
+ }
+ 
+-export async function getUnreadCount(userId: string) {
++export async function getUnreadCount(
++  organizationId: string,
++  userId: string,
++) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.notification.count({
+-    where: { userId, isRead: false },
++    where: { userId, isRead: false, ...scope },
+   });
+ }
+ 
+-export async function markNotificationsRead(userId: string) {
++export async function markNotificationsRead(
++  organizationId: string,
++  userId: string,
++) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.notification.updateMany({
+-    where: { userId, isRead: false },
+-    data: { isRead: true },
++    where: { userId, isRead: false, ...scope },
++    data: { organizationId, isRead: true },
+   });
+ }
+ 
+-/**
+- * Notify all admins about an event (e.g., new ticket from email).
+- */
+ export async function notifyAdmins(
+-  input: Omit<CreateNotificationInput, "userId">,
++  organizationId: string,
++  input: Omit<CreateNotificationInput, "organizationId" | "userId">,
+ ) {
+-  const admins = await prisma.user.findMany({
+-    where: { role: "admin" },
+-    select: { id: true },
++  const memberships = await prisma.organizationMember.findMany({
++    where: {
++      organizationId,
++      status: "active",
++      role: { in: ["admin", "supervisor"] },
++    },
++    select: { userId: true },
+   });
+ 
+   await Promise.all(
+-    admins.map((admin) => createNotification({ ...input, userId: admin.id })),
++    memberships.map((membership) =>
++      createNotification({
++        ...input,
++        organizationId,
++        userId: membership.userId,
++      }),
++    ),
+   );
+ }
+ 
+-/**
+- * Notify the assigned agent on a ticket.
+- */
+ export async function notifyAssignee(
++  organizationId: string,
+   ticketId: string,
+-  input: Omit<CreateNotificationInput, "userId" | "ticketId">,
++  input: Omit<
++    CreateNotificationInput,
++    "organizationId" | "userId" | "ticketId"
++  >,
+ ) {
+-  const ticket = await prisma.ticket.findUnique({
+-    where: { id: ticketId },
++  const scope = await getTenantRecordScope(organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
+     select: { assigneeEmail: true },
+   });
+-
+   if (!ticket?.assigneeEmail) return;
+ 
+   const user = await prisma.user.findUnique({
+     where: { email: ticket.assigneeEmail },
+-    select: { id: true },
++    select: { id: true, status: true },
+   });
+-
+-  if (!user) return;
++  if (!user || user.status !== "active") return;
+ 
+   await createNotification({
+     ...input,
++    organizationId,
+     userId: user.id,
+     ticketId,
+   });
+diff --git a/features/organizations/services/tenant-record-scope-service.ts b/features/organizations/services/tenant-record-scope-service.ts
+new file mode 100644
+index 0000000..9fabf81
+--- /dev/null
++++ b/features/organizations/services/tenant-record-scope-service.ts
+@@ -0,0 +1,36 @@
++import { prisma } from "@/lib/prisma";
++
++const LEGACY_ORGANIZATION_SLUG = "default-workspace";
++let cachedLegacyOrganizationId: string | undefined;
++
++async function getLegacyOrganizationId() {
++  if (cachedLegacyOrganizationId) return cachedLegacyOrganizationId;
++
++  const organization = await prisma.organization.findUnique({
++    where: { slug: LEGACY_ORGANIZATION_SLUG },
++    select: { id: true },
++  });
++
++  if (organization) cachedLegacyOrganizationId = organization.id;
++  return organization?.id;
++}
++
++/**
++ * Legacy records with no organization are visible only inside the deterministic
++ * default workspace. All other organizations receive a strict tenant filter.
++ */
++export async function getTenantRecordScope(organizationId: string) {
++  const legacyOrganizationId = await getLegacyOrganizationId();
++
++  if (legacyOrganizationId === organizationId) {
++    return {
++      OR: [{ organizationId }, { organizationId: null }],
++    };
++  }
++
++  return { organizationId };
++}
++
++export function getStrictTenantRecordScope(organizationId: string) {
++  return { organizationId };
++}
+diff --git a/features/saved-replies/services/saved-reply-service.ts b/features/saved-replies/services/saved-reply-service.ts
+index 2964bbb..4a0cd75 100644
+--- a/features/saved-replies/services/saved-reply-service.ts
++++ b/features/saved-replies/services/saved-reply-service.ts
+@@ -1,12 +1,10 @@
+ import { prisma } from "@/lib/prisma";
+-
+-function tenantFilter(organizationId: string) {
+-  return { OR: [{ organizationId }, { organizationId: null }] };
+-}
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export async function getAllSavedReplies(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.savedReply.findMany({
+-    where: tenantFilter(organizationId),
++    where: scope,
+     orderBy: { title: "asc" },
+   });
+ }
+@@ -22,9 +20,9 @@ export async function createSavedReply(input: CreateSavedReplyInput) {
+   return prisma.savedReply.create({
+     data: {
+       organizationId: input.organizationId,
+-      title: input.title,
++      title: input.title.trim(),
+       body: input.body,
+-      shortcut: input.shortcut ?? null,
++      shortcut: input.shortcut?.trim() || null,
+     },
+   });
+ }
+@@ -38,8 +36,9 @@ type UpdateSavedReplyInput = {
+ };
+ 
+ export async function updateSavedReply(input: UpdateSavedReplyInput) {
++  const scope = await getTenantRecordScope(input.organizationId);
+   const existing = await prisma.savedReply.findFirst({
+-    where: { id: input.id, ...tenantFilter(input.organizationId) },
++    where: { id: input.id, ...scope },
+   });
+   if (!existing) throw new Error("Saved reply not found");
+ 
+@@ -47,19 +46,17 @@ export async function updateSavedReply(input: UpdateSavedReplyInput) {
+     where: { id: existing.id },
+     data: {
+       organizationId: input.organizationId,
+-      title: input.title,
++      title: input.title.trim(),
+       body: input.body,
+-      shortcut: input.shortcut ?? null,
++      shortcut: input.shortcut?.trim() || null,
+     },
+   });
+ }
+ 
+-export async function deleteSavedReply(
+-  organizationId: string,
+-  id: string,
+-) {
++export async function deleteSavedReply(organizationId: string, id: string) {
++  const scope = await getTenantRecordScope(organizationId);
+   const existing = await prisma.savedReply.findFirst({
+-    where: { id, ...tenantFilter(organizationId) },
++    where: { id, ...scope },
+   });
+   if (!existing) throw new Error("Saved reply not found");
+ 
+diff --git a/features/sla/services/sla-service.ts b/features/sla/services/sla-service.ts
+index 8da140b..40c2748 100644
+--- a/features/sla/services/sla-service.ts
++++ b/features/sla/services/sla-service.ts
+@@ -1,4 +1,5 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export type SlaStatus = {
+   firstResponseDue: string | null;
+@@ -8,10 +9,12 @@ export type SlaStatus = {
+ };
+ 
+ export async function getSlaStatus(
++  organizationId: string,
+   ticketId: string,
+ ): Promise<SlaStatus | null> {
+-  const ticket = await prisma.ticket.findUnique({
+-    where: { id: ticketId },
++  const scope = await getTenantRecordScope(organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
+     include: {
+       messages: { orderBy: { createdAt: "asc" } },
+     },
+@@ -19,24 +22,22 @@ export async function getSlaStatus(
+ 
+   if (!ticket) return null;
+ 
+-  const policy = await prisma.slaPolicy.findUnique({
+-    where: { priority: ticket.priority },
++  const policy = await prisma.slaPolicy.findFirst({
++    where: { priority: ticket.priority, ...scope },
+   });
+ 
+   if (!policy) return null;
+ 
+   const createdAt = ticket.createdAt.getTime();
+   const now = Date.now();
+-
+   const firstResponseDue = new Date(
+     createdAt + policy.firstResponseMinutes * 60_000,
+   );
+   const resolutionDue = new Date(createdAt + policy.resolutionMinutes * 60_000);
+-
+-  // First response = first non-customer message
+-  const hasResponse = ticket.messages.some((m) => m.author !== "customer");
+-
+-  const isClosed = ticket.status === "closed";
++  const hasResponse = ticket.messages.some(
++    (message) => message.author !== "customer",
++  );
++  const isClosed = ticket.status === "closed" || ticket.status === "resolved";
+ 
+   return {
+     firstResponseDue: hasResponse ? null : firstResponseDue.toISOString(),
+@@ -46,23 +47,33 @@ export async function getSlaStatus(
+   };
+ }
+ 
+-export async function getAllSlaPolicies() {
++export async function getAllSlaPolicies(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.slaPolicy.findMany({
++    where: scope,
+     orderBy: { firstResponseMinutes: "asc" },
+   });
+ }
+ 
+ export async function updateSlaPolicy(
++  organizationId: string,
+   id: string,
+   data: { firstResponseMinutes: number; resolutionMinutes: number },
+ ) {
++  const scope = await getTenantRecordScope(organizationId);
++  const existing = await prisma.slaPolicy.findFirst({
++    where: { id, ...scope },
++    select: { id: true },
++  });
++  if (!existing) throw new Error("Policy not found");
++
+   return prisma.slaPolicy.update({
+-    where: { id },
+-    data,
++    where: { id: existing.id },
++    data: { organizationId, ...data },
+   });
+ }
+ 
+-export async function seedSlaPolicies() {
++export async function seedSlaPolicies(organizationId: string) {
+   const defaults = [
+     {
+       name: "Urgent",
+@@ -92,9 +103,14 @@ export async function seedSlaPolicies() {
+ 
+   for (const policy of defaults) {
+     await prisma.slaPolicy.upsert({
+-      where: { priority: policy.priority },
++      where: {
++        organizationId_priority: {
++          organizationId,
++          priority: policy.priority,
++        },
++      },
+       update: {},
+-      create: policy,
++      create: { organizationId, ...policy },
+     });
+   }
+ }
