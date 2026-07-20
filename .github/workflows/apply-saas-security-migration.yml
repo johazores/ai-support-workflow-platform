@@ -1,6 +1,7 @@
 name: Apply SaaS Security Migration
 
 on:
+  workflow_dispatch:
   push:
     branches: [feat/saas-foundation]
 
