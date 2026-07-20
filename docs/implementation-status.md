@@ -12,18 +12,19 @@ This document tracks the current migration from the original single-workspace su
 - Clerk product-user authentication with sign-in, sign-up, account controls, App Router support, Pages API support, and verified lifecycle webhooks
 - Legacy JWT authentication retained only as a migration fallback when Clerk is unavailable
 - Tenant-aware authorization middleware for API routes and protected pages
-- Tenant-scoped ticket listing, details, assignment, status, priority, replies, internal notes, tags, AI drafts, saved drafts, and saved replies
+- Tenant-scoped ticket listing, details, assignment, status, priority, replies, internal notes, tags, AI drafts, saved drafts, saved replies, and customer queries
 - Durable workflow execution records, step records, execution inspection, idempotency, and failure reporting
 - Database-managed OpenAI and Anthropic configuration with explicit provider failure behavior
 - Health and readiness endpoints
 - Security response headers
 - CI validation for Prisma, TypeScript, ESLint, Prettier, tests, and production builds
+- Complete API inventory and repository-wide authorization audit
 
 ## Active Migration Work
 
 - Apply tenant-safe composite uniqueness to customers, tags, SLA policies, and mailboxes
-- Complete tenant scoping for remaining analytics, notifications, email templates/logs, CSAT, bulk operations, and inbound email paths
-- Resolve compiler and test changes caused by stricter service signatures
+- Complete tenant scoping for analytics, notifications, email templates/logs, CSAT, bulk operations, users, SLA, polling, and inbound email paths
+- Resolve tests affected by Clerk-aware and tenant-aware service signatures
 - Remove temporary migration workflows after their one-time commits complete
 
 ## Remaining Product Work
