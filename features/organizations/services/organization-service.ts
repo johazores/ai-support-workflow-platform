@@ -7,6 +7,17 @@ export type OrganizationContext = {
   role: string;
 };
 
+export async function ensureDefaultOrganization() {
+  return prisma.organization.upsert({
+    where: { slug: LEGACY_ORGANIZATION_SLUG },
+    update: {},
+    create: {
+      name: "Default Workspace",
+      slug: LEGACY_ORGANIZATION_SLUG,
+    },
+  });
+}
+
 /**
  * Keeps existing installations usable while organization onboarding is added.
  * Every legacy user is attached to one deterministic workspace on first login.
@@ -34,15 +45,7 @@ export async function ensureLegacyOrganizationForUser(user: {
     }
   }
 
-  const organization = await prisma.organization.upsert({
-    where: { slug: LEGACY_ORGANIZATION_SLUG },
-    update: {},
-    create: {
-      name: "Default Workspace",
-      slug: LEGACY_ORGANIZATION_SLUG,
-    },
-  });
-
+  const organization = await ensureDefaultOrganization();
   const membership = await prisma.organizationMember.upsert({
     where: {
       organizationId_userId: {
@@ -83,6 +86,11 @@ export async function requireOrganizationMembership(
   });
 
   if (!membership || membership.status !== "active") return null;
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+  });
+  if (!organization || organization.status !== "active") return null;
 
   return {
     organizationId,
