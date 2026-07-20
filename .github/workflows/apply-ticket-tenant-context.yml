@@ -1,0 +1,57 @@
+name: Apply Ticket Tenant Context
+
+on:
+  push:
+    branches: [agent/saas-foundation]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-ticket-tenant-context
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.repository == 'johazores/ai-support-workflow-platform' && (github.ref == 'refs/heads/agent/saas-foundation' || github.head_ref == 'agent/saas-foundation')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/saas-foundation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pass tenant context into ticket detail
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('features/tickets/components/ticket-detail.tsx')
+          value = path.read_text()
+          value = value.replace(
+              'type TicketDetailProps = {\n  ticketId: string;\n};',
+              'type TicketDetailProps = {\n  ticketId: string;\n  organizationId: string;\n};',
+          )
+          value = value.replace(
+              'export async function TicketDetail({ ticketId }: TicketDetailProps) {\n  const ticket = await getTicketById(ticketId);',
+              'export async function TicketDetail({\n  ticketId,\n  organizationId,\n}: TicketDetailProps) {\n  const ticket = await getTicketById(ticketId, organizationId);',
+          )
+          path.write_text(value)
+          PY
+
+      - name: Commit tenant context
+        shell: bash
+        run: |
+          if git diff --quiet features/tickets/components/ticket-detail.tsx; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add features/tickets/components/ticket-detail.tsx
+          git commit -m "security: scope ticket details to organization"
+          git push origin HEAD:agent/saas-foundation
