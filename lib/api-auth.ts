@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getClerkApiSessionUser } from "@/features/auth/services/clerk-session-service";
 import {
   parseSessionValue,
   type SessionUser,
@@ -7,19 +8,21 @@ import { hasPermission } from "@/features/auth/services/role-service";
 
 type AuthResult = { ok: true; user: SessionUser } | { ok: false; user: null };
 
-/** Authenticate an API request by verifying the product session cookie JWT. */
+/** Authenticate a product API request through Clerk or the migration JWT. */
 export async function requireApiAuth(
   req: NextApiRequest,
   res: NextApiResponse,
 ): Promise<AuthResult> {
-  const session = await parseSessionValue(req.cookies.support_session);
+  const clerkUser = await getClerkApiSessionUser(req);
+  if (clerkUser) return { ok: true, user: clerkUser };
 
-  if (!session) {
+  const legacySession = await parseSessionValue(req.cookies.support_session);
+  if (!legacySession) {
     res.status(401).json({ message: "Unauthorized" });
     return { ok: false, user: null };
   }
 
-  return { ok: true, user: session };
+  return { ok: true, user: legacySession };
 }
 
 /** Authenticate and authorize an API request against product-user permissions. */
@@ -28,13 +31,13 @@ export async function requireApiPermission(
   res: NextApiResponse,
   permission: Parameters<typeof hasPermission>[1],
 ): Promise<AuthResult> {
-  const auth = await requireApiAuth(req, res);
-  if (!auth.ok) return auth;
+  const authResult = await requireApiAuth(req, res);
+  if (!authResult.ok) return authResult;
 
-  if (!hasPermission(auth.user.role, permission)) {
+  if (!hasPermission(authResult.user.role, permission)) {
     res.status(403).json({ message: "Forbidden" });
     return { ok: false, user: null };
   }
 
-  return auth;
+  return authResult;
 }
