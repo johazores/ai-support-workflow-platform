@@ -8,41 +8,110 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         String   @default("support")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String
+  email                 String   @unique
+  passwordHash          String
+  clerkUserId           String?  @unique
+  defaultOrganizationId String?  @db.ObjectId
+  role                  String   @default("support")
+  status                String   @default("active")
+  lastLoginAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([defaultOrganizationId])
+  @@index([status])
+}
+
+model Organization {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String   @unique
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model OrganizationMember {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  userId         String   @db.ObjectId
+  role           String   @default("agent")
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, status])
+}
+
+model RootAdmin {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  username           String    @unique
+  displayName        String
+  passwordHash       String
+  isActive           Boolean   @default(true)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  passwordChangedAt  DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([lockedUntil])
+}
+
+model RootSession {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  rootAdminId String    @db.ObjectId
+  tokenId     String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([rootAdminId, revokedAt])
+  @@index([expiresAt])
 }
 
 model Customer {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  email     String   @unique
-  tickets   Ticket[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  name           String
+  email          String   @unique
+  tickets        Ticket[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
 }
 
 model Ticket {
-  id         String    @id @default(auto()) @map("_id") @db.ObjectId
-  subject    String
-  status     String    @default("open")
-  priority   String    @default("normal")
-  customerId String    @db.ObjectId
-  customer   Customer  @relation(fields: [customerId], references: [id])
-  mailboxId  String?   @db.ObjectId
-  assigneeName  String?
-  assigneeEmail String?
-  tagIds     String[]  @db.ObjectId
-  messages   Message[]
-  drafts     Draft[]
-  activityLogs ActivityLog[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?       @db.ObjectId
+  subject        String
+  status         String        @default("open")
+  priority       String        @default("normal")
+  customerId     String        @db.ObjectId
+  customer       Customer      @relation(fields: [customerId], references: [id])
+  mailboxId      String?       @db.ObjectId
+  assigneeName   String?
+  assigneeEmail  String?
+  tagIds         String[]      @db.ObjectId
+  messages       Message[]
+  drafts         Draft[]
+  activityLogs   ActivityLog[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, priority])
   @@index([status])
   @@index([priority])
   @@index([customerId])
@@ -52,6 +121,7 @@ model Ticket {
 
 model Message {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId    String?  @db.ObjectId
   ticketId          String   @db.ObjectId
   ticket            Ticket   @relation(fields: [ticketId], references: [id])
   author            String
@@ -60,141 +130,341 @@ model Message {
   inReplyTo         String?
   createdAt         DateTime @default(now())
 
+  @@index([organizationId, createdAt])
   @@index([ticketId])
   @@index([externalMessageId])
 }
 
 model WorkflowRule {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  trigger     String
-  actions     Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  trigger        String
+  actions        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, isActive])
+}
+
+model Workflow {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  name           String
+  description    String?
+  status         String   @default("draft")
+  currentVersion Int      @default(0)
+  createdByUserId String? @db.ObjectId
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, status, updatedAt])
+}
+
+model WorkflowVersion {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId  String    @db.ObjectId
+  workflowId      String    @db.ObjectId
+  version         Int
+  status          String    @default("draft")
+  definition      Json
+  createdByUserId String?   @db.ObjectId
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([workflowId, version])
+  @@index([organizationId, status])
+}
+
+model WorkflowExecution {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId    String    @db.ObjectId
+  workflowId        String    @db.ObjectId
+  workflowVersionId String    @db.ObjectId
+  triggerType       String
+  status            String    @default("queued")
+  idempotencyKey    String?
+  input             Json?
+  output            Json?
+  error             String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([workflowId, createdAt])
+  @@index([idempotencyKey])
+}
+
+model WorkflowExecutionStep {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String    @db.ObjectId
+  executionId    String    @db.ObjectId
+  nodeId         String
+  nodeType       String
+  status         String    @default("pending")
+  attempt        Int       @default(1)
+  input          Json?
+  output         Json?
+  error          String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([executionId, createdAt])
+  @@index([organizationId, status])
 }
 
 model Draft {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  ticketId  String   @db.ObjectId
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
-  body      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  ticketId       String   @db.ObjectId
+  ticket         Ticket   @relation(fields: [ticketId], references: [id])
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
+  @@index([organizationId])
   @@index([ticketId])
 }
 
 model ActivityLog {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  ticketId  String   @db.ObjectId
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
-  type      String
-  message   String
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  ticketId       String   @db.ObjectId
+  ticket         Ticket   @relation(fields: [ticketId], references: [id])
+  type           String
+  message        String
+  createdAt      DateTime @default(now())
 
+  @@index([organizationId, createdAt])
   @@index([ticketId])
   @@index([createdAt])
   @@index([type])
 }
 
+model AuditEvent {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  rootAdminId    String?  @db.ObjectId
+  userId         String?  @db.ObjectId
+  actorType      String
+  action         String
+  targetType     String?
+  targetId       String?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([rootAdminId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
 model AiUsageLog {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  provider  String
-  model     String
-  success   Boolean
-  error     String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  provider       String
+  model          String
+  success        Boolean
+  error          String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
+model Provider {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  key          String   @unique
+  name         String
+  category     String
+  isEnabled    Boolean  @default(false)
+  priority     Int      @default(100)
+  defaultModel String?
+  baseUrl      String?
+  configuration Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category, isEnabled, priority])
+}
+
+model ProviderCredential {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  providerId     String    @db.ObjectId
+  label          String
+  encryptedValue String
+  lastFour       String?
+  keyVersion     Int       @default(1)
+  isActive       Boolean   @default(true)
+  lastTestedAt   DateTime?
+  lastTestStatus String?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([providerId, isActive])
+}
+
+model ProviderUsageRecord {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  providerId     String   @db.ObjectId
+  operation      String
+  model          String?
+  inputTokens    Int?
+  outputTokens   Int?
+  costMicros     Int?
+  latencyMs      Int?
+  success        Boolean
+  errorCode      String?
+  createdAt      DateTime @default(now())
+
+  @@index([providerId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model SystemSetting {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  key                   String   @unique
+  category              String
+  value                 Json?
+  encryptedValue        String?
+  isSecret              Boolean  @default(false)
+  description           String?
+  updatedByRootAdminId  String?  @db.ObjectId
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([category])
+}
+
+model FeatureFlag {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  key         String   @unique
+  name        String
+  description String?
+  isEnabled   Boolean  @default(false)
+  rules       Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model EmailLog {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  ticketId  String   @db.ObjectId
-  messageId String   @db.ObjectId
-  mailboxId String?  @db.ObjectId
-  to        String
-  subject   String
-  status    String   @default("sent")
-  error     String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  ticketId       String   @db.ObjectId
+  messageId      String   @db.ObjectId
+  mailboxId      String?  @db.ObjectId
+  to             String
+  subject        String
+  status         String   @default("sent")
+  error          String?
+  createdAt      DateTime @default(now())
 
+  @@index([organizationId, createdAt])
   @@index([ticketId])
   @@index([mailboxId])
 }
 
 model Notification {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  type      String
-  title     String
-  message   String
-  ticketId  String?  @db.ObjectId
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  userId         String   @db.ObjectId
+  type           String
+  title          String
+  message        String
+  ticketId       String?  @db.ObjectId
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
+  @@index([organizationId, createdAt])
   @@index([userId, isRead])
   @@index([userId, createdAt])
 }
 
 model Tag {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String   @unique
-  color     String   @default("slate")
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  name           String   @unique
+  color          String   @default("slate")
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
 }
 
 model SavedReply {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  title     String
-  body      String
-  shortcut  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  title          String
+  body           String
+  shortcut       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, updatedAt])
 }
 
 model SlaPolicy {
-  id                    String @id @default(auto()) @map("_id") @db.ObjectId
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId        String?  @db.ObjectId
   name                  String
-  priority              String @unique
+  priority              String   @unique
   firstResponseMinutes  Int
   resolutionMinutes     Int
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+
+  @@index([organizationId])
 }
 
 model CsatRating {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  ticketId  String   @unique @db.ObjectId
-  score     Int
-  comment   String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  ticketId       String   @unique @db.ObjectId
+  score          Int
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
 }
 
 model EmailConfig {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  name          String
-  smtpHost      String
-  smtpPort      Int      @default(587)
-  smtpUser      String
-  smtpPass      String
-  imapHost      String
-  imapPort      Int      @default(993)
-  imapUser      String
-  imapPass      String
-  fromAddress   String   @unique
-  fromName      String   @default("Support")
-  isActive      Boolean  @default(false)
-  isDefault     Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  name           String
+  smtpHost       String
+  smtpPort       Int      @default(587)
+  smtpUser       String
+  smtpPass       String
+  imapHost       String
+  imapPort       Int      @default(993)
+  imapUser       String
+  imapPass       String
+  fromAddress    String   @unique
+  fromName       String   @default("Support")
+  isActive       Boolean  @default(false)
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, isActive])
 }
 
 model EmailTemplate {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  subject   String
-  body      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?  @db.ObjectId
+  name           String
+  subject        String
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, updatedAt])
 }
