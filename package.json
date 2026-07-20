@@ -1,6 +1,6 @@
 {
   "name": "ai-support-workflow-platform",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -23,6 +23,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.5.20",
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.3",
     "imap": "^0.8.19",
