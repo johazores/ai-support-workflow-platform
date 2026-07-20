@@ -46,7 +46,7 @@ jobs:
           if [ "$status" -eq 0 ]; then npm ci || status=$?; fi
           if [ "$status" -eq 0 ]; then npx prisma generate || status=$?; fi
           if [ "$status" -eq 0 ]; then npx prisma validate || status=$?; fi
-          if [ "$status" -eq 0 ]; then npx prettier --write app pages features components lib prisma docs scripts package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs postcss.config.mjs vitest.config.ts .env.example .github/workflows || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx prettier --write app pages features components lib prisma docs scripts package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs postcss.config.mjs vitest.config.ts .github/workflows || status=$?; fi
           if [ "$status" -eq 0 ]; then npm run type-check -- --pretty false || status=$?; fi
           if [ "$status" -eq 0 ]; then npx eslint . --max-warnings 0 || status=$?; fi
           if [ "$status" -eq 0 ]; then npx vitest run --reporter=verbose || status=$?; fi
