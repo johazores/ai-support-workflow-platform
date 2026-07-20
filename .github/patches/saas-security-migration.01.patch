@@ -1,0 +1,329 @@
+diff --git a/features/ai-drafts/services/ai-usage-query-service.ts b/features/ai-drafts/services/ai-usage-query-service.ts
+index f7a64d0..5d833fd 100644
+--- a/features/ai-drafts/services/ai-usage-query-service.ts
++++ b/features/ai-drafts/services/ai-usage-query-service.ts
+@@ -1,10 +1,13 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+-export async function getAiUsageLogs() {
++export async function getAiUsageLogs(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.aiUsageLog.findMany({
+-    orderBy: {
+-      createdAt: "desc",
+-    },
+-    take: 50,
++    where: scope,
++    orderBy: { createdAt: "desc" },
++    take: 100,
+   });
+ }
+diff --git a/features/ai-drafts/services/classification-service.ts b/features/ai-drafts/services/classification-service.ts
+index 7824baf..7fe01af 100644
+--- a/features/ai-drafts/services/classification-service.ts
++++ b/features/ai-drafts/services/classification-service.ts
+@@ -1,36 +1,10 @@
+-import type { AiDraftProvider } from "@/features/ai-drafts/types/ai-provider";
+-import { mockAiProvider } from "@/features/ai-drafts/services/mock-ai-provider";
+-import { openAiProvider } from "@/features/ai-drafts/services/openai-ai-provider";
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type Classification = {
+   priority: "urgent" | "high" | "normal" | "low";
+   category: string;
+ };
+ 
+-const validPriorities = ["urgent", "high", "normal", "low"] as const;
+-
+-function getProvider(): { name: string; provider: AiDraftProvider } {
+-  if (process.env.AI_PROVIDER === "openai") {
+-    return { name: "openai", provider: openAiProvider };
+-  }
+-  return { name: "mock", provider: mockAiProvider };
+-}
+-
+ function classifyByKeywords(subject: string, body: string): Classification {
+   const text = `${subject} ${body}`.toLowerCase();
+ 
+-  if (
+-    text.includes("urgent") ||
+-    text.includes("emergency") ||
+-    text.includes("down") ||
+-    text.includes("outage")
++  if (
++    ["urgent", "emergency", "down", "outage", "security breach"].some(
++      (term) => text.includes(term),
++    )
+   ) {
+     return { priority: "urgent", category: "incident" };
+   }
+ 
+-  if (
+-    text.includes("billing") ||
+-    text.includes("invoice") ||
+-    text.includes("charge") ||
+-    text.includes("refund")
+-  ) {
++  if (["billing", "invoice", "charge", "refund"].some((term) => text.includes(term))) {
+     return { priority: "high", category: "billing" };
+   }
+ 
+-  if (
+-    text.includes("bug") ||
+-    text.includes("error") ||
+-    text.includes("broken") ||
+-    text.includes("not working")
+-  ) {
++  if (["bug", "error", "broken", "not working"].some((term) => text.includes(term))) {
+     return { priority: "high", category: "bug-report" };
+   }
+ 
+-  if (
+-    text.includes("how to") ||
+-    text.includes("help") ||
+-    text.includes("question")
+-  ) {
++  if (["how to", "help", "question"].some((term) => text.includes(term))) {
+     return { priority: "normal", category: "question" };
+   }
+ 
+-  if (
+-    text.includes("feature") ||
+-    text.includes("request") ||
+-    text.includes("suggestion")
+-  ) {
++  if (["feature", "request", "suggestion"].some((term) => text.includes(term))) {
+     return { priority: "low", category: "feature-request" };
+   }
+@@ -40,68 +14,24 @@ function classifyByKeywords(subject: string, body: string): Classification {
+ }
+ 
+ export async function classifyTicket(
++  organizationId: string,
+   ticketId: string,
+   subject: string,
+   body: string,
+ ): Promise<Classification> {
+-  const { name, provider } = getProvider();
+-
+-  // If OpenAI is configured, try AI classification
+-  if (name === "openai") {
+-    try {
+-      const result = await provider.generateDraft({
+-        subject,
+-        customerName: "",
+-        customerMessage: `Classify this support ticket. Respond with ONLY a JSON object like {"priority":"normal","category":"general"}.
+-
+-Priorities: urgent, high, normal, low
+-Categories: incident, billing, bug-report, question, feature-request, general
+-
+-Subject: ${subject}
+-Message: ${body}`,
+-      });
+-
+-      const parsed = JSON.parse(result.draft) as Record<string, unknown>;
+-
+-      if (
+-        typeof parsed.priority === "string" &&
+-        validPriorities.includes(
+-          parsed.priority as (typeof validPriorities)[number],
+-        ) &&
+-        typeof parsed.category === "string"
+-      ) {
+-        return parsed as unknown as Classification;
+-      }
+-    } catch {
+-      // Fall through to keyword-based classification
+-    }
+-  }
+-
+-  // Keyword-based fallback (always available, no API call)
++  const scope = await getTenantRecordScope(organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
++    select: { id: true },
++  });
++  if (!ticket) throw new Error("Ticket not found");
++
+   const classification = classifyByKeywords(subject, body);
+-
+   await prisma.ticket.update({
+-    where: { id: ticketId },
+-    data: { priority: classification.priority },
++    where: { id: ticket.id },
++    data: { organizationId, priority: classification.priority },
+   });
+ 
+   return classification;
+ }
+diff --git a/features/ai-drafts/services/draft-service.ts b/features/ai-drafts/services/draft-service.ts
+index fe00f49..122a873 100644
+--- a/features/ai-drafts/services/draft-service.ts
++++ b/features/ai-drafts/services/draft-service.ts
+@@ -1,17 +1,25 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type SaveDraftInput = {
++  organizationId: string;
+   ticketId: string;
+   body: string;
+ };
+ 
+ export async function saveDraft(input: SaveDraftInput) {
++  const scope = await getTenantRecordScope(input.organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: input.ticketId, ...scope },
++    select: { id: true },
++  });
++  if (!ticket) throw new Error("Ticket not found");
++
+   return prisma.draft.create({
+     data: {
+-      ticketId: input.ticketId,
++      organizationId: input.organizationId,
++      ticketId: ticket.id,
+       body: input.body,
+     },
+   });
+ }
+diff --git a/features/ai-drafts/services/mock-ai-provider.test.ts b/features/ai-drafts/services/mock-ai-provider.test.ts
+index 6a11889..088984d 100644
+--- a/features/ai-drafts/services/mock-ai-provider.test.ts
++++ b/features/ai-drafts/services/mock-ai-provider.test.ts
+@@ -4,6 +4,7 @@ describe("mock-ai-provider", () => {
+   it("generates a professional draft by default", async () => {
+     const result = await mockAiProvider.generateDraft({
++      organizationId: "507f1f77bcf86cd799439011",
+       subject: "Billing inquiry",
+       customerName: "Alice",
+       customerMessage: "I have a question about my invoice.",
+@@ -16,6 +17,7 @@ describe("mock-ai-provider", () => {
+ 
+   it("generates a friendly draft when tone is friendly", async () => {
+     const result = await mockAiProvider.generateDraft({
++      organizationId: "507f1f77bcf86cd799439011",
+       subject: "Help needed",
+       customerName: "Bob",
+       customerMessage: "Can you help me?",
+@@ -28,6 +30,7 @@ describe("mock-ai-provider", () => {
+ 
+   it("generates a concise draft when tone is concise", async () => {
+     const result = await mockAiProvider.generateDraft({
++      organizationId: "507f1f77bcf86cd799439011",
+       subject: "Quick question",
+       customerName: "Charlie",
+       customerMessage: "What's the status?",
+@@ -41,6 +44,7 @@ describe("mock-ai-provider", () => {
+ 
+   it("generates an empathetic draft when tone is empathetic", async () => {
+     const result = await mockAiProvider.generateDraft({
++      organizationId: "507f1f77bcf86cd799439011",
+       subject: "Service issue",
+       customerName: "Diana",
+       customerMessage: "This is really frustrating.",
+@@ -53,6 +57,7 @@ describe("mock-ai-provider", () => {
+ 
+   it("falls back to professional for unknown tone", async () => {
+     const result = await mockAiProvider.generateDraft({
++      organizationId: "507f1f77bcf86cd799439011",
+       subject: "Test",
+       customerName: "Eve",
+       customerMessage: "Test message.",
+diff --git a/features/ai-drafts/services/send-draft-service.ts b/features/ai-drafts/services/send-draft-service.ts
+index e20d950..0bbb6e9 100644
+--- a/features/ai-drafts/services/send-draft-service.ts
++++ b/features/ai-drafts/services/send-draft-service.ts
+@@ -1,25 +1,31 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
++import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
+ import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
+ 
+ type SendDraftInput = {
++  organizationId: string;
+   draftId: string;
+ };
+ 
+ export async function sendDraft(input: SendDraftInput) {
+-  const draft = await prisma.draft.findUnique({
+-    where: {
+-      id: input.draftId,
+-    },
++  const scope = await getTenantRecordScope(input.organizationId);
++  const draft = await prisma.draft.findFirst({
++    where: { id: input.draftId, ...scope },
++    include: {
++      ticket: {
++        include: { customer: true },
++      },
++    },
+   });
+ 
+-  if (!draft) {
++  if (!draft || (draft.ticket.organizationId && draft.ticket.organizationId !== input.organizationId)) {
+     throw new Error("Draft not found");
+   }
+ 
+   const message = await prisma.message.create({
+     data: {
++      organizationId: input.organizationId,
+       ticketId: draft.ticketId,
+       author: "support",
+       body: draft.body,
+@@ -34,6 +40,7 @@ export async function sendDraft(input: SendDraftInput) {
+     where: {
+       id: draft.ticketId,
+     },
+     data: {
++      organizationId: input.organizationId,
+       status: "pending",
+     },
+   });
+@@ -42,15 +49,29 @@ export async function sendDraft(input: SendDraftInput) {
+     data: {
++      organizationId: input.organizationId,
+       ticketId: draft.ticketId,
+       type: "reply_sent",
+       message: "Support reply sent from saved draft.",
+     },
+   });
+ 
+   await prisma.activityLog.create({
+     data: {
++      organizationId: input.organizationId,
+       ticketId: draft.ticketId,
+       type: "status_changed",
+       message: "Ticket status changed to pending after reply was sent.",
+     },
+   });
++
++  await sendTicketEmail({
++    organizationId: input.organizationId,
++    ticketId: draft.ticketId,
++    messageId: message.id,
++    to: draft.ticket.customer.email,
++    subject: `Re: ${draft.ticket.subject}`,
++    body: draft.body,
++  });
++
++  broadcastTicketUpdate(input.organizationId, draft.ticketId, "message-created", {
++    messageId: message.id,
++  });
+ 
+   return message;
+ }
+diff --git a/features/ai-drafts/types/ai-provider.ts b/features/ai-drafts/types/ai-provider.ts
+index a4a39a3..634e381 100644
+--- a/features/ai-drafts/types/ai-provider.ts
++++ b/features/ai-drafts/types/ai-provider.ts
+@@ -2,7 +2,7 @@ export type DraftTone = "professional" | "friendly" | "concise" | "empathetic";
+ 
+ export type GenerateDraftInput = {
+-  organizationId?: string;
++  organizationId: string;
+   subject: string;
+   customerName: string;
+   customerMessage: string;
