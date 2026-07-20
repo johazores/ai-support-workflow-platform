@@ -3,19 +3,26 @@ name: Sync Clerk Foundation
 on:
   push:
     branches: [agent/saas-foundation]
+  pull_request:
+    branches: [master]
 
 permissions:
   contents: write
 
+concurrency:
+  group: sync-clerk-foundation
+  cancel-in-progress: true
+
 jobs:
   sync:
-    if: github.repository == 'johazores/ai-support-workflow-platform'
+    if: github.repository == 'johazores/ai-support-workflow-platform' && (github.ref == 'refs/heads/agent/saas-foundation' || github.head_ref == 'agent/saas-foundation')
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: agent/saas-foundation
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -23,7 +30,7 @@ jobs:
           cache: npm
 
       - name: Sync package lock
-        run: npm install --package-lock-only
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Allow Clerk-only product users
         shell: bash
