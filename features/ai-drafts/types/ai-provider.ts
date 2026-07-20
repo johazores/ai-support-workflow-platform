@@ -1,6 +1,7 @@
 export type DraftTone = "professional" | "friendly" | "concise" | "empathetic";
 
 export type GenerateDraftInput = {
+  organizationId?: string;
   subject: string;
   customerName: string;
   customerMessage: string;
