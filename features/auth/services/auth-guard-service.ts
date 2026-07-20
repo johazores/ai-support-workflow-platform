@@ -12,9 +12,27 @@ import {
   requireOrganizationMembership,
 } from "@/features/organizations/services/organization-service";
 
-export async function requireUser() {
+export type AuthenticatedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  organizationId: string;
+  authProvider: "clerk" | "legacy";
+};
+
+export async function requireUser(): Promise<AuthenticatedUser> {
   const clerkUser = await getClerkAppSessionUser();
-  if (clerkUser?.organizationId) return clerkUser;
+  if (clerkUser?.organizationId) {
+    return {
+      id: clerkUser.id,
+      name: clerkUser.name,
+      email: clerkUser.email,
+      role: clerkUser.role,
+      organizationId: clerkUser.organizationId,
+      authProvider: "clerk",
+    };
+  }
 
   const sessionUser = await getCurrentUser();
   const signInPath = isClerkConfigured() ? "/sign-in" : "/login";
@@ -40,7 +58,7 @@ export async function requireUser() {
     email: databaseUser.email,
     role: organization.role,
     organizationId: organization.organizationId,
-    authProvider: "legacy" as const,
+    authProvider: "legacy",
   };
 }
 
