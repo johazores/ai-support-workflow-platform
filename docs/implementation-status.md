@@ -2,6 +2,8 @@
 
 This document tracks the current migration from the original single-workspace support application to a production-oriented SaaS platform.
 
+Development continues on `feat/saas-foundation` in draft PR #3. It supersedes PR #2, which GitHub automatically closed when the original source branch was renamed.
+
 ## Implemented
 
 - Organization and membership models with a legacy default-workspace migration path
