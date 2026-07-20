@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -24,8 +24,28 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Validate Prisma Schema
+        run: npx prisma validate
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/ci-placeholder"
+
       - name: Type Check
-        run: npm run type-check
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npm run type-check -- --pretty false 2>&1 | tee typecheck.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Type Check Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-report
+          path: typecheck.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Lint
         run: npx eslint . --max-warnings 0
@@ -42,7 +62,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -63,7 +83,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -76,3 +96,5 @@ jobs:
         env:
           DATABASE_URL: "mongodb://localhost:27017/ci-placeholder"
           SESSION_SECRET: "ci-test-secret-do-not-use-in-production"
+          ROOT_SESSION_SECRET: "ci-root-session-secret-do-not-use-in-production"
+          CONFIG_ENCRYPTION_KEY: "Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE="
