@@ -23,58 +23,60 @@ jobs:
           ref: feat/saas-foundation
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Apply migration patches
-        shell: bash
-        run: |
-          set -euo pipefail
-          for patch in .github/patches/saas-security-migration.*.patch; do
-            echo "Applying ${patch}"
-            git apply --index --whitespace=nowarn "${patch}"
-          done
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - run: npm ci
-
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Validate Prisma Schema
-        run: npx prisma validate
-        env:
-          DATABASE_URL: mongodb://localhost:27017/ci-placeholder
-
-      - name: Format source
-        run: npx prettier --write app pages features components lib prisma docs scripts package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs postcss.config.mjs vitest.config.ts .env.example .github/workflows
-
-      - name: Type Check
-        run: npm run type-check -- --pretty false
-
-      - name: Lint
-        run: npx eslint . --max-warnings 0
-
-      - name: Tests
-        run: npx vitest run --reporter=verbose
-
-      - name: Production Build
-        run: npx next build
+      - name: Apply and validate migration
+        shell: bash
         env:
           DATABASE_URL: mongodb://localhost:27017/ci-placeholder
           SESSION_SECRET: ci-test-secret-do-not-use-in-production
           ROOT_SESSION_SECRET: ci-root-session-secret-do-not-use-in-production
           CONFIG_ENCRYPTION_KEY: Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE=
-
-      - name: Commit migration
-        shell: bash
         run: |
-          set -euo pipefail
-          git rm -rf .github/patches
-          git rm -f .github/workflows/apply-saas-security-migration.yml
+          set +e
+          exec > >(tee migration-validation.log) 2>&1
+
+          status=0
+          for patch in .github/patches/saas-security-migration.*.patch; do
+            echo "Applying ${patch}"
+            git apply --index --whitespace=nowarn "${patch}" || { status=$?; break; }
+          done
+
+          if [ "$status" -eq 0 ]; then npm ci || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx prisma generate || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx prisma validate || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx prettier --write app pages features components lib prisma docs scripts package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs postcss.config.mjs vitest.config.ts .env.example .github/workflows || status=$?; fi
+          if [ "$status" -eq 0 ]; then npm run type-check -- --pretty false || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx eslint . --max-warnings 0 || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx vitest run --reporter=verbose || status=$?; fi
+          if [ "$status" -eq 0 ]; then npx next build || status=$?; fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$status" -ne 0 ]; then
+            git reset --hard HEAD
+            {
+              echo "# SaaS Migration Validation Failure"
+              echo
+              echo "The one-time migration job failed with exit code ${status}."
+              echo
+              echo '```text'
+              tail -n 240 migration-validation.log
+              echo '```'
+            } > docs/MIGRATION_VALIDATION_FAILURE.md
+            git add docs/MIGRATION_VALIDATION_FAILURE.md
+            git commit -m "ci: record SaaS migration validation failure"
+            git push origin HEAD:feat/saas-foundation
+            exit "$status"
+          fi
+
+          rm -f docs/MIGRATION_VALIDATION_FAILURE.md migration-validation.log
+          git rm -rf .github/patches
+          git rm -f .github/workflows/apply-saas-security-migration.yml
           git add -A
           git commit -m "security: complete tenant and authentication migration"
           git push origin HEAD:feat/saas-foundation
