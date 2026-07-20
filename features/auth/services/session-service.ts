@@ -20,6 +20,7 @@ export type SessionUser = {
   email: string;
   role: string;
   organizationId?: string;
+  authProvider?: "clerk" | "legacy";
 };
 
 export async function createSessionValue(user: SessionUser) {
@@ -67,6 +68,7 @@ export async function parseSessionValue(
         typeof payload.organizationId === "string"
           ? payload.organizationId
           : undefined,
+      authProvider: "legacy",
     };
   } catch {
     return null;
