@@ -62,16 +62,15 @@ jobs:
             {
               echo "# SaaS Migration Validation Failure"
               echo
+              echo "Run: ${GITHUB_RUN_ID}"
+              echo
               echo "The one-time migration job failed with exit code ${status}."
               echo
               echo '```text'
-              tail -n 240 migration-validation.log
+              tail -n 400 migration-validation.log
               echo '```'
             } > docs/MIGRATION_VALIDATION_FAILURE.md
             git add docs/MIGRATION_VALIDATION_FAILURE.md
-            if git diff --cached --quiet; then
-              exit "$status"
-            fi
             git commit -m "ci: record SaaS migration validation failure"
             git push origin HEAD:feat/saas-foundation
             exit "$status"
