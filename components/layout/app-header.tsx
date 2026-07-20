@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LogoutButton } from "@/features/auth/components/logout-button";
 import { CurrentUserBadge } from "@/features/auth/components/current-user-badge";
+import { ProductAccountControl } from "@/features/auth/components/product-account-control";
 import { NotificationBell } from "@/features/notifications/components/notification-bell";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-
 import { isElevatedRole } from "@/features/auth/services/role-service";
 
 type AppHeaderProps = {
   user: {
     name: string;
     role: string;
+    authProvider?: "clerk" | "legacy";
   };
 };
 
@@ -25,14 +25,12 @@ export function AppHeader({ user }: AppHeaderProps) {
         <div className="flex items-center gap-8">
           <Link
             href="/inbox"
-            className="flex items-center gap-2 text-slate-950"
+            className="flex items-center gap-2 text-slate-950 dark:text-white"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-xs font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-xs font-bold text-white dark:bg-white dark:text-slate-950">
               AI
             </span>
-            <span className="text-sm font-semibold tracking-tight">
-              Support
-            </span>
+            <span className="text-sm font-semibold tracking-tight">Support</span>
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">
@@ -59,10 +57,9 @@ export function AppHeader({ user }: AppHeaderProps) {
           <NotificationBell />
           <CurrentUserBadge name={user.name} role={user.role} />
           <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
-          <LogoutButton />
+          <ProductAccountControl authProvider={user.authProvider} />
         </div>
 
-        {/* Mobile hamburger */}
         <button
           type="button"
           className="rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 md:hidden"
@@ -94,7 +91,6 @@ export function AppHeader({ user }: AppHeaderProps) {
         </button>
       </div>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="animate-in border-t border-slate-100 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-900 md:hidden">
           <nav className="flex flex-col gap-1">
@@ -122,7 +118,7 @@ export function AppHeader({ user }: AppHeaderProps) {
             <NotificationBell />
             <CurrentUserBadge name={user.name} role={user.role} />
             <div className="flex-1" />
-            <LogoutButton />
+            <ProductAccountControl authProvider={user.authProvider} />
           </div>
         </div>
       )}
