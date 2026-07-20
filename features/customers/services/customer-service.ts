@@ -1,27 +1,42 @@
 import { prisma } from "@/lib/prisma";
 
-export async function listCustomers() {
+function tenantFilter(organizationId: string) {
+  return { OR: [{ organizationId }, { organizationId: null }] };
+}
+
+export async function listCustomers(organizationId: string) {
   const customers = await prisma.customer.findMany({
+    where: tenantFilter(organizationId),
     include: {
-      _count: { select: { tickets: true } },
+      _count: {
+        select: {
+          tickets: {
+            where: tenantFilter(organizationId),
+          },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return customers.map((c) => ({
-    id: c.id,
-    name: c.name,
-    email: c.email,
-    ticketCount: c._count.tickets,
-    createdAt: c.createdAt,
+  return customers.map((customer) => ({
+    id: customer.id,
+    name: customer.name,
+    email: customer.email,
+    ticketCount: customer._count.tickets,
+    createdAt: customer.createdAt,
   }));
 }
 
-export async function getCustomerWithTickets(id: string) {
-  return prisma.customer.findUnique({
-    where: { id },
+export async function getCustomerWithTickets(
+  organizationId: string,
+  id: string,
+) {
+  return prisma.customer.findFirst({
+    where: { id, ...tenantFilter(organizationId) },
     include: {
       tickets: {
+        where: tenantFilter(organizationId),
         select: {
           id: true,
           subject: true,
