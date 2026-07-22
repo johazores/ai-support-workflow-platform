@@ -1,0 +1,319 @@
+diff --git a/features/customers/services/customer-service.ts b/features/customers/services/customer-service.ts
+index ca0ce5f..2dec160 100644
+--- a/features/customers/services/customer-service.ts
++++ b/features/customers/services/customer-service.ts
+@@ -1,18 +1,14 @@
+ import { prisma } from "@/lib/prisma";
+-
+-function tenantFilter(organizationId: string) {
+-  return { OR: [{ organizationId }, { organizationId: null }] };
+-}
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export async function listCustomers(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
+   const customers = await prisma.customer.findMany({
+-    where: tenantFilter(organizationId),
++    where: scope,
+     include: {
+       _count: {
+         select: {
+-          tickets: {
+-            where: tenantFilter(organizationId),
+-          },
++          tickets: { where: scope },
+         },
+       },
+     },
+@@ -32,11 +28,13 @@ export async function getCustomerWithTickets(
+   organizationId: string,
+   id: string,
+ ) {
++  const scope = await getTenantRecordScope(organizationId);
++
+   return prisma.customer.findFirst({
+-    where: { id, ...tenantFilter(organizationId) },
++    where: { id, ...scope },
+     include: {
+       tickets: {
+-        where: tenantFilter(organizationId),
++        where: scope,
+         select: {
+           id: true,
+           subject: true,
+diff --git a/features/email-logs/services/email-log-service.ts b/features/email-logs/services/email-log-service.ts
+index e17219c..e8c2db6 100644
+--- a/features/email-logs/services/email-log-service.ts
++++ b/features/email-logs/services/email-log-service.ts
+@@ -1,21 +1,28 @@
++import type { Prisma } from "@prisma/client";
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+-export async function listEmailLogs(opts?: {
+-  status?: string;
+-  mailboxId?: string;
+-  limit?: number;
+-  offset?: number;
+-}) {
+-  const where: Record<string, unknown> = {};
+-  if (opts?.status) where.status = opts.status;
+-  if (opts?.mailboxId) where.mailboxId = opts.mailboxId;
++export async function listEmailLogs(
++  organizationId: string,
++  opts?: {
++    status?: string;
++    mailboxId?: string;
++    limit?: number;
++    offset?: number;
++  },
++) {
++  const scope = await getTenantRecordScope(organizationId);
++  const filters: Prisma.EmailLogWhereInput[] = [scope];
++  if (opts?.status) filters.push({ status: opts.status });
++  if (opts?.mailboxId) filters.push({ mailboxId: opts.mailboxId });
+ 
++  const where: Prisma.EmailLogWhereInput = { AND: filters };
+   const [logs, total] = await Promise.all([
+     prisma.emailLog.findMany({
+       where,
+       orderBy: { createdAt: "desc" },
+-      take: opts?.limit ?? 50,
+-      skip: opts?.offset ?? 0,
++      take: Math.min(Math.max(opts?.limit ?? 50, 1), 100),
++      skip: Math.max(opts?.offset ?? 0, 0),
+     }),
+     prisma.emailLog.count({ where }),
+   ]);
+diff --git a/features/email/services/email-config-service.ts b/features/email/services/email-config-service.ts
+index e2676a3..d0e1685 100644
+--- a/features/email/services/email-config-service.ts
++++ b/features/email/services/email-config-service.ts
+@@ -5,6 +5,8 @@ import {
+   isEncryptedSecret,
+   readStoredSecret,
+ } from "@/lib/secret-encryption";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
++import { ensureDefaultOrganization } from "@/features/organizations/services/organization-service";
+ 
+ function decryptMailbox(config: EmailConfig): EmailConfig {
+   return {
+@@ -14,12 +16,6 @@ function decryptMailbox(config: EmailConfig): EmailConfig {
+   };
+ }
+ 
+-function organizationWhere(organizationId?: string) {
+-  return organizationId
+-    ? { OR: [{ organizationId }, { organizationId: null }] }
+-    : {};
+-}
+-
+ function isMaskedSecret(value: string) {
+   return value.includes("•") || value === "********";
+ }
+@@ -28,41 +24,47 @@ function encryptNewSecret(value: string) {
+   return isEncryptedSecret(value) ? value : encryptSecret(value);
+ }
+ 
+-/** Get a mailbox config for server-side connection use. */
+-export async function getEmailConfigById(id: string, organizationId?: string) {
++async function mailboxScope(organizationId: string) {
++  return getTenantRecordScope(organizationId);
++}
++
++export async function getEmailConfigById(
++  id: string,
++  organizationId: string,
++) {
++  const scope = await mailboxScope(organizationId);
+   const config = await prisma.emailConfig.findFirst({
+-    where: { id, ...organizationWhere(organizationId) },
++    where: { id, ...scope },
+   });
+   return config ? decryptMailbox(config) : null;
+ }
+ 
+-/** Get the default active mailbox for server-side connection use. */
+-export async function getEmailConfig(organizationId?: string) {
+-  const tenantFilter = organizationWhere(organizationId);
++export async function getEmailConfig(organizationId: string) {
++  const scope = await mailboxScope(organizationId);
+   const config =
+     (await prisma.emailConfig.findFirst({
+-      where: { ...tenantFilter, isDefault: true, isActive: true },
++      where: { ...scope, isDefault: true, isActive: true },
+     })) ??
+     (await prisma.emailConfig.findFirst({
+-      where: { ...tenantFilter, isActive: true },
++      where: { ...scope, isActive: true },
+       orderBy: { updatedAt: "desc" },
+     }));
+ 
+   return config ? decryptMailbox(config) : null;
+ }
+ 
+-/** List stored mailbox metadata. Password values remain encrypted. */
+-export async function listEmailConfigs(organizationId?: string) {
++export async function listEmailConfigs(organizationId: string) {
++  const scope = await mailboxScope(organizationId);
+   return prisma.emailConfig.findMany({
+-    where: organizationWhere(organizationId),
++    where: scope,
+     orderBy: { createdAt: "asc" },
+   });
+ }
+ 
+-/** Get all active mailboxes with decrypted passwords for IMAP polling. */
+-export async function getActiveEmailConfigs(organizationId?: string) {
++export async function getActiveEmailConfigs(organizationId: string) {
++  const scope = await mailboxScope(organizationId);
+   const configs = await prisma.emailConfig.findMany({
+-    where: { ...organizationWhere(organizationId), isActive: true },
++    where: { ...scope, isActive: true },
+     orderBy: { createdAt: "asc" },
+   });
+ 
+@@ -70,7 +72,7 @@ export async function getActiveEmailConfigs(organizationId?: string) {
+ }
+ 
+ type EmailConfigInput = {
+-  organizationId?: string;
++  organizationId: string;
+   name: string;
+   smtpHost: string;
+   smtpPort: number;
+@@ -86,14 +88,28 @@ type EmailConfigInput = {
+   isDefault: boolean;
+ };
+ 
+-/** Create a mailbox with encrypted SMTP and IMAP passwords. */
++async function assertUniqueFromAddress(
++  organizationId: string,
++  fromAddress: string,
++  excludedId?: string,
++) {
++  const existing = await prisma.emailConfig.findFirst({
++    where: {
++      organizationId,
++      fromAddress: fromAddress.trim().toLowerCase(),
++      ...(excludedId ? { id: { not: excludedId } } : {}),
++    },
++    select: { id: true },
++  });
++  if (existing) throw new Error("From address is already configured");
++}
++
+ export async function createEmailConfig(data: EmailConfigInput) {
++  await assertUniqueFromAddress(data.organizationId, data.fromAddress);
++
+   if (data.isDefault) {
+     await prisma.emailConfig.updateMany({
+-      where: {
+-        isDefault: true,
+-        ...(data.organizationId ? { organizationId: data.organizationId } : {}),
+-      },
++      where: { organizationId: data.organizationId, isDefault: true },
+       data: { isDefault: false },
+     });
+   }
+@@ -101,28 +117,36 @@ export async function createEmailConfig(data: EmailConfigInput) {
+   return prisma.emailConfig.create({
+     data: {
+       ...data,
++      name: data.name.trim(),
++      fromAddress: data.fromAddress.trim().toLowerCase(),
+       smtpPass: encryptNewSecret(data.smtpPass),
+       imapPass: encryptNewSecret(data.imapPass),
+     },
+   });
+ }
+ 
+-/** Update a mailbox while preserving masked password placeholders. */
+ export async function updateEmailConfig(
+   id: string,
+-  data: Partial<EmailConfigInput>,
+-  organizationId?: string,
++  data: Partial<Omit<EmailConfigInput, "organizationId">>,
++  organizationId: string,
+ ) {
++  const scope = await mailboxScope(organizationId);
+   const existing = await prisma.emailConfig.findFirst({
+-    where: { id, ...organizationWhere(organizationId) },
++    where: { id, ...scope },
+   });
+   if (!existing) throw new Error("Mailbox not found");
+ 
+   const updateData: Partial<EmailConfigInput> = {
+     ...data,
+-    ...(organizationId ? { organizationId } : {}),
++    organizationId,
+   };
+ 
++  if (updateData.fromAddress) {
++    updateData.fromAddress = updateData.fromAddress.trim().toLowerCase();
++    await assertUniqueFromAddress(organizationId, updateData.fromAddress, id);
++  }
++  if (updateData.name) updateData.name = updateData.name.trim();
++
+   if (updateData.smtpPass) {
+     if (isMaskedSecret(updateData.smtpPass)) delete updateData.smtpPass;
+     else updateData.smtpPass = encryptNewSecret(updateData.smtpPass);
+@@ -135,15 +159,7 @@ export async function updateEmailConfig(
+ 
+   if (data.isDefault) {
+     await prisma.emailConfig.updateMany({
+-      where: {
+-        isDefault: true,
+-        id: { not: id },
+-        ...(organizationId
+-          ? { organizationId }
+-          : existing.organizationId
+-            ? { organizationId: existing.organizationId }
+-            : {}),
+-      },
++      where: { organizationId, isDefault: true, id: { not: id } },
+       data: { isDefault: false },
+     });
+   }
+@@ -151,23 +167,34 @@ export async function updateEmailConfig(
+   return prisma.emailConfig.update({ where: { id }, data: updateData });
+ }
+ 
+-export async function deleteEmailConfig(id: string, organizationId?: string) {
++export async function deleteEmailConfig(
++  id: string,
++  organizationId: string,
++) {
++  const scope = await mailboxScope(organizationId);
+   const existing = await prisma.emailConfig.findFirst({
+-    where: { id, ...organizationWhere(organizationId) },
++    where: { id, ...scope },
+   });
+   if (!existing) throw new Error("Mailbox not found");
+   return prisma.emailConfig.delete({ where: { id } });
+ }
+ 
+-/** @deprecated Use createEmailConfig/updateEmailConfig instead. */
++/** Legacy installer helper. New product code must pass an organization ID. */
+ export async function upsertEmailConfig(
+-  data: Omit<EmailConfigInput, "name" | "isDefault">,
++  data: Omit<EmailConfigInput, "organizationId" | "name" | "isDefault">,
+ ) {
+-  const existing = await prisma.emailConfig.findFirst();
++  const organization = await ensureDefaultOrganization();
++  const scope = await mailboxScope(organization.id);
++  const existing = await prisma.emailConfig.findFirst({ where: scope });
+ 
+   if (existing) {
+-    return updateEmailConfig(existing.id, data);
++    return updateEmailConfig(existing.id, data, organization.id);
+   }
+ 
+-  return createEmailConfig({ ...data, name: "Default", isDefault: true });
++  return createEmailConfig({
++    ...data,
++    organizationId: organization.id,
++    name: "Default",
++    isDefault: true,
++  });
+ }

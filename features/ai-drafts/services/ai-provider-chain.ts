@@ -26,33 +26,70 @@ export class AiProviderChain {
     let lastError: unknown;
 
     for (const entry of this.providers) {
+      const startedAt = Date.now();
       try {
         const result = await entry.provider.generateDraft(input);
 
         await prisma.aiUsageLog.create({
           data: {
+            organizationId: input.organizationId,
             provider: entry.name,
             model: entry.model,
             success: true,
           },
         });
 
+        const provider = await prisma.provider.findUnique({
+          where: { key: entry.name },
+        });
+        if (provider) {
+          await prisma.providerUsageRecord.create({
+            data: {
+              organizationId: input.organizationId,
+              providerId: provider.id,
+              operation: "ai.draft.generate",
+              model: entry.model,
+              latencyMs: Date.now() - startedAt,
+              success: true,
+            },
+          });
+        }
+
         return result;
       } catch (error: unknown) {
         lastError = error;
+        const errorMessage = getErrorMessage(error);
 
         await prisma.aiUsageLog.create({
           data: {
+            organizationId: input.organizationId,
             provider: entry.name,
             model: entry.model,
             success: false,
-            error: getErrorMessage(error),
+            error: errorMessage,
           },
         });
 
+        const provider = await prisma.provider.findUnique({
+          where: { key: entry.name },
+        });
+        if (provider) {
+          await prisma.providerUsageRecord.create({
+            data: {
+              organizationId: input.organizationId,
+              providerId: provider.id,
+              operation: "ai.draft.generate",
+              model: entry.model,
+              latencyMs: Date.now() - startedAt,
+              success: false,
+              errorCode: errorMessage.slice(0, 200),
+            },
+          });
+        }
+
         console.error(
           `AI provider ${entry.name} failed, trying next:`,
-          getErrorMessage(error),
+          errorMessage,
         );
       }
     }

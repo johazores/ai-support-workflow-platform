@@ -1,0 +1,409 @@
+diff --git a/features/email/services/email-template-service.ts b/features/email/services/email-template-service.ts
+index adf1efc..cd4474d 100644
+--- a/features/email/services/email-template-service.ts
++++ b/features/email/services/email-template-service.ts
+@@ -1,24 +1,75 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+-export async function listEmailTemplates() {
+-  return prisma.emailTemplate.findMany({ orderBy: { updatedAt: "desc" } });
++export async function listEmailTemplates(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
++  return prisma.emailTemplate.findMany({
++    where: scope,
++    orderBy: { updatedAt: "desc" },
++  });
+ }
+ 
+-export async function createEmailTemplate(data: {
+-  name: string;
+-  subject: string;
+-  body: string;
+-}) {
+-  return prisma.emailTemplate.create({ data });
++export async function createEmailTemplate(
++  organizationId: string,
++  data: { name: string; subject: string; body: string },
++) {
++  const name = data.name.trim();
++  const existing = await prisma.emailTemplate.findFirst({
++    where: { organizationId, name },
++    select: { id: true },
++  });
++  if (existing) throw new Error("Template name already exists");
++
++  return prisma.emailTemplate.create({
++    data: { organizationId, name, subject: data.subject, body: data.body },
++  });
+ }
+ 
+ export async function updateEmailTemplate(
++  organizationId: string,
+   id: string,
+   data: { name?: string; subject?: string; body?: string },
+ ) {
+-  return prisma.emailTemplate.update({ where: { id }, data });
++  const scope = await getTenantRecordScope(organizationId);
++  const existing = await prisma.emailTemplate.findFirst({
++    where: { id, ...scope },
++    select: { id: true },
++  });
++  if (!existing) throw new Error("Template not found");
++
++  if (data.name) {
++    const duplicate = await prisma.emailTemplate.findFirst({
++      where: {
++        organizationId,
++        name: data.name.trim(),
++        id: { not: existing.id },
++      },
++      select: { id: true },
++    });
++    if (duplicate) throw new Error("Template name already exists");
++  }
++
++  return prisma.emailTemplate.update({
++    where: { id: existing.id },
++    data: {
++      organizationId,
++      ...(data.name ? { name: data.name.trim() } : {}),
++      ...(data.subject ? { subject: data.subject } : {}),
++      ...(data.body ? { body: data.body } : {}),
++    },
++  });
+ }
+ 
+-export async function deleteEmailTemplate(id: string) {
+-  return prisma.emailTemplate.delete({ where: { id } });
++export async function deleteEmailTemplate(
++  organizationId: string,
++  id: string,
++) {
++  const scope = await getTenantRecordScope(organizationId);
++  const existing = await prisma.emailTemplate.findFirst({
++    where: { id, ...scope },
++    select: { id: true },
++  });
++  if (!existing) throw new Error("Template not found");
++
++  return prisma.emailTemplate.delete({ where: { id: existing.id } });
+ }
+diff --git a/features/email/services/imap-service.ts b/features/email/services/imap-service.ts
+index b323f68..0b395d7 100644
+--- a/features/email/services/imap-service.ts
++++ b/features/email/services/imap-service.ts
+@@ -1,3 +1,4 @@
++import crypto from "crypto";
+ import Imap from "imap";
+ import { simpleParser } from "mailparser";
+ import type { EmailConfig } from "@prisma/client";
+@@ -15,69 +16,52 @@ type PollResult = {
+   error?: string;
+ };
+ 
+-/**
+- * Polls all active IMAP mailboxes for unseen messages.
+- * Returns per-mailbox results for visibility into failures.
+- */
+-export async function pollAllInboxes(): Promise<PollResult[]> {
+-  const configs = await getActiveEmailConfigs();
+-
+-  if (configs.length === 0) {
+-    return [];
+-  }
+-
++export async function pollAllInboxes(
++  organizationId: string,
++): Promise<PollResult[]> {
++  const configs = await getActiveEmailConfigs(organizationId);
+   const results = await Promise.allSettled(
+-    configs.map(async (config) => {
+-      const processed = await pollSingleInbox(config);
+-      return {
+-        mailboxId: config.id,
+-        mailboxName: config.name,
+-        processed,
+-      };
+-    }),
++    configs.map(async (config) => ({
++      mailboxId: config.id,
++      mailboxName: config.name,
++      processed: await pollSingleInbox(config, organizationId),
++    })),
+   );
+ 
+-  return results.map((r, i) =>
+-    r.status === "fulfilled"
+-      ? r.value
++  return results.map((result, index) =>
++    result.status === "fulfilled"
++      ? result.value
+       : {
+-          mailboxId: configs[i].id,
+-          mailboxName: configs[i].name,
++          mailboxId: configs[index].id,
++          mailboxName: configs[index].name,
+           processed: 0,
+-          error: r.reason instanceof Error ? r.reason.message : "Unknown error",
++          error:
++            result.reason instanceof Error
++              ? result.reason.message
++              : "Unknown error",
+         },
+   );
+ }
+ 
+-/**
+- * Polls a single IMAP inbox by mailbox ID.
+- */
+ export async function pollInboxById(
++  organizationId: string,
+   mailboxId: string,
+-): Promise<{ processed: number }> {
+-  const config = await getEmailConfigById(mailboxId);
+-  if (!config || !config.isActive) {
+-    return { processed: 0 };
+-  }
+-  const processed = await pollSingleInbox(config);
+-  return { processed };
++) {
++  const config = await getEmailConfigById(mailboxId, organizationId);
++  if (!config?.isActive) return { processed: 0 };
++  return { processed: await pollSingleInbox(config, organizationId) };
+ }
+ 
+-/**
+- * @deprecated Use pollAllInboxes() or pollInboxById() instead.
+- * Polls the default mailbox (backward-compatible).
+- */
+-export async function pollInbox(): Promise<{ processed: number }> {
+-  const config = await getEmailConfig();
+-  if (!config || !config.isActive) {
+-    return { processed: 0 };
+-  }
+-  const processed = await pollSingleInbox(config);
+-  return { processed };
++export async function pollInbox(organizationId: string) {
++  const config = await getEmailConfig(organizationId);
++  if (!config?.isActive) return { processed: 0 };
++  return { processed: await pollSingleInbox(config, organizationId) };
+ }
+ 
+-/** Internal: polls a single IMAP mailbox config. */
+-function pollSingleInbox(config: EmailConfig): Promise<number> {
++function pollSingleInbox(
++  config: EmailConfig,
++  organizationId: string,
++): Promise<number> {
+   return new Promise((resolve, reject) => {
+     const imap = new Imap({
+       user: config.imapUser,
+@@ -85,65 +69,87 @@ function pollSingleInbox(config: EmailConfig): Promise<number> {
+       host: config.imapHost,
+       port: config.imapPort,
+       tls: true,
+-      tlsOptions: { rejectUnauthorized: false },
++      tlsOptions: {
++        rejectUnauthorized: process.env.ALLOW_INSECURE_EMAIL_TLS !== "true",
++      },
+     });
+ 
+-    let processed = 0;
++    const processingTasks: Promise<void>[] = [];
++    let settled = false;
++
++    function finish(error?: unknown) {
++      if (settled) return;
++      settled = true;
++      if (error) reject(error);
++      else resolve(processingTasks.length);
++    }
+ 
+     imap.once("ready", () => {
+-      imap.openBox("INBOX", false, (err) => {
+-        if (err) {
++      imap.openBox("INBOX", false, (openError) => {
++        if (openError) {
+           imap.end();
+-          return reject(err);
++          return finish(openError);
+         }
+ 
+-        imap.search(["UNSEEN"], (searchErr, uids) => {
+-          if (searchErr) {
++        imap.search(["UNSEEN"], (searchError, uids) => {
++          if (searchError) {
+             imap.end();
+-            return reject(searchErr);
++            return finish(searchError);
+           }
+ 
+-          if (!uids || uids.length === 0) {
++          if (!uids?.length) {
+             imap.end();
+-            return resolve(0);
++            return finish();
+           }
+ 
+-          const fetch = imap.fetch(uids, { bodies: "", markSeen: true });
+-
+-          fetch.on("message", (msg) => {
+-            msg.on("body", (stream) => {
+-              simpleParser(stream as unknown as import("stream").Readable)
+-                .then(async (parsed) => {
+-                  const from = parsed.from?.value?.[0];
+-                  if (!from?.address) return;
+-
+-                  await processInboundEmail({
+-                    from: from.address,
+-                    fromName: from.name || from.address.split("@")[0],
+-                    subject: parsed.subject || "(no subject)",
+-                    body: parsed.text || parsed.html || "",
+-                    messageId: parsed.messageId || crypto.randomUUID(),
+-                    inReplyTo: parsed.inReplyTo || undefined,
+-                    mailboxId: config.id,
+-                  });
+-
+-                  processed++;
+-                })
+-                .catch((parseErr) => {
+-                  console.error("Failed to parse email:", parseErr);
++          const fetcher = imap.fetch(uids.slice(0, 100), {
++            bodies: "",
++            markSeen: true,
++          });
++
++          fetcher.on("message", (message) => {
++            message.on("body", (stream) => {
++              const task = simpleParser(
++                stream as unknown as import("stream").Readable,
++              ).then(async (parsed) => {
++                const from = parsed.from?.value?.[0];
++                if (!from?.address) return;
++
++                await processInboundEmail({
++                  organizationId,
++                  from: from.address,
++                  fromName: from.name || from.address.split("@")[0],
++                  subject: parsed.subject || "(no subject)",
++                  body: parsed.text || parsed.html || "",
++                  messageId: parsed.messageId || crypto.randomUUID(),
++                  inReplyTo: parsed.inReplyTo || undefined,
++                  mailboxId: config.id,
+                 });
++              });
++              processingTasks.push(task);
+             });
+           });
+ 
+-          fetch.once("end", () => {
++          fetcher.once("error", (error) => {
+             imap.end();
++            finish(error);
++          });
++
++          fetcher.once("end", async () => {
++            try {
++              await Promise.all(processingTasks);
++              imap.end();
++              finish();
++            } catch (error) {
++              imap.end();
++              finish(error);
++            }
+           });
+         });
+       });
+     });
+ 
+-    imap.once("error", reject);
+-    imap.once("end", () => resolve(processed));
++    imap.once("error", finish);
+     imap.connect();
+   });
+ }
+diff --git a/features/email/services/smtp-service.ts b/features/email/services/smtp-service.ts
+index 205ada3..92e77af 100644
+--- a/features/email/services/smtp-service.ts
++++ b/features/email/services/smtp-service.ts
+@@ -6,16 +6,18 @@ import {
+ } from "@/features/email/services/email-config-service";
+ 
+ export async function sendEmail(opts: {
++  organizationId: string;
+   to: string;
+   subject: string;
+   html: string;
+   ticketId: string;
+   messageId: string;
+   mailboxId?: string;
++  inReplyTo?: string;
+ }) {
+   const config = opts.mailboxId
+-    ? await getEmailConfigById(opts.mailboxId)
+-    : await getEmailConfig();
++    ? await getEmailConfigById(opts.mailboxId, opts.organizationId)
++    : await getEmailConfig(opts.organizationId);
+ 
+   if (!config || !config.isActive) {
+     throw new Error("Email integration is not configured or inactive");
+@@ -25,22 +27,26 @@ export async function sendEmail(opts: {
+     host: config.smtpHost,
+     port: config.smtpPort,
+     secure: config.smtpPort === 465,
+-    auth: {
+-      user: config.smtpUser,
+-      pass: config.smtpPass,
++    auth: { user: config.smtpUser, pass: config.smtpPass },
++    tls: {
++      rejectUnauthorized: process.env.ALLOW_INSECURE_EMAIL_TLS !== "true",
+     },
+   });
+ 
+   try {
+-    await transport.sendMail({
++    const result = await transport.sendMail({
+       from: `"${config.fromName}" <${config.fromAddress}>`,
+       to: opts.to,
+       subject: opts.subject,
+       html: opts.html,
++      ...(opts.inReplyTo
++        ? { inReplyTo: opts.inReplyTo, references: opts.inReplyTo }
++        : {}),
+     });
+ 
+     await prisma.emailLog.create({
+       data: {
++        organizationId: opts.organizationId,
+         ticketId: opts.ticketId,
+         messageId: opts.messageId,
+         mailboxId: config.id,
+@@ -49,11 +55,15 @@ export async function sendEmail(opts: {
+         status: "sent",
+       },
+     });
+-  } catch (err) {
+-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
++
++    return { messageId: result.messageId, mailboxId: config.id };
++  } catch (error) {
++    const errorMessage =
++      error instanceof Error ? error.message : "Unknown error";
+ 
+     await prisma.emailLog.create({
+       data: {
++        organizationId: opts.organizationId,
+         ticketId: opts.ticketId,
+         messageId: opts.messageId,
+         mailboxId: config.id,
+@@ -64,6 +74,8 @@ export async function sendEmail(opts: {
+       },
+     });
+ 
+-    throw err;
++    throw error;
++  } finally {
++    transport.close();
+   }
+ }

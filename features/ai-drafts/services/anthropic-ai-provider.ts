@@ -2,6 +2,7 @@ import type {
   AiDraftProvider,
   GenerateDraftInput,
 } from "@/features/ai-drafts/types/ai-provider";
+import { getEnabledProviderConfiguration } from "@/features/providers/services/provider-service";
 
 const toneInstructions: Record<string, string> = {
   professional: "Use a formal, business-appropriate tone.",
@@ -27,22 +28,25 @@ Rules:
 - Sign as Support Team.`;
 }
 
-/**
- * Anthropic provider stub.
- * Set AI_PROVIDER=anthropic and ANTHROPIC_API_KEY to activate.
- * Uses the Messages API with Claude models.
- */
 export const anthropicProvider: AiDraftProvider = {
   async generateDraft(input: GenerateDraftInput) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const configuredProvider =
+      await getEnabledProviderConfiguration("anthropic");
+    const apiKey =
+      configuredProvider?.credential ?? process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY is not configured");
+      throw new Error("Anthropic is not configured");
     }
 
-    const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
+    const model =
+      configuredProvider?.defaultModel ||
+      process.env.ANTHROPIC_MODEL ||
+      "claude-sonnet-4-20250514";
+    const baseUrl =
+      configuredProvider?.baseUrl || "https://api.anthropic.com/v1";
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(`${baseUrl}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -56,23 +60,21 @@ export const anthropicProvider: AiDraftProvider = {
           "You are a helpful customer support assistant. Write concise, professional replies.",
         messages: [{ role: "user", content: buildPrompt(input) }],
       }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Anthropic API error ${response.status}: ${text}`);
+      throw new Error(
+        `Anthropic API request failed with HTTP ${response.status}`,
+      );
     }
 
     const data = (await response.json()) as {
       content: Array<{ type: string; text: string }>;
     };
+    const draft = data.content.find((block) => block.type === "text")?.text;
 
-    const draft = data.content.find((b) => b.type === "text")?.text;
-
-    if (!draft) {
-      throw new Error("Anthropic returned an empty response");
-    }
-
+    if (!draft) throw new Error("Anthropic returned an empty response");
     return { draft };
   },
 };

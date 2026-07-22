@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
-const sessionCookieName = "support_session";
+export const sessionCookieName = "support_session";
 
 function getSecret() {
   const secret = process.env.SESSION_SECRET;
@@ -14,11 +14,13 @@ function getSecret() {
   return new TextEncoder().encode(secret);
 }
 
-type SessionUser = {
+export type SessionUser = {
   id: string;
   name: string;
   email: string;
   role: string;
+  organizationId?: string;
+  authProvider?: "clerk" | "legacy";
 };
 
 export async function createSessionValue(user: SessionUser) {
@@ -27,8 +29,11 @@ export async function createSessionValue(user: SessionUser) {
     name: user.name,
     email: user.email,
     role: user.role,
+    organizationId: user.organizationId,
   })
     .setProtectedHeader({ alg: "HS256" })
+    .setIssuer("ai-support-workflow-platform")
+    .setAudience("product-user")
     .setIssuedAt()
     .setExpirationTime("24h")
     .sign(getSecret());
@@ -40,13 +45,30 @@ export async function parseSessionValue(
   if (!value) return null;
 
   try {
-    const { payload } = await jwtVerify(value, getSecret());
+    const { payload } = await jwtVerify(value, getSecret(), {
+      issuer: "ai-support-workflow-platform",
+      audience: "product-user",
+    });
+
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.name !== "string" ||
+      typeof payload.email !== "string" ||
+      typeof payload.role !== "string"
+    ) {
+      return null;
+    }
 
     return {
-      id: payload.sub as string,
-      name: payload.name as string,
-      email: payload.email as string,
-      role: payload.role as string,
+      id: payload.sub,
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+      organizationId:
+        typeof payload.organizationId === "string"
+          ? payload.organizationId
+          : undefined,
+      authProvider: "legacy",
     };
   } catch {
     return null;

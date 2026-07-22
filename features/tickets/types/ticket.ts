@@ -1,6 +1,6 @@
-export type TicketStatus = "open" | "pending" | "closed";
+export type TicketStatus = "open" | "pending" | "resolved" | "closed";
 
-export type TicketPriority = "low" | "normal" | "high";
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
 
 export type TicketSummary = {
   id: string;

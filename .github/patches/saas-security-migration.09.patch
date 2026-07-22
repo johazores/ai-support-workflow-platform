@@ -1,0 +1,344 @@
+diff --git a/features/tickets/services/reply-service.ts b/features/tickets/services/reply-service.ts
+index 5429558..1ace5af 100644
+--- a/features/tickets/services/reply-service.ts
++++ b/features/tickets/services/reply-service.ts
+@@ -1,4 +1,5 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
+ import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
+ 
+@@ -9,14 +10,9 @@ type SendManualReplyInput = {
+ };
+ 
+ export async function sendManualReply(input: SendManualReplyInput) {
++  const scope = await getTenantRecordScope(input.organizationId);
+   const ticket = await prisma.ticket.findFirst({
+-    where: {
+-      id: input.ticketId,
+-      OR: [
+-        { organizationId: input.organizationId },
+-        { organizationId: null },
+-      ],
+-    },
++    where: { id: input.ticketId, ...scope },
+     include: { customer: true },
+   });
+ 
+@@ -48,11 +44,12 @@ export async function sendManualReply(input: SendManualReplyInput) {
+     },
+   });
+ 
+-  broadcastTicketUpdate(ticket.id, "message-created", {
++  broadcastTicketUpdate(input.organizationId, ticket.id, "message-created", {
+     messageId: message.id,
+   });
+ 
+   await sendTicketEmail({
++    organizationId: input.organizationId,
+     ticketId: ticket.id,
+     messageId: message.id,
+     to: ticket.customer.email,
+diff --git a/features/tickets/services/ticket-service.ts b/features/tickets/services/ticket-service.ts
+index 09d675d..8648ab0 100644
+--- a/features/tickets/services/ticket-service.ts
++++ b/features/tickets/services/ticket-service.ts
+@@ -1,5 +1,6 @@
+ import { prisma } from "@/lib/prisma";
+ import type { Prisma } from "@prisma/client";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ import type {
+   TicketStatus,
+   TicketSummary,
+@@ -11,26 +12,20 @@ import {
+   requireOrganizationMembership,
+ } from "@/features/organizations/services/organization-service";
+ 
+-function tenantTicketFilter(organizationId: string): Prisma.TicketWhereInput {
+-  return {
+-    OR: [{ organizationId }, { organizationId: null }],
+-  };
+-}
+-
+ async function findTenantTicket(ticketId: string, organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
++
+   return prisma.ticket.findFirst({
+-    where: {
+-      id: ticketId,
+-      ...tenantTicketFilter(organizationId),
+-    },
++    where: { id: ticketId, ...scope },
+   });
+ }
+ 
+ export async function getTicketSummaries(
+   organizationId: string,
+ ): Promise<TicketSummary[]> {
++  const scope = await getTenantRecordScope(organizationId);
+   const tickets = await prisma.ticket.findMany({
+-    where: tenantTicketFilter(organizationId),
++    where: scope,
+     orderBy: { updatedAt: "desc" },
+     include: {
+       customer: true,
+@@ -48,11 +43,10 @@ export async function getTicketById(
+   ticketId: string,
+   organizationId: string,
+ ) {
++  const scope = await getTenantRecordScope(organizationId);
++
+   return prisma.ticket.findFirst({
+-    where: {
+-      id: ticketId,
+-      ...tenantTicketFilter(organizationId),
+-    },
++    where: { id: ticketId, ...scope },
+     include: {
+       customer: true,
+       messages: { orderBy: { createdAt: "asc" } },
+@@ -85,7 +79,7 @@ export async function updateTicketStatus(
+   });
+ 
+   await executeWorkflowRules(ticketId, { organizationId });
+-  broadcastTicketUpdate(ticketId, "status-changed", { status });
++  broadcastTicketUpdate(organizationId, ticketId, "status-changed", { status });
+ 
+   return ticket;
+ }
+@@ -140,7 +134,7 @@ export async function assignTicket(input: AssignTicketInput) {
+     organizationId: input.organizationId,
+   });
+ 
+-  broadcastTicketUpdate(input.ticketId, "ticket-assigned", {
++  broadcastTicketUpdate(input.organizationId, input.ticketId, "ticket-assigned", {
+     assigneeName: assignee.name,
+   });
+ 
+@@ -167,9 +161,8 @@ const MAX_PAGE_SIZE = 100;
+ export async function getTickets(
+   input: GetTicketsInput,
+ ): Promise<PaginatedTickets> {
+-  const filters: Prisma.TicketWhereInput[] = [
+-    tenantTicketFilter(input.organizationId),
+-  ];
++  const tenantScope = await getTenantRecordScope(input.organizationId);
++  const filters: Prisma.TicketWhereInput[] = [tenantScope];
+   const limit = Math.min(
+     Math.max(input.limit ?? DEFAULT_PAGE_SIZE, 1),
+     MAX_PAGE_SIZE,
+diff --git a/features/workflows/services/workflow-execution-query-service.ts b/features/workflows/services/workflow-execution-query-service.ts
+index bfd7e2c..8b198bf 100644
+--- a/features/workflows/services/workflow-execution-query-service.ts
++++ b/features/workflows/services/workflow-execution-query-service.ts
+@@ -1,4 +1,5 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export async function listWorkflowExecutions(
+   organizationId: string,
+@@ -7,15 +8,18 @@ export async function listWorkflowExecutions(
+   const executions = await prisma.workflowExecution.findMany({
+     where: { organizationId },
+     orderBy: { createdAt: "desc" },
+-    take: Math.min(options?.limit ?? 50, 100),
++    take: Math.min(Math.max(options?.limit ?? 50, 1), 100),
+   });
+ 
+   const workflowIds = [
+     ...new Set(executions.map((execution) => execution.workflowId)),
+   ];
+-  const legacyRules = await prisma.workflowRule.findMany({
+-    where: { id: { in: workflowIds } },
+-  });
++  const scope = await getTenantRecordScope(organizationId);
++  const legacyRules = workflowIds.length
++    ? await prisma.workflowRule.findMany({
++        where: { id: { in: workflowIds }, ...scope },
++      })
++    : [];
+   const names = new Map(legacyRules.map((rule) => [rule.id, rule.name]));
+ 
+   return executions.map((execution) => ({
+@@ -33,12 +37,15 @@ export async function getWorkflowExecution(
+   });
+   if (!execution) return null;
+ 
++  const scope = await getTenantRecordScope(organizationId);
+   const [steps, rule] = await Promise.all([
+     prisma.workflowExecutionStep.findMany({
+       where: { executionId, organizationId },
+       orderBy: { createdAt: "asc" },
+     }),
+-    prisma.workflowRule.findUnique({ where: { id: execution.workflowId } }),
++    prisma.workflowRule.findFirst({
++      where: { id: execution.workflowId, ...scope },
++    }),
+   ]);
+ 
+   return {
+diff --git a/features/workflows/services/workflow-execution-service.ts b/features/workflows/services/workflow-execution-service.ts
+index 826962a..822f922 100644
+--- a/features/workflows/services/workflow-execution-service.ts
++++ b/features/workflows/services/workflow-execution-service.ts
+@@ -1,9 +1,11 @@
+ import { prisma } from "@/lib/prisma";
+ import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
+ import { addTagToTicket } from "@/features/tags/services/tag-service";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ import {
+   ensureDefaultOrganization,
+   ensureLegacyOrganizationForUser,
++  requireOrganizationMembership,
+ } from "@/features/organizations/services/organization-service";
+ 
+ type WorkflowAction = {
+@@ -113,8 +115,14 @@ async function executeAction(input: {
+     });
+ 
+     if (!user) throw new Error(`Assignee ${action.value} was not found`);
+-    const membership = await ensureLegacyOrganizationForUser(user);
+-    if (membership.organizationId !== organizationId) {
++    let membership = await requireOrganizationMembership(user.id, organizationId);
++    if (!membership) {
++      const defaultOrganization = await ensureDefaultOrganization();
++      if (defaultOrganization.id === organizationId) {
++        membership = await ensureLegacyOrganizationForUser(user);
++      }
++    }
++    if (!membership || membership.organizationId !== organizationId) {
+       throw new Error(`Assignee ${action.value} is not in this organization`);
+     }
+ 
+@@ -131,6 +139,7 @@ async function executeAction(input: {
+ 
+   if (action.type === "generate-draft") {
+     const result = await generateAiDraftReply({
++      organizationId,
+       subject: ticket.subject,
+       customerName: ticket.customer.name,
+       customerMessage: ticket.messages[0]?.body ?? "",
+@@ -146,7 +155,7 @@ async function executeAction(input: {
+     return { message: "Generated AI draft", draftId: draft.id };
+   }
+ 
+-  await addTagToTicket(ticket.id, action.value);
++  await addTagToTicket(ticket.id, action.value, organizationId);
+   return { message: `Added tag ${action.value}` };
+ }
+ 
+@@ -162,8 +171,11 @@ export async function executeWorkflowRules(
+     return { executed: false, message: "Skipped to prevent loop." };
+   }
+ 
+-  const ticket = await prisma.ticket.findUnique({
+-    where: { id: ticketId },
++  const defaultOrganization = await ensureDefaultOrganization();
++  const organizationId = context?.organizationId || defaultOrganization.id;
++  const scope = await getTenantRecordScope(organizationId);
++  const ticket = await prisma.ticket.findFirst({
++    where: { id: ticketId, ...scope },
+     include: {
+       customer: true,
+       messages: { orderBy: { createdAt: "desc" }, take: 1 },
+@@ -172,11 +184,7 @@ export async function executeWorkflowRules(
+ 
+   if (!ticket) return { executed: false, message: "Ticket not found." };
+ 
+-  const defaultOrganization = await ensureDefaultOrganization();
+-  const organizationId =
+-    context?.organizationId || ticket.organizationId || defaultOrganization.id;
+-
+-  if (ticket.organizationId !== organizationId) {
++  if (!ticket.organizationId) {
+     await prisma.ticket.update({
+       where: { id: ticket.id },
+       data: { organizationId },
+@@ -184,10 +192,7 @@ export async function executeWorkflowRules(
+   }
+ 
+   const rules = await prisma.workflowRule.findMany({
+-    where: {
+-      isActive: true,
+-      OR: [{ organizationId }, { organizationId: null }],
+-    },
++    where: { isActive: true, ...scope },
+   });
+ 
+   const executedRules: string[] = [];
+diff --git a/features/workflows/services/workflow-mutation-service.ts b/features/workflows/services/workflow-mutation-service.ts
+index 2636764..b19c9e1 100644
+--- a/features/workflows/services/workflow-mutation-service.ts
++++ b/features/workflows/services/workflow-mutation-service.ts
+@@ -1,8 +1,5 @@
+ import { prisma } from "@/lib/prisma";
+-
+-function organizationWhere(organizationId: string) {
+-  return { OR: [{ organizationId }, { organizationId: null }] };
+-}
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ type CreateWorkflowRuleInput = {
+   organizationId: string;
+@@ -16,8 +13,8 @@ export async function createWorkflowRule(input: CreateWorkflowRuleInput) {
+   return prisma.workflowRule.create({
+     data: {
+       organizationId: input.organizationId,
+-      name: input.name,
+-      description: input.description ?? "",
++      name: input.name.trim(),
++      description: input.description?.trim() ?? "",
+       trigger: input.trigger,
+       actions: input.actions,
+     },
+@@ -31,13 +28,10 @@ type UpdateWorkflowStatusInput = {
+ };
+ 
+ export async function updateWorkflowStatus(input: UpdateWorkflowStatusInput) {
++  const scope = await getTenantRecordScope(input.organizationId);
+   const workflow = await prisma.workflowRule.findFirst({
+-    where: {
+-      id: input.workflowId,
+-      ...organizationWhere(input.organizationId),
+-    },
++    where: { id: input.workflowId, ...scope },
+   });
+-
+   if (!workflow) throw new Error("Workflow not found");
+ 
+   return prisma.workflowRule.update({
+@@ -55,13 +49,11 @@ type DeleteWorkflowInput = {
+ };
+ 
+ export async function deleteWorkflowRule(input: DeleteWorkflowInput) {
++  const scope = await getTenantRecordScope(input.organizationId);
+   const workflow = await prisma.workflowRule.findFirst({
+-    where: {
+-      id: input.workflowId,
+-      ...organizationWhere(input.organizationId),
+-    },
++    where: { id: input.workflowId, ...scope },
+   });
+-
+   if (!workflow) throw new Error("Workflow not found");
++
+   return prisma.workflowRule.delete({ where: { id: workflow.id } });
+ }
+diff --git a/features/workflows/services/workflow-query-service.ts b/features/workflows/services/workflow-query-service.ts
+index ee4d0dd..6418e3d 100644
+--- a/features/workflows/services/workflow-query-service.ts
++++ b/features/workflows/services/workflow-query-service.ts
+@@ -1,10 +1,10 @@
+ import { prisma } from "@/lib/prisma";
++import { getTenantRecordScope } from "@/features/organizations/services/tenant-record-scope-service";
+ 
+ export async function getWorkflowRules(organizationId: string) {
++  const scope = await getTenantRecordScope(organizationId);
+   return prisma.workflowRule.findMany({
+-    where: {
+-      OR: [{ organizationId }, { organizationId: null }],
+-    },
++    where: scope,
+     orderBy: { createdAt: "desc" },
+   });
+ }

@@ -1,0 +1,246 @@
+# SaaS Migration Validation Failure
+
+The one-time migration job failed with exit code 2.
+
+```text
+[90mapp/globals.css[39m 34ms (unchanged)
+[90mapp/inbox/[ticket-id]/error.tsx[39m 4ms (unchanged)
+[90mapp/inbox/[ticket-id]/loading.tsx[39m 2ms (unchanged)
+[90mapp/inbox/[ticket-id]/page.tsx[39m 5ms (unchanged)
+[90mapp/inbox/error.tsx[39m 3ms (unchanged)
+[90mapp/inbox/loading.tsx[39m 2ms (unchanged)
+[90mapp/inbox/page.tsx[39m 3ms (unchanged)
+app/layout.tsx 6ms
+[90mapp/login/page.tsx[39m 3ms (unchanged)
+[90mapp/page.tsx[39m 11ms (unchanged)
+[90mapp/root/audit-logs/page.tsx[39m 11ms (unchanged)
+[90mapp/root/login/page.tsx[39m 2ms (unchanged)
+[90mapp/root/organizations/page.tsx[39m 2ms (unchanged)
+[90mapp/root/page.tsx[39m 11ms (unchanged)
+[90mapp/root/providers/page.tsx[39m 3ms (unchanged)
+[90mapp/root/settings/page.tsx[39m 3ms (unchanged)
+[90mapp/root/system-health/page.tsx[39m 17ms (unchanged)
+[90mapp/sign-in/[[...sign-in]]/page.tsx[39m 2ms (unchanged)
+[90mapp/sign-up/[[...sign-up]]/page.tsx[39m 2ms (unchanged)
+pages/api/ai-drafts/[draft-id]/send.ts 5ms
+[90mpages/api/ai-drafts/generate.ts[39m 10ms (unchanged)
+pages/api/ai-drafts/save.ts 7ms
+[90mpages/api/analytics/index.ts[39m 5ms (unchanged)
+[90mpages/api/audit-logs/index.ts[39m 6ms (unchanged)
+[90mpages/api/auth/login.ts[39m 4ms (unchanged)
+[90mpages/api/auth/logout.ts[39m 2ms (unchanged)
+pages/api/customers/[id].ts 4ms
+[90mpages/api/customers/index.ts[39m 3ms (unchanged)
+[90mpages/api/email-config/[id].ts[39m 19ms (unchanged)
+[90mpages/api/email-config/index.ts[39m 11ms (unchanged)
+[90mpages/api/email-logs/index.ts[39m 5ms (unchanged)
+pages/api/email-templates/[id].ts 6ms
+[90mpages/api/email-templates/index.ts[39m 7ms (unchanged)
+[90mpages/api/email/poll.ts[39m 5ms (unchanged)
+[90mpages/api/health.ts[39m 2ms (unchanged)
+[90mpages/api/notifications/index.ts[39m 6ms (unchanged)
+[90mpages/api/readiness.ts[39m 3ms (unchanged)
+[90mpages/api/root/auth/login.ts[39m 3ms (unchanged)
+[90mpages/api/root/auth/logout.ts[39m 2ms (unchanged)
+[90mpages/api/root/auth/me.ts[39m 2ms (unchanged)
+[90mpages/api/root/organizations/[id].ts[39m 5ms (unchanged)
+[90mpages/api/root/providers/[id]/test.ts[39m 4ms (unchanged)
+[90mpages/api/root/providers/index.ts[39m 7ms (unchanged)
+[90mpages/api/root/settings/[id].ts[39m 3ms (unchanged)
+[90mpages/api/root/settings/index.ts[39m 10ms (unchanged)
+[90mpages/api/saved-replies/[id].ts[39m 6ms (unchanged)
+[90mpages/api/saved-replies/index.ts[39m 5ms (unchanged)
+[90mpages/api/sla-policies/[id].ts[39m 6ms (unchanged)
+[90mpages/api/sla-policies/index.ts[39m 2ms (unchanged)
+pages/api/tags/index.ts 5ms
+pages/api/tickets/[ticket-id]/assign.ts 4ms
+pages/api/tickets/[ticket-id]/csat.ts 4ms
+[90mpages/api/tickets/[ticket-id]/events.ts[39m 9ms (unchanged)
+pages/api/tickets/[ticket-id]/notes.ts 4ms
+[90mpages/api/tickets/[ticket-id]/priority.ts[39m 4ms (unchanged)
+pages/api/tickets/[ticket-id]/reply.ts 4ms
+[90mpages/api/tickets/[ticket-id]/sla.ts[39m 2ms (unchanged)
+[90mpages/api/tickets/[ticket-id]/status.ts[39m 4ms (unchanged)
+pages/api/tickets/[ticket-id]/tags.ts 4ms
+[90mpages/api/tickets/[ticket-id]/workflows/run.ts[39m 3ms (unchanged)
+[90mpages/api/tickets/bulk.ts[39m 10ms (unchanged)
+pages/api/tickets/index.ts 6ms
+[90mpages/api/users/[id].ts[39m 8ms (unchanged)
+[90mpages/api/users/index.ts[39m 9ms (unchanged)
+pages/api/webhooks/inbound-email.ts 13ms
+[90mpages/api/workflows/[workflow-id]/index.ts[39m 5ms (unchanged)
+[90mpages/api/workflows/[workflow-id]/status.ts[39m 7ms (unchanged)
+[90mpages/api/workflows/create.ts[39m 6ms (unchanged)
+[90mpages/api/workflows/index.ts[39m 6ms (unchanged)
+[90mfeatures/ai-drafts/components/ai-draft-panel.tsx[39m 9ms (unchanged)
+[90mfeatures/ai-drafts/components/ai-usage-log-list.tsx[39m 7ms (unchanged)
+[90mfeatures/ai-drafts/components/send-draft-button.tsx[39m 4ms (unchanged)
+[90mfeatures/ai-drafts/services/ai-draft-client-service.ts[39m 3ms (unchanged)
+[90mfeatures/ai-drafts/services/ai-draft-service.ts[39m 3ms (unchanged)
+[90mfeatures/ai-drafts/services/ai-provider-chain.test.ts[39m 8ms (unchanged)
+[90mfeatures/ai-drafts/services/ai-provider-chain.ts[39m 13ms (unchanged)
+[90mfeatures/ai-drafts/services/ai-usage-query-service.ts[39m 2ms (unchanged)
+[90mfeatures/ai-drafts/services/anthropic-ai-provider.ts[39m 8ms (unchanged)
+features/ai-drafts/services/classification-service.ts 7ms
+[90mfeatures/ai-drafts/services/draft-service.ts[39m 2ms (unchanged)
+[90mfeatures/ai-drafts/services/mock-ai-provider.test.ts[39m 7ms (unchanged)
+[90mfeatures/ai-drafts/services/mock-ai-provider.ts[39m 5ms (unchanged)
+[90mfeatures/ai-drafts/services/openai-ai-provider.ts[39m 4ms (unchanged)
+features/ai-drafts/services/send-draft-service.ts 6ms
+[90mfeatures/ai-drafts/types/ai-provider.ts[39m 2ms (unchanged)
+[90mfeatures/analytics/components/analytics-dashboard.tsx[39m 13ms (unchanged)
+features/analytics/services/analytics-service.ts 22ms
+[90mfeatures/audit/components/audit-log-viewer.tsx[39m 19ms (unchanged)
+[90mfeatures/audit/services/audit-event-service.ts[39m 2ms (unchanged)
+features/audit/services/audit-service.ts 6ms
+[90mfeatures/auth/components/current-user-badge.tsx[39m 2ms (unchanged)
+[90mfeatures/auth/components/login-form.tsx[39m 8ms (unchanged)
+[90mfeatures/auth/components/logout-button.tsx[39m 3ms (unchanged)
+features/auth/components/product-account-control.tsx 2ms
+features/auth/components/user-manager.tsx 27ms
+[90mfeatures/auth/services/auth-client-service.ts[39m 2ms (unchanged)
+[90mfeatures/auth/services/auth-guard-service.ts[39m 7ms (unchanged)
+features/auth/services/auth-service.ts 5ms
+features/auth/services/clerk-config.ts 1ms
+[90mfeatures/auth/services/clerk-session-service.ts[39m 6ms (unchanged)
+features/auth/services/clerk-user-service.ts 21ms
+[90mfeatures/auth/services/password-service.ts[39m 2ms (unchanged)
+[90mfeatures/auth/services/role-service.test.ts[39m 8ms (unchanged)
+[90mfeatures/auth/services/role-service.ts[39m 5ms (unchanged)
+[90mfeatures/auth/services/session-service.ts[39m 9ms (unchanged)
+[90mfeatures/auth/services/user-client-service.ts[39m 4ms (unchanged)
+features/auth/services/user-management-service.ts 29ms
+[90mfeatures/csat/components/csat-widget.tsx[39m 10ms (unchanged)
+features/csat/services/csat-service.ts 6ms
+[90mfeatures/customers/components/customer-directory.tsx[39m 7ms (unchanged)
+[90mfeatures/customers/components/customer-history.tsx[39m 8ms (unchanged)
+[90mfeatures/customers/services/customer-client-service.ts[39m 1ms (unchanged)
+[90mfeatures/customers/services/customer-service.ts[39m 4ms (unchanged)
+[90mfeatures/email-logs/components/email-log-viewer.tsx[39m 10ms (unchanged)
+[90mfeatures/email-logs/services/email-log-client-service.ts[39m 3ms (unchanged)
+[90mfeatures/email-logs/services/email-log-service.ts[39m 3ms (unchanged)
+[90mfeatures/email/components/email-config-form.tsx[39m 17ms (unchanged)
+[90mfeatures/email/components/email-template-builder.tsx[39m 15ms (unchanged)
+features/email/services/email-config-service.ts 11ms
+features/email/services/email-template-service.ts 5ms
+features/email/services/imap-service.ts 17ms
+[90mfeatures/email/services/smtp-service.ts[39m 5ms (unchanged)
+[90mfeatures/notifications/components/notification-bell.tsx[39m 7ms (unchanged)
+[90mfeatures/notifications/components/notification-panel.tsx[39m 6ms (unchanged)
+[90mfeatures/notifications/services/notification-client-service.ts[39m 2ms (unchanged)
+features/notifications/services/notification-service.ts 7ms
+[90mfeatures/organizations/components/root-organization-list.tsx[39m 11ms (unchanged)
+[90mfeatures/organizations/services/organization-service.ts[39m 8ms (unchanged)
+[90mfeatures/organizations/services/root-organization-service.ts[39m 3ms (unchanged)
+[90mfeatures/organizations/services/tenant-record-scope-service.ts[39m 2ms (unchanged)
+[90mfeatures/providers/components/provider-manager.tsx[39m 23ms (unchanged)
+[90mfeatures/providers/services/provider-service.ts[39m 17ms (unchanged)
+[90mfeatures/providers/services/provider-test-service.ts[39m 13ms (unchanged)
+[90mfeatures/root-auth/components/root-login-form.tsx[39m 7ms (unchanged)
+[90mfeatures/root-auth/components/root-logout-button.tsx[39m 3ms (unchanged)
+[90mfeatures/root-auth/services/root-auth-guard-service.ts[39m 1ms (unchanged)
+[90mfeatures/root-auth/services/root-auth-service.ts[39m 9ms (unchanged)
+[90mfeatures/root-auth/services/root-session-service.ts[39m 13ms (unchanged)
+[90mfeatures/saved-replies/components/macro-picker.tsx[39m 7ms (unchanged)
+[90mfeatures/saved-replies/components/saved-reply-manager.tsx[39m 8ms (unchanged)
+[90mfeatures/saved-replies/services/saved-reply-client-service.ts[39m 3ms (unchanged)
+[90mfeatures/saved-replies/services/saved-reply-service.ts[39m 4ms (unchanged)
+[90mfeatures/sla/components/sla-countdown.tsx[39m 5ms (unchanged)
+[90mfeatures/sla/components/sla-policy-editor.tsx[39m 14ms (unchanged)
+[90mfeatures/sla/services/sla-client-service.ts[39m 3ms (unchanged)
+[90mfeatures/sla/services/sla-service.ts[39m 7ms (unchanged)
+[90mfeatures/system-settings/components/system-settings-manager.tsx[39m 14ms (unchanged)
+[90mfeatures/system-settings/services/system-setting-service.ts[39m 4ms (unchanged)
+[90mfeatures/tags/components/tag-badge.tsx[39m 2ms (unchanged)
+[90mfeatures/tags/components/tag-picker.tsx[39m 8ms (unchanged)
+[90mfeatures/tags/services/tag-client-service.ts[39m 2ms (unchanged)
+[90mfeatures/tags/services/tag-service.ts[39m 7ms (unchanged)
+[90mfeatures/tickets/components/internal-note-composer.tsx[39m 5ms (unchanged)
+[90mfeatures/tickets/components/mention-input.tsx[39m 13ms (unchanged)
+[90mfeatures/tickets/components/reply-composer.tsx[39m 5ms (unchanged)
+[90mfeatures/tickets/components/ticket-assignee-select.tsx[39m 6ms (unchanged)
+[90mfeatures/tickets/components/ticket-detail.tsx[39m 24ms (unchanged)
+[90mfeatures/tickets/components/ticket-list.tsx[39m 35ms (unchanged)
+[90mfeatures/tickets/components/ticket-live-updates.tsx[39m 2ms (unchanged)
+[90mfeatures/tickets/components/ticket-priority-select.tsx[39m 6ms (unchanged)
+[90mfeatures/tickets/components/ticket-status-select.tsx[39m 5ms (unchanged)
+[90mfeatures/tickets/services/email-ingestion-service.ts[39m 12ms (unchanged)
+[90mfeatures/tickets/services/email-send-service.ts[39m 7ms (unchanged)
+[90mfeatures/tickets/services/internal-note-service.ts[39m 2ms (unchanged)
+[90mfeatures/tickets/services/reply-service.ts[39m 5ms (unchanged)
+[90mfeatures/tickets/services/ticket-client-service.ts[39m 3ms (unchanged)
+features/tickets/services/ticket-service.ts 11ms
+[90mfeatures/tickets/types/ticket.ts[39m 2ms (unchanged)
+[90mfeatures/tickets/utils/highlight-text.tsx[39m 2ms (unchanged)
+[90mfeatures/workflows/components/create-workflow-form.tsx[39m 7ms (unchanged)
+[90mfeatures/workflows/components/delete-workflow-button.tsx[39m 3ms (unchanged)
+[90mfeatures/workflows/components/run-workflow-button.tsx[39m 3ms (unchanged)
+[90mfeatures/workflows/components/workflow-list.tsx[39m 6ms (unchanged)
+[90mfeatures/workflows/components/workflow-status-toggle.tsx[39m 2ms (unchanged)
+[90mfeatures/workflows/services/workflow-client-service.ts[39m 2ms (unchanged)
+[90mfeatures/workflows/services/workflow-execution-query-service.ts[39m 4ms (unchanged)
+features/workflows/services/workflow-execution-service.ts 17ms
+[90mfeatures/workflows/services/workflow-mutation-service.ts[39m 3ms (unchanged)
+[90mfeatures/workflows/services/workflow-query-service.ts[39m 1ms (unchanged)
+[90mfeatures/workflows/services/workflow-service.ts[39m 1ms (unchanged)
+[90mfeatures/workflows/utils/workflow-utils.test.ts[39m 4ms (unchanged)
+[90mfeatures/workflows/utils/workflow-utils.ts[39m 4ms (unchanged)
+components/layout/app-header.tsx 4ms
+[90mcomponents/layout/root-admin-shell.tsx[39m 3ms (unchanged)
+[90mcomponents/ui/alert.tsx[39m 10ms (unchanged)
+[90mcomponents/ui/button.tsx[39m 6ms (unchanged)
+[90mcomponents/ui/card.tsx[39m 2ms (unchanged)
+[90mcomponents/ui/confirm-dialog.tsx[39m 8ms (unchanged)
+[90mcomponents/ui/empty-state.tsx[39m 8ms (unchanged)
+[90mcomponents/ui/error-boundary.tsx[39m 7ms (unchanged)
+[90mcomponents/ui/input.tsx[39m 5ms (unchanged)
+[90mcomponents/ui/select.tsx[39m 6ms (unchanged)
+[90mcomponents/ui/skeleton.tsx[39m 8ms (unchanged)
+[90mcomponents/ui/status-badge.tsx[39m 6ms (unchanged)
+[90mcomponents/ui/textarea.tsx[39m 5ms (unchanged)
+[90mcomponents/ui/theme-provider.tsx[39m 8ms (unchanged)
+[90mcomponents/ui/theme-toggle.tsx[39m 4ms (unchanged)
+[90mcomponents/ui/toast.tsx[39m 10ms (unchanged)
+[90mlib/api-auth.test.ts[39m 13ms (unchanged)
+[90mlib/api-auth.ts[39m 4ms (unchanged)
+[90mlib/api-client.test.ts[39m 2ms (unchanged)
+[90mlib/api-client.ts[39m 3ms (unchanged)
+[90mlib/email-client.ts[39m 3ms (unchanged)
+[90mlib/prisma.ts[39m 1ms (unchanged)
+[90mlib/root-api-auth.ts[39m 3ms (unchanged)
+[90mlib/secret-encryption.test.ts[39m 6ms (unchanged)
+[90mlib/secret-encryption.ts[39m 8ms (unchanged)
+[90mlib/tenant-api-auth.ts[39m 4ms (unchanged)
+[90mlib/use-async-action.ts[39m 5ms (unchanged)
+[90mlib/use-ticket-events.ts[39m 6ms (unchanged)
+[90mlib/utils.test.ts[39m 8ms (unchanged)
+[90mlib/utils.ts[39m 7ms (unchanged)
+[90mprisma/seed.ts[39m 39ms (unchanged)
+[90mdocs/architecture-decisions.md[39m 72ms (unchanged)
+[90mdocs/architecture.md[39m 77ms (unchanged)
+[90mdocs/case-study.md[39m 32ms (unchanged)
+[90mdocs/implementation-status.md[39m 7ms (unchanged)
+[90mdocs/MIGRATION_VALIDATION_FAILURE.md[39m 5ms (unchanged)
+[90mdocs/production-readiness-audit.md[39m 56ms (unchanged)
+[90mdocs/roadmap.md[39m 13ms (unchanged)
+[90mscripts/bootstrap-root-admin.ts[39m 5ms (unchanged)
+[90mpackage.json[39m 2ms (unchanged)
+[90mtsconfig.json[39m 2ms (unchanged)
+[90mnext.config.ts[39m 2ms (unchanged)
+[90meslint.config.mjs[39m 6ms (unchanged)
+[90mpostcss.config.mjs[39m 1ms (unchanged)
+[90mvitest.config.ts[39m 1ms (unchanged)
+[90m.github/workflows/apply-saas-security-migration.yml[39m 12ms (unchanged)
+[90m.github/workflows/ci.yml[39m 7ms (unchanged)
+
+> ai-support-workflow-platform@0.3.0 type-check
+> tsc --noEmit --pretty false
+
+features/tickets/components/mention-input.tsx(31,13): error TS2345: Argument of type 'Dispatch<SetStateAction<User[]>>' is not assignable to parameter of type '(value: { data: ManagedUser[]; invitationMode: InvitationMode; }) => void | PromiseLike<void>'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type '{ data: ManagedUser[]; invitationMode: InvitationMode; }' is not assignable to type 'SetStateAction<User[]>'.
+prisma/seed.ts(403,7): error TS2322: Type '{ priority: string; }' is not assignable to type 'SlaPolicyWhereUniqueInput'.
+  Type '{ priority: string; }' is not assignable to type '{ id: string; organizationId_priority: SlaPolicyOrganizationIdPriorityCompoundUniqueInput; } & { id?: string | undefined; ... 10 more ...; updatedAt?: string | ... 2 more ... | undefined; }'.
+    Type '{ priority: string; }' is missing the following properties from type '{ id: string; organizationId_priority: SlaPolicyOrganizationIdPriorityCompoundUniqueInput; }': id, organizationId_priority
+HEAD is now at 39ca8a4 ci: continue SaaS migration validation
+```

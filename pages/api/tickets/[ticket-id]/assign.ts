@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { assignTicket } from "@/features/tickets/services/ticket-service";
-import { requireApiAuth } from "@/lib/api-auth";
+import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
 
 const assignTicketSchema = z.object({
-  assigneeName: z.string().min(1),
-  assigneeEmail: z.string().email(),
+  assigneeName: z.string().trim().min(1).max(150),
+  assigneeEmail: z.string().trim().email().max(255),
 });
 
 export default async function handler(
@@ -17,17 +17,15 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const auth = await requireApiAuth(req, res);
+  const auth = await requireTenantApiPermission(req, res, "tickets:assign");
   if (!auth.ok) return;
 
   const ticketId = req.query["ticket-id"];
-
   if (typeof ticketId !== "string") {
     return res.status(400).json({ message: "Invalid ticket id" });
   }
 
   const result = assignTicketSchema.safeParse(req.body);
-
   if (!result.success) {
     return res.status(400).json({
       message: "Invalid request body",
@@ -37,6 +35,7 @@ export default async function handler(
 
   try {
     const ticket = await assignTicket({
+      organizationId: auth.user.organizationId,
       ticketId,
       assigneeName: result.data.assigneeName,
       assigneeEmail: result.data.assigneeEmail,
@@ -44,10 +43,7 @@ export default async function handler(
 
     return res.status(200).json({ data: ticket });
   } catch (error) {
-    console.error("Failed to assign ticket", error);
-
-    return res.status(500).json({
-      message: "Failed to assign ticket",
-    });
+    const message = error instanceof Error ? error.message : "Assignment failed";
+    return res.status(message === "Ticket not found" ? 404 : 422).json({ message });
   }
 }

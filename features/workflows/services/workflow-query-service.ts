@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 
-export async function getWorkflowRules() {
+export async function getWorkflowRules(organizationId: string) {
   return prisma.workflowRule.findMany({
-    orderBy: {
-      createdAt: "desc",
+    where: {
+      OR: [{ organizationId }, { organizationId: null }],
     },
+    orderBy: { createdAt: "desc" },
   });
 }

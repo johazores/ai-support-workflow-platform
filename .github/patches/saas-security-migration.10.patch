@@ -1,0 +1,362 @@
+diff --git a/pages/api/analytics/index.ts b/pages/api/analytics/index.ts
+index e63422c..5371669 100644
+--- a/pages/api/analytics/index.ts
++++ b/pages/api/analytics/index.ts
+@@ -1,6 +1,6 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+ import { getAnalytics } from "@/features/analytics/services/analytics-service";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ 
+ export default async function handler(
+   req: NextApiRequest,
+@@ -11,7 +11,7 @@ export default async function handler(
+     return res.status(405).json({ message: "Method not allowed" });
+   }
+ 
+-  const auth = await requireApiPermission(req, res, "analytics:read");
++  const auth = await requireTenantApiPermission(req, res, "analytics:read");
+   if (!auth.ok) return;
+ 
+   try {
+@@ -21,7 +21,7 @@ export default async function handler(
+         ? Math.min(Math.max(parseInt(daysParam, 10) || 30, 1), 365)
+         : 30;
+ 
+-    const data = await getAnalytics(days);
++    const data = await getAnalytics(auth.user.organizationId, days);
+ 
+     return res.status(200).json({ data });
+   } catch (error) {
+diff --git a/pages/api/audit-logs/index.ts b/pages/api/audit-logs/index.ts
+index b202205..265b36e 100644
+--- a/pages/api/audit-logs/index.ts
++++ b/pages/api/audit-logs/index.ts
+@@ -3,7 +3,7 @@ import {
+   getAuditLogs,
+   getAuditLogTypes,
+ } from "@/features/audit/services/audit-service";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ 
+ export default async function handler(
+   req: NextApiRequest,
+@@ -14,7 +14,7 @@ export default async function handler(
+     return res.status(405).json({ message: "Method not allowed" });
+   }
+ 
+-  const auth = await requireApiPermission(req, res, "audit-logs:read");
++  const auth = await requireTenantApiPermission(req, res, "audit-logs:read");
+   if (!auth.ok) return;
+ 
+   try {
+@@ -22,11 +22,11 @@ export default async function handler(
+ 
+     // Return distinct log types for filter dropdown
+     if (meta === "types") {
+-      const types = await getAuditLogTypes();
++      const types = await getAuditLogTypes(auth.user.organizationId);
+       return res.status(200).json({ data: types });
+     }
+ 
+-    const result = await getAuditLogs({
++    const result = await getAuditLogs(auth.user.organizationId, {
+       cursor: typeof cursor === "string" ? cursor : undefined,
+       type: typeof type === "string" ? type : undefined,
+       ticketId: typeof ticketId === "string" ? ticketId : undefined,
+diff --git a/pages/api/email-logs/index.ts b/pages/api/email-logs/index.ts
+index f48b1c9..6453f08 100644
+--- a/pages/api/email-logs/index.ts
++++ b/pages/api/email-logs/index.ts
+@@ -1,12 +1,12 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import { listEmailLogs } from "@/features/email-logs/services/email-log-service";
+ 
+ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  const auth = await requireApiPermission(req, res, "email-logs:read");
++  const auth = await requireTenantApiPermission(req, res, "email-logs:read");
+   if (!auth.ok) return;
+ 
+   if (req.method === "GET") {
+@@ -15,7 +15,11 @@ export default async function handler(
+     const limit = Math.min(Number(req.query.limit) || 50, 100);
+     const offset = Math.max(Number(req.query.offset) || 0, 0);
+ 
+-    const result = await listEmailLogs({ status, limit, offset });
++    const result = await listEmailLogs(auth.user.organizationId, {
++      status,
++      limit,
++      offset,
++    });
+     return res.status(200).json({ data: result });
+   }
+ 
+diff --git a/pages/api/email-templates/[id].ts b/pages/api/email-templates/[id].ts
+index 7ee5a56..8481ea9 100644
+--- a/pages/api/email-templates/[id].ts
++++ b/pages/api/email-templates/[id].ts
+@@ -1,6 +1,6 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+ import { z } from "zod";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import {
+   updateEmailTemplate,
+   deleteEmailTemplate,
+@@ -16,7 +16,11 @@ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  const auth = await requireApiPermission(req, res, "email-logs:read");
++  const auth = await requireTenantApiPermission(
++    req,
++    res,
++    "email-settings:manage",
++  );
+   if (!auth.ok) return;
+ 
+   const { id } = req.query;
+@@ -24,21 +28,32 @@ export default async function handler(
+     return res.status(400).json({ message: "Invalid template ID" });
+   }
+ 
+-  if (req.method === "PATCH") {
+-    const parsed = updateSchema.safeParse(req.body);
+-    if (!parsed.success) {
+-      return res
+-        .status(400)
+-        .json({ message: "Invalid input", errors: parsed.error.flatten() });
+-    }
++  try {
++    if (req.method === "PATCH") {
++      const parsed = updateSchema.safeParse(req.body);
++      if (!parsed.success) {
++        return res
++          .status(400)
++          .json({ message: "Invalid input", errors: parsed.error.flatten() });
++      }
+ 
+-    const template = await updateEmailTemplate(id, parsed.data);
+-    return res.status(200).json({ data: template });
+-  }
++      const template = await updateEmailTemplate(
++        auth.user.organizationId,
++        id,
++        parsed.data,
++      );
++      return res.status(200).json({ data: template });
++    }
+ 
+-  if (req.method === "DELETE") {
+-    await deleteEmailTemplate(id);
+-    return res.status(200).json({ data: { deleted: true } });
++    if (req.method === "DELETE") {
++      await deleteEmailTemplate(auth.user.organizationId, id);
++      return res.status(200).json({ data: { deleted: true } });
++    }
++  } catch (error) {
++    const message = error instanceof Error ? error.message : "Request failed";
++    return res
++      .status(message.includes("not found") ? 404 : message.includes("exists") ? 409 : 500)
++      .json({ message });
+   }
+ 
+   res.setHeader("Allow", ["PATCH", "DELETE"]);
+diff --git a/pages/api/email-templates/index.ts b/pages/api/email-templates/index.ts
+index 6ac7bf8..d5433ed 100644
+--- a/pages/api/email-templates/index.ts
++++ b/pages/api/email-templates/index.ts
+@@ -1,6 +1,6 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+ import { z } from "zod";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import {
+   listEmailTemplates,
+   createEmailTemplate,
+@@ -16,11 +16,13 @@ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  const auth = await requireApiPermission(req, res, "email-logs:read");
++  const permission =
++    req.method === "GET" ? "email-logs:read" : "email-settings:manage";
++  const auth = await requireTenantApiPermission(req, res, permission);
+   if (!auth.ok) return;
+ 
+   if (req.method === "GET") {
+-    const templates = await listEmailTemplates();
++    const templates = await listEmailTemplates(auth.user.organizationId);
+     return res.status(200).json({ data: templates });
+   }
+ 
+@@ -32,8 +34,18 @@ export default async function handler(
+         .json({ message: "Invalid input", errors: parsed.error.flatten() });
+     }
+ 
+-    const template = await createEmailTemplate(parsed.data);
+-    return res.status(201).json({ data: template });
++    try {
++      const template = await createEmailTemplate(
++        auth.user.organizationId,
++        parsed.data,
++      );
++      return res.status(201).json({ data: template });
++    } catch (error) {
++      const message = error instanceof Error ? error.message : "Create failed";
++      return res.status(message.includes("already exists") ? 409 : 500).json({
++        message,
++      });
++    }
+   }
+ 
+   res.setHeader("Allow", ["GET", "POST"]);
+diff --git a/pages/api/email/poll.ts b/pages/api/email/poll.ts
+index c968078..23da2dc 100644
+--- a/pages/api/email/poll.ts
++++ b/pages/api/email/poll.ts
+@@ -1,5 +1,5 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import {
+   pollAllInboxes,
+   pollInboxById,
+@@ -14,24 +14,26 @@ export default async function handler(
+     return res.status(405).json({ message: "Method not allowed" });
+   }
+ 
+-  const auth = await requireApiPermission(req, res, "email-logs:read");
++  const auth = await requireTenantApiPermission(
++    req,
++    res,
++    "email-settings:manage",
++  );
+   if (!auth.ok) return;
+ 
+   try {
+     const mailboxId =
+       typeof req.body?.mailboxId === "string" ? req.body.mailboxId : undefined;
+ 
+-    if (mailboxId) {
+-      const result = await pollInboxById(mailboxId);
+-      return res.status(200).json({ data: result });
+-    }
++    const data = mailboxId
++      ? await pollInboxById(auth.user.organizationId, mailboxId)
++      : await pollAllInboxes(auth.user.organizationId);
+ 
+-    const results = await pollAllInboxes();
+-    return res.status(200).json({ data: results });
+-  } catch (err) {
+-    console.error("IMAP poll failed:", err);
++    return res.status(200).json({ data });
++  } catch (error) {
++    console.error("IMAP poll failed", error);
+     return res.status(500).json({
+-      message: err instanceof Error ? err.message : "Failed to poll inbox",
++      message: error instanceof Error ? error.message : "Failed to poll inbox",
+     });
+   }
+ }
+diff --git a/pages/api/notifications/index.ts b/pages/api/notifications/index.ts
+index deb04d7..51a98d3 100644
+--- a/pages/api/notifications/index.ts
++++ b/pages/api/notifications/index.ts
+@@ -1,5 +1,5 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+-import { parseSessionValue } from "@/features/auth/services/session-service";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import {
+   getNotifications,
+   getUnreadCount,
+@@ -10,26 +10,20 @@ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  // Parse session from cookie
+-  const sessionCookie = req.cookies["support_session"];
+-  const user = await parseSessionValue(sessionCookie);
+-
+-  if (!user) {
+-    return res.status(401).json({ message: "Unauthorized" });
+-  }
++  const auth = await requireTenantApiPermission(req, res, "tickets:read");
++  if (!auth.ok) return;
+ 
+   if (req.method === "GET") {
+     const [notifications, unreadCount] = await Promise.all([
+-      getNotifications(user.id),
+-      getUnreadCount(user.id),
++      getNotifications(auth.user.organizationId, auth.user.id),
++      getUnreadCount(auth.user.organizationId, auth.user.id),
+     ]);
+ 
+     return res.status(200).json({ data: notifications, unreadCount });
+   }
+ 
+   if (req.method === "PATCH") {
+-    await markNotificationsRead(user.id);
+-
++    await markNotificationsRead(auth.user.organizationId, auth.user.id);
+     return res.status(200).json({ message: "Marked all as read" });
+   }
+ 
+diff --git a/pages/api/sla-policies/[id].ts b/pages/api/sla-policies/[id].ts
+index f5d6aa5..e362640 100644
+--- a/pages/api/sla-policies/[id].ts
++++ b/pages/api/sla-policies/[id].ts
+@@ -1,6 +1,6 @@
+ import type { NextApiRequest, NextApiResponse } from "next";
+ import { z } from "zod";
+-import { requireApiPermission } from "@/lib/api-auth";
++import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+ import { updateSlaPolicy } from "@/features/sla/services/sla-service";
+ 
+ const updateSchema = z.object({
+@@ -12,18 +12,16 @@ export default async function handler(
+   req: NextApiRequest,
+   res: NextApiResponse,
+ ) {
+-  const auth = await requireApiPermission(req, res, "workflows:manage");
++  const auth = await requireTenantApiPermission(req, res, "workflows:manage");
+   if (!auth.ok) return;
+ 
+   const { id } = req.query;
+-
+   if (typeof id !== "string") {
+     return res.status(400).json({ message: "Invalid policy ID" });
+   }
+ 
+   if (req.method === "PATCH") {
+     const result = updateSchema.safeParse(req.body);
+-
+     if (!result.success) {
+       return res.status(400).json({
+         message: "Invalid request body",
+@@ -31,7 +29,6 @@ export default async function handler(
+       });
+     }
+ 
+-    // Ensure resolution >= first response
+     if (result.data.resolutionMinutes < result.data.firstResponseMinutes) {
+       return res.status(400).json({
+         message: "Resolution time must be greater than first response time",
+@@ -39,7 +36,11 @@ export default async function handler(
+     }
+ 
+     try {
+-      const policy = await updateSlaPolicy(id, result.data);
++      const policy = await updateSlaPolicy(
++        auth.user.organizationId,
++        id,
++        result.data,
++      );
+       return res.status(200).json({ data: policy });
+     } catch {
+       return res.status(404).json({ message: "Policy not found" });

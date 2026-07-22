@@ -14,9 +14,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create source snapshot
+        shell: bash
+        run: |
+          tar -czf source-snapshot.tar.gz \
+            app pages features components lib prisma docs scripts \
+            package.json package-lock.json tsconfig.json next.config.ts \
+            eslint.config.mjs postcss.config.mjs vitest.config.ts \
+            .env.example .github/workflows
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-snapshot
+          path: source-snapshot.tar.gz
+          retention-days: 2
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -24,14 +40,80 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Validate Prisma Schema
+        run: npx prisma validate
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/ci-placeholder"
+
       - name: Type Check
-        run: npm run type-check
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npm run type-check -- --pretty false 2>&1 | tee typecheck.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Type Check Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-report
+          path: typecheck.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Lint
-        run: npx eslint . --max-warnings 0
+        id: lint
+        if: always() && steps.typecheck.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          npx eslint . --max-warnings 0 2>&1 | tee lint.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: lint.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Format Check
-        run: npm run format:check
+        id: format
+        if: always() && steps.typecheck.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          npx prettier --write . 2>&1 | tee format.log
+          git diff --name-only --diff-filter=ACM > formatted-files.txt
+          if [ -s formatted-files.txt ]; then
+            tar -czf formatted-files.tar.gz -T formatted-files.txt
+          fi
+          git diff --exit-code
+          status=$?
+          exit $status
+
+      - name: Upload Format Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: format-report
+          path: format.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload Formatted Files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-files
+          path: formatted-files.tar.gz
+          if-no-files-found: ignore
+          retention-days: 7
 
   test:
     name: Tests
@@ -42,7 +124,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -51,7 +133,22 @@ jobs:
         run: npx prisma generate
 
       - name: Run Tests
-        run: npx vitest run --reporter=verbose
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          npx vitest run --reporter=verbose 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Upload Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   build:
     name: Build
@@ -63,7 +160,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -76,3 +173,5 @@ jobs:
         env:
           DATABASE_URL: "mongodb://localhost:27017/ci-placeholder"
           SESSION_SECRET: "ci-test-secret-do-not-use-in-production"
+          ROOT_SESSION_SECRET: "ci-root-session-secret-do-not-use-in-production"
+          CONFIG_ENCRYPTION_KEY: "Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE="

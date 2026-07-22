@@ -4,30 +4,32 @@ import {
   updateSavedReply,
   deleteSavedReply,
 } from "@/features/saved-replies/services/saved-reply-service";
-import { requireApiAuth } from "@/lib/api-auth";
+import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
 
 const updateSchema = z.object({
-  title: z.string().min(1).max(100),
-  body: z.string().min(1),
-  shortcut: z.string().max(30).optional(),
+  title: z.string().trim().min(1).max(100),
+  body: z.string().trim().min(1).max(50_000),
+  shortcut: z.string().trim().max(30).optional(),
 });
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const auth = await requireApiAuth(req, res);
+  const auth = await requireTenantApiPermission(
+    req,
+    res,
+    "saved-replies:manage",
+  );
   if (!auth.ok) return;
 
-  const id = req.query.id as string;
-
-  if (!id) {
-    return res.status(400).json({ message: "Missing id" });
+  const id = req.query.id;
+  if (typeof id !== "string") {
+    return res.status(400).json({ message: "Invalid saved reply id" });
   }
 
   if (req.method === "PUT") {
     const result = updateSchema.safeParse(req.body);
-
     if (!result.success) {
       return res.status(400).json({
         message: "Invalid request body",
@@ -36,21 +38,31 @@ export default async function handler(
     }
 
     try {
-      const reply = await updateSavedReply({ id, ...result.data });
+      const reply = await updateSavedReply({
+        id,
+        organizationId: auth.user.organizationId,
+        ...result.data,
+      });
       return res.status(200).json({ data: reply });
     } catch (error) {
-      console.error("Failed to update saved reply", error);
-      return res.status(500).json({ message: "Failed to update saved reply" });
+      const message =
+        error instanceof Error ? error.message : "Failed to update saved reply";
+      return res.status(message === "Saved reply not found" ? 404 : 500).json({
+        message,
+      });
     }
   }
 
   if (req.method === "DELETE") {
     try {
-      await deleteSavedReply(id);
-      return res.status(200).json({ message: "Deleted" });
+      await deleteSavedReply(auth.user.organizationId, id);
+      return res.status(200).json({ data: { deleted: true } });
     } catch (error) {
-      console.error("Failed to delete saved reply", error);
-      return res.status(500).json({ message: "Failed to delete saved reply" });
+      const message =
+        error instanceof Error ? error.message : "Failed to delete saved reply";
+      return res.status(message === "Saved reply not found" ? 404 : 500).json({
+        message,
+      });
     }
   }
 

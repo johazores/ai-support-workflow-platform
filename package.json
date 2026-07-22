@@ -1,6 +1,6 @@
 {
   "name": "ai-support-workflow-platform",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,9 +11,11 @@
     "format:check": "prettier --check .",
     "postinstall": "npx prisma generate",
     "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma db push && tsx prisma/seed.ts",
+    "root:bootstrap": "tsx scripts/bootstrap-root-admin.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -21,6 +23,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.5.20",
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.3",
     "imap": "^0.8.19",
