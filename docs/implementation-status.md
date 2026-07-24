@@ -7,6 +7,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 ## Implemented
 
 - Organization and membership models with a legacy default-workspace migration path
+- Tenant-scoped organization listing and active organization selection with membership validation, active-organization checks, persistence, auditing, and responsive shell UI
 - Tenant-scoped user listing, membership roles, add/reactivate flows, removal, last-admin protection, and membership-change audit events
 - Independent Root Admin authentication, sessions, lockout, revocation, and audit events
 - Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
@@ -42,11 +43,11 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 
 ## Remaining Product Work
 
+- Complete new-organization onboarding and Clerk-backed organization invitations
 - Versioned visual workflow graph editor with drag-and-drop nodes and connections
 - Queue-backed retries, delays, resumability, cancellation, and webhook delivery
 - Stripe plans, subscriptions, usage entitlements, and billing portal
 - Attachment storage and secure upload/download
-- Complete Clerk organization onboarding and invitation flows
 - End-to-end browser tests and deployment smoke tests
 - Production observability integrations and alerting
 
