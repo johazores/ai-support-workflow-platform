@@ -1,0 +1,59 @@
+name: Apply Tenant Safe Uniqueness
+
+on:
+  push:
+    branches: [feat/tenant-safe-uniqueness]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tenant-safe-uniqueness
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.repository == 'johazores/ai-support-workflow-platform' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tenant-safe-uniqueness
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply patch and validate
+        shell: bash
+        env:
+          DATABASE_URL: mongodb://localhost:27017/ci-placeholder
+          SESSION_SECRET: ci-test-secret-do-not-use-in-production
+          ROOT_SESSION_SECRET: ci-root-session-secret-do-not-use-in-production
+          CONFIG_ENCRYPTION_KEY: Y2ktdGVzdC1rZXktMzItYnl0ZXMtbG9uZyEhISEhISE=
+        run: |
+          set -euo pipefail
+          git apply --index --whitespace=nowarn .github/patches/tenant-safe-uniqueness.patch
+          npm ci
+          npx prisma generate
+          npx prisma validate
+          npx prettier --write prisma/schema.prisma prisma/schema-tenancy.test.ts docs/implementation-status.md
+          npm run type-check -- --pretty false
+          npx eslint . --max-warnings 0
+          npx vitest run --reporter=verbose
+          npx next build
+
+      - name: Publish validated change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/patches/tenant-safe-uniqueness.patch
+          git rm .github/workflows/apply-tenant-safe-uniqueness.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: scope tenant uniqueness by organization"
+          git push origin HEAD:feat/tenant-safe-uniqueness
