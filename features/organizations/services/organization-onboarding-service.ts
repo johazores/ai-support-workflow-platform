@@ -28,6 +28,38 @@ async function createUniqueSlug(name: string) {
   throw new Error("Unable to create a unique organization slug");
 }
 
+async function cleanupProvisioning(input: {
+  userId: string;
+  organizationId: string;
+  previousRole: string;
+}) {
+  await Promise.allSettled([
+    prisma.slaPolicy.deleteMany({
+      where: { organizationId: input.organizationId },
+    }),
+    prisma.organizationMember.deleteMany({
+      where: {
+        organizationId: input.organizationId,
+        userId: input.userId,
+      },
+    }),
+    prisma.user.updateMany({
+      where: {
+        id: input.userId,
+        defaultOrganizationId: input.organizationId,
+      },
+      data: {
+        defaultOrganizationId: null,
+        role: input.previousRole,
+      },
+    }),
+  ]);
+
+  await prisma.organization.deleteMany({
+    where: { id: input.organizationId },
+  });
+}
+
 export async function createFirstOrganization(input: {
   userId: string;
   name: string;
@@ -45,6 +77,10 @@ export async function createFirstOrganization(input: {
     throw new Error("User already belongs to an organization");
   }
 
+  if (user.defaultOrganizationId) {
+    throw new Error("Organization onboarding is already in progress");
+  }
+
   const slug = await createUniqueSlug(input.name);
   const organization = await prisma.organization.create({
     data: {
@@ -54,8 +90,22 @@ export async function createFirstOrganization(input: {
     },
   });
 
-  let membershipCreated = false;
-  let defaultUpdated = false;
+  const claim = await prisma.user.updateMany({
+    where: {
+      id: user.id,
+      status: "active",
+      defaultOrganizationId: null,
+    },
+    data: {
+      defaultOrganizationId: organization.id,
+      role: "admin",
+    },
+  });
+
+  if (claim.count !== 1) {
+    await prisma.organization.deleteMany({ where: { id: organization.id } });
+    throw new Error("Organization onboarding is already in progress");
+  }
 
   try {
     await prisma.organizationMember.create({
@@ -66,43 +116,14 @@ export async function createFirstOrganization(input: {
         status: "active",
       },
     });
-    membershipCreated = true;
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        defaultOrganizationId: organization.id,
-        role: "admin",
-      },
-    });
-    defaultUpdated = true;
 
     await seedSlaPolicies(organization.id);
   } catch (error) {
-    await prisma.slaPolicy.deleteMany({
-      where: { organizationId: organization.id },
+    await cleanupProvisioning({
+      userId: user.id,
+      organizationId: organization.id,
+      previousRole: user.role,
     });
-
-    if (membershipCreated) {
-      await prisma.organizationMember.deleteMany({
-        where: {
-          organizationId: organization.id,
-          userId: user.id,
-        },
-      });
-    }
-
-    if (defaultUpdated) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          defaultOrganizationId: null,
-          role: user.role,
-        },
-      });
-    }
-
-    await prisma.organization.delete({ where: { id: organization.id } });
     throw error;
   }
 
