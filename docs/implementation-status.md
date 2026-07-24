@@ -8,7 +8,11 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 
 - Organization and membership models with a legacy default-workspace migration path
 - Tenant-scoped organization listing and active organization selection with membership validation, active-organization checks, persistence, auditing, and responsive shell UI
+- First-organization onboarding for Clerk-only users with concurrency-safe organization creation, admin membership provisioning, default SLA seeding, rollback, and onboarding guards
+- Clerk-backed organization invitations with tenant-owned lifecycle records, seven-day expiry, verified-email acceptance, revocation, audit events, role preservation, and failure compensation
+- Invitation-first team administration UI with pending/accepted/revoked/expired states and direct membership for existing active Clerk identities
 - Tenant-scoped user listing, membership roles, add/reactivate flows, removal, last-admin protection, and membership-change audit events
+- Inactive internal product identities remain disabled across Clerk session fallback, identity synchronization, webhook updates, and organization invitations
 - Independent Root Admin authentication, sessions, lockout, revocation, and audit events
 - Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
 - AES-256-GCM encryption for provider, SMTP, IMAP, and system secrets
@@ -40,15 +44,16 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 - Validate the full stacked tenant migration against a green repository quality gate
 - Merge the CI baseline cleanup that removes completed one-time migration workflows
 - Resolve any remaining Clerk-aware or tenant-aware signature regressions surfaced by the final quality gate
+- Development-gate or remove the remaining legacy product-password account creation/login paths after migration compatibility is no longer required
 
 ## Remaining Product Work
 
-- Complete new-organization onboarding and Clerk-backed organization invitations
-- Versioned visual workflow graph editor with drag-and-drop nodes and connections
-- Queue-backed retries, delays, resumability, cancellation, and webhook delivery
+- Versioned visual workflow graph editor with complete create-test-publish-run flows
+- Queue-backed retries, delays, resumability, cancellation, webhook delivery, and scheduled workflow execution
 - Stripe plans, subscriptions, usage entitlements, and billing portal
 - Attachment storage and secure upload/download
 - End-to-end browser tests and deployment smoke tests
 - Production observability integrations and alerting
+- Final documentation reconciliation, retention/deletion controls, and launch runbooks
 
 No feature should be marked production-ready until its tenant isolation, authorization, failure states, tests, and operational behavior have been validated end-to-end.
