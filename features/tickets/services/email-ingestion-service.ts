@@ -1,10 +1,11 @@
-import { prisma } from "@/lib/prisma";
-import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
-import {
-  notifyAssignee,
-  notifyAdmins,
-} from "@/features/notifications/services/notification-service";
 import { classifyTicket } from "@/features/ai-drafts/services/classification-service";
+import {
+  notifyAdmins,
+  notifyAssignee,
+} from "@/features/notifications/services/notification-service";
+import { executePublishedWorkflowsForTicket } from "@/features/workflows/services/versioned-workflow-runtime";
+import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
+import { prisma } from "@/lib/prisma";
 
 type InboundEmailInput = {
   organizationId: string;
@@ -16,6 +17,44 @@ type InboundEmailInput = {
   inReplyTo?: string;
   mailboxId?: string;
 };
+
+async function runInboundAutomations(input: {
+  organizationId: string;
+  ticketId: string;
+  messageId: string;
+  isNewTicket: boolean;
+}) {
+  const tasks: Promise<unknown>[] = [
+    executeWorkflowRules(input.ticketId, {
+      organizationId: input.organizationId,
+      triggerType: "inbound-email",
+    }),
+    executePublishedWorkflowsForTicket({
+      organizationId: input.organizationId,
+      ticketId: input.ticketId,
+      triggerType: "message-received",
+      idempotencyKey: `message-received:${input.messageId}`,
+    }),
+  ];
+
+  if (input.isNewTicket) {
+    tasks.push(
+      executePublishedWorkflowsForTicket({
+        organizationId: input.organizationId,
+        ticketId: input.ticketId,
+        triggerType: "ticket-created",
+        idempotencyKey: `ticket-created:${input.ticketId}`,
+      }),
+    );
+  }
+
+  const results = await Promise.allSettled(tasks);
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("Inbound workflow automation failed", result.reason);
+    }
+  }
+}
 
 export async function processInboundEmail(input: InboundEmailInput) {
   const existingMessage = await prisma.message.findFirst({
@@ -124,9 +163,11 @@ export async function processInboundEmail(input: InboundEmailInput) {
     });
   }
 
-  await executeWorkflowRules(ticketId, {
+  await runInboundAutomations({
     organizationId: input.organizationId,
-    triggerType: "inbound-email",
+    ticketId,
+    messageId: message.id,
+    isNewTicket,
   });
 
   if (isNewTicket) {
