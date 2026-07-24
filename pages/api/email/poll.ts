@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { requireApiPermission } from "@/lib/api-auth";
 import {
   pollAllInboxes,
   pollInboxById,
 } from "@/features/email/services/imap-service";
+import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,7 +14,11 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const auth = await requireApiPermission(req, res, "email-logs:read");
+  const auth = await requireTenantApiPermission(
+    req,
+    res,
+    "email-settings:manage",
+  );
   if (!auth.ok) return;
 
   try {
@@ -22,11 +26,11 @@ export default async function handler(
       typeof req.body?.mailboxId === "string" ? req.body.mailboxId : undefined;
 
     if (mailboxId) {
-      const result = await pollInboxById(mailboxId);
+      const result = await pollInboxById(auth.user.organizationId, mailboxId);
       return res.status(200).json({ data: result });
     }
 
-    const results = await pollAllInboxes();
+    const results = await pollAllInboxes(auth.user.organizationId);
     return res.status(200).json({ data: results });
   } catch (err) {
     console.error("IMAP poll failed:", err);
