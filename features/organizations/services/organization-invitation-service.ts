@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
+import { isClerkConfigured } from "@/features/auth/services/clerk-config";
 import { prisma } from "@/lib/prisma";
 
 const INVITATION_EXPIRY_DAYS = 7;
@@ -16,6 +17,12 @@ function getInvitationRedirectUrl() {
     process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim();
   if (!appUrl) return undefined;
   return `${appUrl.replace(/\/$/, "")}/sign-up`;
+}
+
+function assertClerkInvitationsAvailable() {
+  if (!isClerkConfigured()) {
+    throw new Error("Clerk invitations are unavailable until Clerk is configured");
+  }
 }
 
 async function expirePendingInvitations(organizationId?: string) {
@@ -82,6 +89,10 @@ export async function createOrganizationInvitation(input: {
   await expirePendingInvitations(input.organizationId);
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser && existingUser.status !== "active") {
+    throw new Error("User account is inactive");
+  }
+
   if (existingUser?.status === "active") {
     const membership = await prisma.organizationMember.findUnique({
       where: {
@@ -97,56 +108,96 @@ export async function createOrganizationInvitation(input: {
     }
 
     if (existingUser.clerkUserId) {
-      if (membership) {
-        await prisma.organizationMember.update({
-          where: { id: membership.id },
-          data: { status: "active", role: input.role },
-        });
-      } else {
-        await prisma.organizationMember.create({
+      let createdMembershipId: string | null = null;
+      let restoredMembership: { id: string; role: string; status: string } | null =
+        null;
+      let defaultOrganizationChanged = false;
+
+      try {
+        if (membership) {
+          restoredMembership = {
+            id: membership.id,
+            role: membership.role,
+            status: membership.status,
+          };
+          await prisma.organizationMember.update({
+            where: { id: membership.id },
+            data: { status: "active", role: input.role },
+          });
+        } else {
+          const createdMembership = await prisma.organizationMember.create({
+            data: {
+              organizationId: input.organizationId,
+              userId: existingUser.id,
+              role: input.role,
+              status: "active",
+            },
+          });
+          createdMembershipId = createdMembership.id;
+        }
+
+        if (!existingUser.defaultOrganizationId) {
+          await prisma.user.update({
+            where: { id: existingUser.id },
+            data: { defaultOrganizationId: input.organizationId },
+          });
+          defaultOrganizationChanged = true;
+        }
+
+        const acceptedAt = new Date();
+        const invitation = await prisma.organizationInvitation.create({
           data: {
             organizationId: input.organizationId,
-            userId: existingUser.id,
+            email,
             role: input.role,
-            status: "active",
+            status: "accepted",
+            invitedByUserId: input.invitedByUserId,
+            acceptedByUserId: existingUser.id,
+            acceptedAt,
+            expiresAt: acceptedAt,
           },
         });
-      }
 
-      if (!existingUser.defaultOrganizationId) {
-        await prisma.user.update({
-          where: { id: existingUser.id },
-          data: { defaultOrganizationId: input.organizationId },
-        });
-      }
-
-      const acceptedAt = new Date();
-      const invitation = await prisma.organizationInvitation.create({
-        data: {
+        await recordInvitationAudit({
           organizationId: input.organizationId,
-          email,
-          role: input.role,
-          status: "accepted",
-          invitedByUserId: input.invitedByUserId,
-          acceptedByUserId: existingUser.id,
-          acceptedAt,
-          expiresAt: acceptedAt,
-        },
-      });
+          actorUserId: input.invitedByUserId,
+          action: "organization.invitation.member_added",
+          invitationId: invitation.id,
+          metadata: {
+            email,
+            role: input.role,
+            organizationName: organization.name,
+          },
+        });
 
-      await recordInvitationAudit({
-        organizationId: input.organizationId,
-        actorUserId: input.invitedByUserId,
-        action: "organization.invitation.member_added",
-        invitationId: invitation.id,
-        metadata: {
-          email,
-          role: input.role,
-          organizationName: organization.name,
-        },
-      });
+        return { invitation, delivery: "member-added" as const };
+      } catch (error) {
+        try {
+          if (createdMembershipId) {
+            await prisma.organizationMember.delete({
+              where: { id: createdMembershipId },
+            });
+          } else if (restoredMembership) {
+            await prisma.organizationMember.update({
+              where: { id: restoredMembership.id },
+              data: {
+                role: restoredMembership.role,
+                status: restoredMembership.status,
+              },
+            });
+          }
 
-      return { invitation, delivery: "member-added" as const };
+          if (defaultOrganizationChanged) {
+            await prisma.user.update({
+              where: { id: existingUser.id },
+              data: { defaultOrganizationId: null },
+            });
+          }
+        } catch (rollbackError) {
+          console.error("Failed to roll back direct member addition", rollbackError);
+        }
+        throw error;
+      }
     }
   }
 
@@ -160,6 +211,7 @@ export async function createOrganizationInvitation(input: {
   });
   if (pending) throw new Error("Invitation already pending");
 
+  assertClerkInvitationsAvailable();
   const client = await clerkClient();
   const redirectUrl = getInvitationRedirectUrl();
   const clerkInvitation = await client.invitations.createInvitation({
@@ -202,7 +254,9 @@ export async function createOrganizationInvitation(input: {
     return { invitation, delivery: "email" as const };
   } catch (error) {
     try {
-      await client.invitations.revokeInvitation(clerkInvitation.id);
+      await client.invitations.revokeInvitation({
+        invitationId: clerkInvitation.id,
+      });
     } catch (revokeError) {
       console.error("Failed to revoke orphaned Clerk invitation", revokeError);
     }
@@ -227,8 +281,11 @@ export async function revokeOrganizationInvitation(input: {
   if (!invitation) throw new Error("Invitation not found");
 
   if (invitation.clerkInvitationId) {
+    assertClerkInvitationsAvailable();
     const client = await clerkClient();
-    await client.invitations.revokeInvitation(invitation.clerkInvitationId);
+    await client.invitations.revokeInvitation({
+      invitationId: invitation.clerkInvitationId,
+    });
   }
 
   const revoked = await prisma.organizationInvitation.update({
@@ -288,31 +345,62 @@ export async function acceptPendingOrganizationInvitations(input: {
       },
     });
 
-    if (!membership) {
-      await prisma.organizationMember.create({
+    let createdMembershipId: string | null = null;
+    let restoredMembership: { id: string; role: string; status: string } | null =
+      null;
+
+    try {
+      if (!membership) {
+        const createdMembership = await prisma.organizationMember.create({
+          data: {
+            organizationId: invitation.organizationId,
+            userId: input.userId,
+            role: invitation.role,
+            status: "active",
+          },
+        });
+        createdMembershipId = createdMembership.id;
+      } else if (membership.status !== "active" || membership.role !== invitation.role) {
+        restoredMembership = {
+          id: membership.id,
+          role: membership.role,
+          status: membership.status,
+        };
+        await prisma.organizationMember.update({
+          where: { id: membership.id },
+          data: { status: "active", role: invitation.role },
+        });
+      }
+
+      const acceptedAt = new Date();
+      await prisma.organizationInvitation.update({
+        where: { id: invitation.id },
         data: {
-          organizationId: invitation.organizationId,
-          userId: input.userId,
-          role: invitation.role,
-          status: "active",
+          status: "accepted",
+          acceptedByUserId: input.userId,
+          acceptedAt,
         },
       });
-    } else if (membership.status !== "active") {
-      await prisma.organizationMember.update({
-        where: { id: membership.id },
-        data: { status: "active", role: invitation.role },
-      });
+    } catch (error) {
+      try {
+        if (createdMembershipId) {
+          await prisma.organizationMember.delete({
+            where: { id: createdMembershipId },
+          });
+        } else if (restoredMembership) {
+          await prisma.organizationMember.update({
+            where: { id: restoredMembership.id },
+            data: {
+              role: restoredMembership.role,
+              status: restoredMembership.status,
+            },
+          });
+        }
+      } catch (rollbackError) {
+        console.error("Failed to roll back invitation acceptance", rollbackError);
+      }
+      throw error;
     }
-
-    const acceptedAt = new Date();
-    await prisma.organizationInvitation.update({
-      where: { id: invitation.id },
-      data: {
-        status: "accepted",
-        acceptedByUserId: input.userId,
-        acceptedAt,
-      },
-    });
 
     await recordInvitationAudit({
       organizationId: invitation.organizationId,
@@ -326,10 +414,17 @@ export async function acceptPendingOrganizationInvitations(input: {
   }
 
   if (acceptedOrganizationIds.length > 0) {
-    await prisma.user.updateMany({
-      where: { id: input.userId, defaultOrganizationId: null },
-      data: { defaultOrganizationId: acceptedOrganizationIds[0] },
-    });
+    try {
+      await prisma.user.updateMany({
+        where: { id: input.userId, defaultOrganizationId: null },
+        data: { defaultOrganizationId: acceptedOrganizationIds[0] },
+      });
+    } catch (error) {
+      // Memberships are already valid and resolveOrganization() can recover the
+      // default pointer. Do not turn a successful invitation acceptance into a
+      // failed Clerk sign-in because this denormalized pointer could not update.
+      console.error("Failed to select accepted organization as default", error);
+    }
   }
 
   return acceptedOrganizationIds;
