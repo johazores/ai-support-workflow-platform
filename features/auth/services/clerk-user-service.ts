@@ -46,11 +46,22 @@ async function resolveOrganization(user: User) {
   }
 
   // Existing password-backed users belong to the legacy migration path.
-  // Brand-new Clerk-only users remain organization-less until onboarding or an invitation.
   if (user.passwordHash) {
     return ensureLegacyOrganizationForUser(user);
   }
 
+  // A Clerk-only user can carry a stale pointer after an organization was
+  // suspended/removed. Clear it so first-organization onboarding can claim
+  // the pointer atomically.
+  if (user.defaultOrganizationId) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { defaultOrganizationId: null },
+    });
+  }
+
+  // Brand-new Clerk-only users remain organization-less until onboarding or
+  // an invitation creates an active membership.
   return null;
 }
 
