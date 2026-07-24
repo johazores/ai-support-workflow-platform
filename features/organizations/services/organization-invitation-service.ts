@@ -1,12 +1,18 @@
 import { clerkClient } from "@clerk/nextjs/server";
-import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import { isClerkConfigured } from "@/features/auth/services/clerk-config";
+import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import { prisma } from "@/lib/prisma";
 
 const INVITATION_EXPIRY_DAYS = 7;
 const INVITATION_EXPIRY_MS = INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
 type OrganizationRole = "admin" | "supervisor" | "agent";
+
+type MembershipSnapshot = {
+  id: string;
+  role: string;
+  status: string;
+};
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -21,7 +27,9 @@ function getInvitationRedirectUrl() {
 
 function assertClerkInvitationsAvailable() {
   if (!isClerkConfigured()) {
-    throw new Error("Clerk invitations are unavailable until Clerk is configured");
+    throw new Error(
+      "Clerk invitations are unavailable until Clerk is configured",
+    );
   }
 }
 
@@ -67,6 +75,28 @@ async function recordInvitationAudit(input: {
   }
 }
 
+async function rollbackMembership(input: {
+  createdMembershipId?: string | null;
+  snapshot?: MembershipSnapshot | null;
+}) {
+  if (input.createdMembershipId) {
+    await prisma.organizationMember.delete({
+      where: { id: input.createdMembershipId },
+    });
+    return;
+  }
+
+  if (input.snapshot) {
+    await prisma.organizationMember.update({
+      where: { id: input.snapshot.id },
+      data: {
+        role: input.snapshot.role,
+        status: input.snapshot.status,
+      },
+    });
+  }
+}
+
 export async function listOrganizationInvitations(organizationId: string) {
   await expirePendingInvitations(organizationId);
 
@@ -109,13 +139,12 @@ export async function createOrganizationInvitation(input: {
 
     if (existingUser.clerkUserId) {
       let createdMembershipId: string | null = null;
-      let restoredMembership: { id: string; role: string; status: string } | null =
-        null;
+      let membershipSnapshot: MembershipSnapshot | null = null;
       let defaultOrganizationChanged = false;
 
       try {
         if (membership) {
-          restoredMembership = {
+          membershipSnapshot = {
             id: membership.id,
             role: membership.role,
             status: membership.status,
@@ -173,19 +202,10 @@ export async function createOrganizationInvitation(input: {
         return { invitation, delivery: "member-added" as const };
       } catch (error) {
         try {
-          if (createdMembershipId) {
-            await prisma.organizationMember.delete({
-              where: { id: createdMembershipId },
-            });
-          } else if (restoredMembership) {
-            await prisma.organizationMember.update({
-              where: { id: restoredMembership.id },
-              data: {
-                role: restoredMembership.role,
-                status: restoredMembership.status,
-              },
-            });
-          }
+          await rollbackMembership({
+            createdMembershipId,
+            snapshot: membershipSnapshot,
+          });
 
           if (defaultOrganizationChanged) {
             await prisma.user.update({
@@ -346,8 +366,9 @@ export async function acceptPendingOrganizationInvitations(input: {
     });
 
     let createdMembershipId: string | null = null;
-    let restoredMembership: { id: string; role: string; status: string } | null =
-      null;
+    let membershipSnapshot: MembershipSnapshot | null = null;
+    const effectiveRole =
+      membership?.status === "active" ? membership.role : invitation.role;
 
     try {
       if (!membership) {
@@ -360,8 +381,8 @@ export async function acceptPendingOrganizationInvitations(input: {
           },
         });
         createdMembershipId = createdMembership.id;
-      } else if (membership.status !== "active" || membership.role !== invitation.role) {
-        restoredMembership = {
+      } else if (membership.status !== "active") {
+        membershipSnapshot = {
           id: membership.id,
           role: membership.role,
           status: membership.status,
@@ -383,19 +404,10 @@ export async function acceptPendingOrganizationInvitations(input: {
       });
     } catch (error) {
       try {
-        if (createdMembershipId) {
-          await prisma.organizationMember.delete({
-            where: { id: createdMembershipId },
-          });
-        } else if (restoredMembership) {
-          await prisma.organizationMember.update({
-            where: { id: restoredMembership.id },
-            data: {
-              role: restoredMembership.role,
-              status: restoredMembership.status,
-            },
-          });
-        }
+        await rollbackMembership({
+          createdMembershipId,
+          snapshot: membershipSnapshot,
+        });
       } catch (rollbackError) {
         console.error("Failed to roll back invitation acceptance", rollbackError);
       }
@@ -407,7 +419,11 @@ export async function acceptPendingOrganizationInvitations(input: {
       actorUserId: input.userId,
       action: "organization.invitation.accepted",
       invitationId: invitation.id,
-      metadata: { email, role: invitation.role },
+      metadata: {
+        email,
+        invitedRole: invitation.role,
+        effectiveRole,
+      },
     });
 
     acceptedOrganizationIds.push(invitation.organizationId);
@@ -420,9 +436,6 @@ export async function acceptPendingOrganizationInvitations(input: {
         data: { defaultOrganizationId: acceptedOrganizationIds[0] },
       });
     } catch (error) {
-      // Memberships are already valid and resolveOrganization() can recover the
-      // default pointer. Do not turn a successful invitation acceptance into a
-      // failed Clerk sign-in because this denormalized pointer could not update.
       console.error("Failed to select accepted organization as default", error);
     }
   }
