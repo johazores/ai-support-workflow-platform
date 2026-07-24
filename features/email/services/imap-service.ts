@@ -15,6 +15,15 @@ type PollResult = {
   error?: string;
 };
 
+function markMessageSeen(imap: Imap, uid: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    imap.addFlags(uid, "\\Seen", (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
 /** Poll all active IMAP mailboxes owned by one organization. */
 export async function pollAllInboxes(
   organizationId: string,
@@ -112,9 +121,20 @@ function pollSingleInbox(
             return resolve(0);
           }
 
-          const fetch = imap.fetch(uids, { bodies: "", markSeen: true });
+          const fetch = imap.fetch(uids, { bodies: "", markSeen: false });
 
           fetch.on("message", (msg) => {
+            const uidPromise = new Promise<number>((resolveUid, rejectUid) => {
+              msg.once("attributes", (attributes) => {
+                if (typeof attributes.uid === "number") {
+                  resolveUid(attributes.uid);
+                  return;
+                }
+
+                rejectUid(new Error("IMAP message is missing a UID"));
+              });
+            });
+
             msg.on("body", (stream) => {
               let task: Promise<void>;
               task = simpleParser(
@@ -135,6 +155,8 @@ function pollSingleInbox(
                     mailboxId: config.id,
                   });
 
+                  const uid = await uidPromise;
+                  await markMessageSeen(imap, uid);
                   processed++;
                 })
                 .catch((parseErr) => {
