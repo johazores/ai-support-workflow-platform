@@ -20,11 +20,13 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 - Tenant-scoped notifications, mailbox configuration, email templates, delivery logs, IMAP polling, and inbound email processing
 - Tenant-scoped analytics counts, trends, status/priority breakdowns, and first-response metrics
 - Tenant-scoped CSAT reads, submissions, and aggregate statistics with ticket ownership enforcement
+- Tenant-scoped SLA ticket status, policy listing/editing, default-policy seeding, and policy-change audit events
 - Raw-body HMAC verification and mailbox-to-organization routing for inbound email webhooks
 - Real tenant-aware SMTP delivery for manual replies and saved AI drafts, including threading and delivery-failure rollback
 - Durable workflow execution records, step records, execution inspection, idempotency, and failure reporting
 - Tenant-isolated workflow rule reads, mutations, execution, actions, assignee membership checks, and execution-history metadata
-- Legacy null workflow/tag records exposed only through the deterministic default-workspace migration path
+- Legacy null workflow/tag/SLA records exposed only through the deterministic default-workspace migration path
+- Tenant-aware development seed covering the default workspace, memberships, tickets, messages, workflows, and SLA policies
 - Database-managed OpenAI and Anthropic configuration with explicit provider failure behavior
 - Health and readiness endpoints
 - Security response headers
@@ -34,9 +36,9 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 
 ## Active Migration Work
 
-- Complete tenant scoping for SLA paths
-- Resolve tests affected by Clerk-aware and tenant-aware service signatures
-- Remove temporary migration workflows after their one-time commits complete
+- Validate the full stacked tenant migration against a green repository quality gate
+- Merge the CI baseline cleanup that removes completed one-time migration workflows
+- Resolve any remaining Clerk-aware or tenant-aware signature regressions surfaced by the final quality gate
 
 ## Remaining Product Work
 
