@@ -293,6 +293,61 @@ describe("organization invitation lifecycle", () => {
     expect(result).toEqual(["org-1"]);
   });
 
+  it("preserves the role of an already-active organization member", async () => {
+    mocks.organizationInvitationFindMany.mockResolvedValueOnce([
+      pendingInvitation,
+    ]);
+    mocks.membershipFindUnique.mockResolvedValueOnce({
+      id: "membership-existing",
+      organizationId: "org-1",
+      userId: "user-2",
+      role: "admin",
+      status: "active",
+    });
+
+    await acceptPendingOrganizationInvitations({
+      userId: "user-2",
+      email: "member@example.com",
+    });
+
+    expect(mocks.membershipUpdate).not.toHaveBeenCalled();
+    expect(mocks.organizationInvitationUpdate).toHaveBeenCalledWith({
+      where: { id: "invite-1" },
+      data: expect.objectContaining({ status: "accepted" }),
+    });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          invitedRole: "agent",
+          effectiveRole: "admin",
+        }),
+      }),
+    );
+  });
+
+  it("reactivates an inactive membership using the invited role", async () => {
+    mocks.organizationInvitationFindMany.mockResolvedValueOnce([
+      pendingInvitation,
+    ]);
+    mocks.membershipFindUnique.mockResolvedValueOnce({
+      id: "membership-existing",
+      organizationId: "org-1",
+      userId: "user-2",
+      role: "supervisor",
+      status: "inactive",
+    });
+
+    await acceptPendingOrganizationInvitations({
+      userId: "user-2",
+      email: "member@example.com",
+    });
+
+    expect(mocks.membershipUpdate).toHaveBeenCalledWith({
+      where: { id: "membership-existing" },
+      data: { status: "active", role: "agent" },
+    });
+  });
+
   it("rolls back a newly created membership when accepting the invitation fails", async () => {
     mocks.organizationInvitationFindMany.mockResolvedValueOnce([
       pendingInvitation,
