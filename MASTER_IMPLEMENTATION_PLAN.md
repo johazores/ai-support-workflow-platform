@@ -1,6 +1,6 @@
 # AI Support Workflow Platform — Master Implementation Plan
 
-Last updated: July 20, 2026
+Last updated: July 25, 2026
 
 This document is the implementation source of truth for evolving the existing repository into a production-ready SaaS platform. It complements `docs/production-readiness-audit.md` and must be updated as decisions are made and work is completed.
 
@@ -88,9 +88,9 @@ Use Clerk for:
 - password reset;
 - session management;
 - user profile management;
-- optional Clerk Organizations only if they remain compatible with the internal tenancy model.
+- application-invitation email delivery while internal organizations remain the product tenancy source of truth.
 
-Keep an internal `User` record for product data and authorization. It should be linked by `clerkUserId` and should not store a product password hash.
+Keep an internal `User` record for product data and authorization. It should be linked by `clerkUserId` and should not store a product password hash after the legacy migration path is removed.
 
 ### Root Admin
 
@@ -121,7 +121,7 @@ Minimum models:
 - `OrganizationMember`
 - `Role`
 - `RolePermission` or a well-defined permission map
-- `Invitation`
+- `OrganizationInvitation`
 
 Every tenant-owned service must receive organization context explicitly.
 
@@ -276,7 +276,7 @@ Integration actions:
 
 - Organization
 - OrganizationMember
-- Invitation
+- OrganizationInvitation
 - RootAdmin
 - RootSession
 - FeatureFlag
@@ -442,7 +442,7 @@ Goal: establish a verified starting point before behavior changes.
 - [x] Review repository metadata, history, architecture, schema, dependencies, auth, workflows, email configuration, AI behavior, UI shell, CI, and documentation.
 - [x] Add production-readiness audit.
 - [x] Add this master implementation plan.
-- [ ] Inventory all routes and their auth/permission status.
+- [x] Inventory all routes and their auth/permission status.
 - [ ] Inventory every page, CTA, form, service, and data source.
 - [ ] Record current lint, type-check, test, and build results.
 - [ ] Add a production-readiness issue/label structure if issue tracking will be used.
@@ -454,17 +454,17 @@ Exit criteria: current behavior and gaps are documented, and the baseline checks
 
 Goal: establish the security boundary all later SaaS work depends on.
 
-- [ ] Add organization and membership schema.
-- [ ] Add Clerk dependencies and middleware.
-- [ ] Link Clerk identities to internal users.
-- [ ] Add onboarding and organization selection.
-- [ ] Add tenant-aware authorization helpers.
-- [ ] Add separate Root Admin and Root Session models.
-- [ ] Add Root Admin password, JWT, cookie, revocation, and lockout services.
-- [ ] Add `/root/login` and protected Root Admin shell.
+- [x] Add organization and membership schema.
+- [x] Add Clerk dependencies and middleware.
+- [x] Link Clerk identities to internal users.
+- [x] Add onboarding and organization selection.
+- [x] Add tenant-aware authorization helpers.
+- [x] Add separate Root Admin and Root Session models.
+- [x] Add Root Admin password, JWT, cookie, revocation, and lockout services.
+- [x] Add `/root/login` and protected Root Admin shell.
 - [ ] Add standardized protected API wrappers.
 - [ ] Migrate existing APIs to consistent authorization.
-- [ ] Add tenant isolation and auth tests.
+- [x] Add tenant isolation and auth tests.
 - [ ] Remove or development-gate the existing product password login.
 
 Exit criteria: Clerk users can access only their organization, Root Admin works without Clerk, and unauthorized/cross-tenant API access is covered by tests.
@@ -473,17 +473,17 @@ Exit criteria: Clerk users can access only their organization, Root Admin works 
 
 Goal: move integration management into a secure Root Admin UI.
 
-- [ ] Add encryption service and key-version strategy.
+- [x] Add encryption service and key-version strategy.
 - [ ] Add provider, credential, model, setting, feature flag, health, and usage models.
-- [ ] Migrate mailbox passwords to encrypted credentials.
-- [ ] Add secret masking and rotation.
+- [x] Migrate mailbox passwords to encrypted storage.
+- [x] Add secret masking and credential rotation.
 - [ ] Add dynamic configuration resolver and cache invalidation.
-- [ ] Add Root Admin environment/provider pages.
-- [ ] Add connection tests and failure monitoring.
+- [x] Add Root Admin environment/provider pages.
+- [x] Add provider connection tests and failure tracking.
 - [ ] Add OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together AI, and DeepSeek adapters.
 - [ ] Add Slack, Discord, SMTP, Resend, Twilio, Stripe, GitHub, Redis, database metadata, and storage configuration definitions.
-- [ ] Add audit events for configuration changes.
-- [ ] Remove production mock fallback behavior.
+- [x] Add audit events for configuration changes.
+- [x] Remove production mock fallback behavior.
 
 Exit criteria: supported providers can be configured, tested, enabled, disabled, prioritized, and rotated without code changes; secrets are encrypted and never returned in plaintext.
 
@@ -491,14 +491,14 @@ Exit criteria: supported providers can be configured, tested, enabled, disabled,
 
 Goal: replace fragile synchronous rule execution with a versioned, observable runtime.
 
-- [ ] Add workflow/version/execution/step models.
+- [x] Add workflow/version/execution/step models.
 - [ ] Define graph schema and node registry.
 - [ ] Migrate legacy rules to graph definitions.
 - [ ] Add queue/worker infrastructure.
 - [ ] Add idempotency, retries, timeouts, cancellation, and delays.
 - [ ] Add variables, conditions, branching, webhooks, and schedules.
 - [ ] Add test mode.
-- [ ] Add execution history and step inspector APIs.
+- [x] Add execution history and step inspector APIs.
 - [ ] Add redaction for execution inputs/outputs.
 - [ ] Add runtime integration tests.
 
@@ -510,7 +510,7 @@ Goal: deliver the modern SaaS experience without breaking existing product flows
 
 - [ ] Add semantic design tokens and icon system.
 - [ ] Build product sidebar/top bar/organization switcher.
-- [ ] Build Root Admin shell.
+- [x] Build Root Admin shell.
 - [ ] Migrate existing pages into the shell.
 - [ ] Add React Query provider and query conventions.
 - [ ] Build node palette, canvas, inspector, validation, autosave, undo/redo, test panel, and execution inspector.
@@ -532,7 +532,7 @@ Goal: finish incomplete or missing customer workflows.
 - [ ] Add provider-aware AI usage/cost views.
 - [ ] Add workflow templates and template installation.
 - [ ] Add import/export with validation and secret exclusion.
-- [ ] Add organization member invitations and role management.
+- [x] Add organization member invitations and role management.
 - [ ] Remove seeded/demo behavior from production paths.
 
 Exit criteria: no dead buttons, fake actions, silent mock data, or incomplete critical flows remain.
@@ -591,6 +591,7 @@ Do not combine schema foundations, UI redesign, workflow runtime, and provider m
 
 - Preserve the existing support product foundation.
 - Use Clerk for product users.
+- Keep internal `Organization` and `OrganizationMember` records as the product tenancy source of truth; use Clerk for identity and invitation delivery rather than introducing Clerk Organizations as a second tenancy model.
 - Keep Root Admin independent from Clerk.
 - Use database-managed encrypted provider configuration after secure bootstrap.
 - Build the visual workflow system on a durable versioned runtime.
@@ -599,7 +600,6 @@ Do not combine schema foundations, UI redesign, workflow runtime, and provider m
 ### Pending validation
 
 - Whether to retain MongoDB long-term or migrate before billing/workflow scale increases.
-- Whether Clerk Organizations should be used directly or only Clerk users with internal organizations.
 - Queue technology and worker deployment model.
 - Workflow canvas library.
 - KMS provider versus application-managed AES-GCM master key.
