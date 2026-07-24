@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getInternalClerkUser,
+  InactiveProductUserError,
   syncClerkIdentity,
 } from "@/features/auth/services/clerk-user-service";
 
@@ -97,7 +98,7 @@ describe("Clerk identity organization resolution", () => {
     expect(mocks.ensureLegacy).not.toHaveBeenCalled();
   });
 
-  it("resolves an organization accepted from an invitation before session creation", async () => {
+  it("resolves an accepted invitation before creating the product session", async () => {
     const invitedUser = {
       ...baseUser,
       defaultOrganizationId: "org-invited",
@@ -117,15 +118,53 @@ describe("Clerk identity organization resolution", () => {
       name: "New User",
     });
 
-    expect(mocks.acceptPendingInvitations).toHaveBeenCalledBefore(
-      mocks.requireMembership,
-    );
+    const inviteCall = mocks.acceptPendingInvitations.mock.invocationCallOrder[0];
+    const membershipCall = mocks.requireMembership.mock.invocationCallOrder[0];
+    expect(inviteCall).toBeLessThan(membershipCall);
     expect(user).toEqual(
       expect.objectContaining({
         organizationId: "org-invited",
         role: "supervisor",
       }),
     );
+  });
+
+  it("refuses to sync an inactive user linked to the Clerk identity", async () => {
+    mocks.userFindUnique.mockResolvedValueOnce({
+      ...baseUser,
+      status: "inactive",
+    });
+
+    await expect(
+      syncClerkIdentity({
+        clerkUserId: "clerk-1",
+        email: "new@example.com",
+        name: "New User",
+      }),
+    ).rejects.toBeInstanceOf(InactiveProductUserError);
+
+    expect(mocks.acceptPendingInvitations).not.toHaveBeenCalled();
+  });
+
+  it("refuses to relink an inactive internal identity by email", async () => {
+    mocks.userFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...baseUser,
+        clerkUserId: null,
+        status: "inactive",
+      });
+
+    await expect(
+      syncClerkIdentity({
+        clerkUserId: "clerk-new",
+        email: "new@example.com",
+        name: "New User",
+      }),
+    ).rejects.toBeInstanceOf(InactiveProductUserError);
+
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.acceptPendingInvitations).not.toHaveBeenCalled();
   });
 
   it("keeps password-backed users on the legacy migration path", async () => {
