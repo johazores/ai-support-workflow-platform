@@ -1,6 +1,10 @@
-import { prisma } from "@/lib/prisma";
-import { ensureLegacyOrganizationForUser } from "@/features/organizations/services/organization-service";
+import type { User } from "@prisma/client";
 import type { SessionUser } from "@/features/auth/services/session-service";
+import {
+  ensureLegacyOrganizationForUser,
+  requireOrganizationMembership,
+} from "@/features/organizations/services/organization-service";
+import { prisma } from "@/lib/prisma";
 
 type ClerkIdentityInput = {
   clerkUserId: string;
@@ -10,6 +14,58 @@ type ClerkIdentityInput = {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+async function resolveOrganization(user: User) {
+  if (user.defaultOrganizationId) {
+    const current = await requireOrganizationMembership(
+      user.id,
+      user.defaultOrganizationId,
+    );
+    if (current) return current;
+  }
+
+  const memberships = await prisma.organizationMember.findMany({
+    where: { userId: user.id, status: "active" },
+    orderBy: { createdAt: "asc" },
+    select: { organizationId: true },
+  });
+
+  for (const membership of memberships) {
+    const organization = await requireOrganizationMembership(
+      user.id,
+      membership.organizationId,
+    );
+    if (!organization) continue;
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { defaultOrganizationId: organization.organizationId },
+    });
+    return organization;
+  }
+
+  // Existing password-backed users belong to the legacy migration path.
+  // Brand-new Clerk-only users remain organization-less until onboarding or an invitation.
+  if (user.passwordHash) {
+    return ensureLegacyOrganizationForUser(user);
+  }
+
+  return null;
+}
+
+function toSessionUser(
+  user: User,
+  organization: Awaited<ReturnType<typeof resolveOrganization>>,
+): SessionUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: organization?.role ?? user.role,
+    organizationId: organization?.organizationId,
+    authProvider: "clerk",
+  };
 }
 
 export async function syncClerkIdentity(
@@ -52,16 +108,8 @@ export async function syncClerkIdentity(
     });
   }
 
-  const organization = await ensureLegacyOrganizationForUser(user);
-
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: organization.role,
-    organizationId: organization.organizationId,
-    authProvider: "clerk",
-  };
+  const organization = await resolveOrganization(user);
+  return toSessionUser(user, organization);
 }
 
 export async function getInternalClerkUser(
@@ -70,16 +118,8 @@ export async function getInternalClerkUser(
   const user = await prisma.user.findUnique({ where: { clerkUserId } });
   if (!user || user.status !== "active") return null;
 
-  const organization = await ensureLegacyOrganizationForUser(user);
-
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: organization.role,
-    organizationId: organization.organizationId,
-    authProvider: "clerk",
-  };
+  const organization = await resolveOrganization(user);
+  return toSessionUser(user, organization);
 }
 
 export async function disableClerkUser(clerkUserId: string) {
