@@ -12,12 +12,17 @@ export async function sendManualReply(input: SendManualReplyInput) {
   const ticket = await prisma.ticket.findFirst({
     where: {
       id: input.ticketId,
-      OR: [
-        { organizationId: input.organizationId },
-        { organizationId: null },
-      ],
+      organizationId: input.organizationId,
     },
-    include: { customer: true },
+    include: {
+      customer: true,
+      messages: {
+        where: { externalMessageId: { not: null } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { externalMessageId: true },
+      },
+    },
   });
 
   if (!ticket) throw new Error("Ticket not found");
@@ -31,12 +36,34 @@ export async function sendManualReply(input: SendManualReplyInput) {
     },
   });
 
+  const delivery = await sendTicketEmail({
+    organizationId: input.organizationId,
+    ticketId: ticket.id,
+    messageId: message.id,
+    to: ticket.customer.email,
+    subject: `Re: ${ticket.subject}`,
+    body: input.body,
+    mailboxId: ticket.mailboxId ?? undefined,
+    inReplyTo: ticket.messages[0]?.externalMessageId ?? undefined,
+  });
+
+  if (!delivery.success) {
+    await prisma.message.delete({ where: { id: message.id } });
+    await prisma.activityLog.create({
+      data: {
+        organizationId: input.organizationId,
+        ticketId: ticket.id,
+        type: "reply_failed",
+        message: "Manual support reply failed to send.",
+      },
+    });
+
+    throw new Error(delivery.error || "Failed to send support reply");
+  }
+
   await prisma.ticket.update({
     where: { id: ticket.id },
-    data: {
-      organizationId: input.organizationId,
-      status: "pending",
-    },
+    data: { status: "pending" },
   });
 
   await prisma.activityLog.create({
@@ -52,13 +79,8 @@ export async function sendManualReply(input: SendManualReplyInput) {
     messageId: message.id,
   });
 
-  await sendTicketEmail({
-    ticketId: ticket.id,
-    messageId: message.id,
-    to: ticket.customer.email,
-    subject: `Re: ${ticket.subject}`,
-    body: input.body,
-  });
-
-  return message;
+  return {
+    ...message,
+    externalMessageId: delivery.externalMessageId,
+  };
 }
