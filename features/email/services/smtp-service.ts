@@ -6,16 +6,23 @@ import {
 } from "@/features/email/services/email-config-service";
 
 export async function sendEmail(opts: {
+  organizationId: string;
   to: string;
   subject: string;
-  html: string;
+  text?: string;
+  html?: string;
   ticketId: string;
   messageId: string;
   mailboxId?: string;
+  inReplyTo?: string;
 }) {
+  if (!opts.text && !opts.html) {
+    throw new Error("Email body is required");
+  }
+
   const config = opts.mailboxId
-    ? await getEmailConfigById(opts.mailboxId)
-    : await getEmailConfig();
+    ? await getEmailConfigById(opts.mailboxId, opts.organizationId)
+    : await getEmailConfig(opts.organizationId);
 
   if (!config || !config.isActive) {
     throw new Error("Email integration is not configured or inactive");
@@ -32,15 +39,19 @@ export async function sendEmail(opts: {
   });
 
   try {
-    await transport.sendMail({
+    const delivery = await transport.sendMail({
       from: `"${config.fromName}" <${config.fromAddress}>`,
       to: opts.to,
       subject: opts.subject,
+      text: opts.text,
       html: opts.html,
+      inReplyTo: opts.inReplyTo,
+      references: opts.inReplyTo ? [opts.inReplyTo] : undefined,
     });
 
     await prisma.emailLog.create({
       data: {
+        organizationId: opts.organizationId,
         ticketId: opts.ticketId,
         messageId: opts.messageId,
         mailboxId: config.id,
@@ -49,11 +60,14 @@ export async function sendEmail(opts: {
         status: "sent",
       },
     });
+
+    return { messageId: delivery.messageId, mailboxId: config.id };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
 
     await prisma.emailLog.create({
       data: {
+        organizationId: opts.organizationId,
         ticketId: opts.ticketId,
         messageId: opts.messageId,
         mailboxId: config.id,
