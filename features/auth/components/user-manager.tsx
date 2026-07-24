@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { EmptyState } from "@/components/ui/empty-state";
-import { formatDateTime } from "@/lib/utils";
 import {
-  fetchUsers,
   createUser,
-  updateUserRole,
   deleteUser,
+  fetchUsers,
+  updateUserRole,
 } from "@/features/auth/services/user-client-service";
+import { formatDateTime } from "@/lib/utils";
 
 type User = {
   id: string;
@@ -30,10 +30,8 @@ export function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Form state
+  const [removeTarget, setRemoveTarget] = useState<User | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +41,7 @@ export function UserManager() {
   useEffect(() => {
     fetchUsers()
       .then(setUsers)
-      .catch(() => toast("Failed to load users", "error"))
+      .catch(() => toast("Failed to load organization members", "error"))
       .finally(() => setLoading(false));
   }, [toast]);
 
@@ -53,16 +51,19 @@ export function UserManager() {
 
     try {
       const user = await createUser({ name, email, password, role });
-      setUsers((prev) => [user, ...prev]);
+      setUsers((previous) => [
+        user,
+        ...previous.filter((item) => item.id !== user.id),
+      ]);
       setShowForm(false);
       setName("");
       setEmail("");
       setPassword("");
       setRole("agent");
-      toast("User created successfully", "success");
-    } catch (err) {
+      toast("Member added successfully", "success");
+    } catch (error) {
       toast(
-        err instanceof Error ? err.message : "Failed to create user",
+        error instanceof Error ? error.message : "Failed to add member",
         "error",
       );
     } finally {
@@ -73,38 +74,44 @@ export function UserManager() {
   async function handleRoleChange(userId: string, newRole: string) {
     try {
       const updated = await updateUserRole(userId, newRole);
-      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
+      setUsers((previous) =>
+        previous.map((user) => (user.id === userId ? updated : user)),
+      );
       toast("Role updated", "success");
-    } catch (err) {
+    } catch (error) {
       toast(
-        err instanceof Error ? err.message : "Failed to update role",
+        error instanceof Error ? error.message : "Failed to update role",
         "error",
       );
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
+  async function handleRemove() {
+    if (!removeTarget) return;
+    setIsRemoving(true);
 
     try {
-      await deleteUser(deleteTarget.id);
-      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
-      toast("User deleted", "success");
-    } catch (err) {
+      await deleteUser(removeTarget.id);
+      setUsers((previous) =>
+        previous.filter((user) => user.id !== removeTarget.id),
+      );
+      toast("Member removed from this organization", "success");
+    } catch (error) {
       toast(
-        err instanceof Error ? err.message : "Failed to delete user",
+        error instanceof Error ? error.message : "Failed to remove member",
         "error",
       );
     } finally {
-      setIsDeleting(false);
-      setDeleteTarget(null);
+      setIsRemoving(false);
+      setRemoveTarget(null);
     }
   }
 
   if (loading) {
     return (
-      <p className="animate-pulse text-sm text-slate-500">Loading users...</p>
+      <p className="animate-pulse text-sm text-slate-500">
+        Loading organization members...
+      </p>
     );
   }
 
@@ -112,10 +119,10 @@ export function UserManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          {users.length} {users.length === 1 ? "user" : "users"}
+          {users.length} {users.length === 1 ? "member" : "members"}
         </p>
         <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "Add User"}
+          {showForm ? "Cancel" : "Add Member"}
         </Button>
       </div>
 
@@ -125,13 +132,13 @@ export function UserManager() {
           className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700"
         >
           <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Create New User
+            Add Organization Member
           </h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               label="Name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => setName(event.target.value)}
               required
               fullWidth
             />
@@ -139,33 +146,33 @@ export function UserManager() {
               label="Email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               required
               fullWidth
             />
             <Input
-              label="Password"
+              label="Temporary password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               required
-              helperText="Minimum 8 characters"
+              helperText="Used only when a new local account must be created. Existing identities keep their credentials."
               fullWidth
             />
             <Select
               label="Role"
               value={role}
-              onChange={(e) => setRole(e.target.value)}
-              options={roles.map((r) => ({
-                value: r,
-                label: r.charAt(0).toUpperCase() + r.slice(1),
+              onChange={(event) => setRole(event.target.value)}
+              options={roles.map((item) => ({
+                value: item,
+                label: item.charAt(0).toUpperCase() + item.slice(1),
               }))}
               fullWidth
             />
           </div>
           <div className="mt-4 flex justify-end">
             <Button type="submit" isLoading={isCreating}>
-              Create User
+              Add Member
             </Button>
           </div>
         </form>
@@ -174,8 +181,8 @@ export function UserManager() {
       {users.length === 0 ? (
         <EmptyState
           icon="file"
-          title="No users yet"
-          description="Create the first user to get started."
+          title="No organization members yet"
+          description="Add a member to start collaborating in this workspace."
         />
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
@@ -215,12 +222,13 @@ export function UserManager() {
                     <td className="px-5 py-3">
                       <Select
                         value={user.role}
-                        onChange={(e) =>
-                          handleRoleChange(user.id, e.target.value)
+                        onChange={(event) =>
+                          handleRoleChange(user.id, event.target.value)
                         }
-                        options={roles.map((r) => ({
-                          value: r,
-                          label: r.charAt(0).toUpperCase() + r.slice(1),
+                        options={roles.map((item) => ({
+                          value: item,
+                          label:
+                            item.charAt(0).toUpperCase() + item.slice(1),
                         }))}
                         aria-label={`Role for ${user.name}`}
                         className="w-32"
@@ -233,10 +241,10 @@ export function UserManager() {
                       <Button
                         variant="tertiary"
                         size="sm"
-                        onClick={() => setDeleteTarget(user)}
+                        onClick={() => setRemoveTarget(user)}
                         className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
-                        Delete
+                        Remove
                       </Button>
                     </td>
                   </tr>
@@ -248,16 +256,16 @@ export function UserManager() {
       )}
 
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete user"
+        open={!!removeTarget}
+        title="Remove organization member"
         variant="destructive"
-        confirmLabel="Delete"
-        isLoading={isDeleting}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
+        confirmLabel="Remove"
+        isLoading={isRemoving}
+        onConfirm={handleRemove}
+        onCancel={() => setRemoveTarget(null)}
       >
-        Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
-        This cannot be undone.
+        Remove <strong>{removeTarget?.name}</strong> from this organization? Their
+        global account and memberships in other organizations are not deleted.
       </ConfirmDialog>
     </div>
   );
