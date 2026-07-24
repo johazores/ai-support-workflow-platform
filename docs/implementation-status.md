@@ -19,6 +19,8 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 - Raw-body HMAC verification and mailbox-to-organization routing for inbound email webhooks
 - Real tenant-aware SMTP delivery for manual replies and saved AI drafts, including threading and delivery-failure rollback
 - Durable workflow execution records, step records, execution inspection, idempotency, and failure reporting
+- Tenant-isolated workflow rule reads, mutations, execution, actions, assignee membership checks, and execution-history metadata
+- Legacy null workflow/tag records exposed only through the deterministic default-workspace migration path
 - Database-managed OpenAI and Anthropic configuration with explicit provider failure behavior
 - Health and readiness endpoints
 - Security response headers
