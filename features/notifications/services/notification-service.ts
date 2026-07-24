@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 type CreateNotificationInput = {
+  organizationId: string;
   userId: string;
   type: string;
   title: string;
@@ -11,6 +12,7 @@ type CreateNotificationInput = {
 export async function createNotification(input: CreateNotificationInput) {
   return prisma.notification.create({
     data: {
+      organizationId: input.organizationId,
       userId: input.userId,
       type: input.type,
       title: input.title,
@@ -20,52 +22,72 @@ export async function createNotification(input: CreateNotificationInput) {
   });
 }
 
-export async function getNotifications(userId: string) {
+export async function getNotifications(
+  organizationId: string,
+  userId: string,
+) {
   return prisma.notification.findMany({
-    where: { userId },
+    where: { organizationId, userId },
     orderBy: { createdAt: "desc" },
     take: 30,
   });
 }
 
-export async function getUnreadCount(userId: string) {
+export async function getUnreadCount(
+  organizationId: string,
+  userId: string,
+) {
   return prisma.notification.count({
-    where: { userId, isRead: false },
+    where: { organizationId, userId, isRead: false },
   });
 }
 
-export async function markNotificationsRead(userId: string) {
+export async function markNotificationsRead(
+  organizationId: string,
+  userId: string,
+) {
   return prisma.notification.updateMany({
-    where: { userId, isRead: false },
+    where: { organizationId, userId, isRead: false },
     data: { isRead: true },
   });
 }
 
-/**
- * Notify all admins about an event (e.g., new ticket from email).
- */
+/** Notify active administrators within one organization. */
 export async function notifyAdmins(
-  input: Omit<CreateNotificationInput, "userId">,
+  organizationId: string,
+  input: Omit<CreateNotificationInput, "organizationId" | "userId">,
 ) {
-  const admins = await prisma.user.findMany({
-    where: { role: "admin" },
-    select: { id: true },
+  const admins = await prisma.organizationMember.findMany({
+    where: {
+      organizationId,
+      role: "admin",
+      status: "active",
+    },
+    select: { userId: true },
   });
 
   await Promise.all(
-    admins.map((admin) => createNotification({ ...input, userId: admin.id })),
+    admins.map((admin) =>
+      createNotification({
+        ...input,
+        organizationId,
+        userId: admin.userId,
+      }),
+    ),
   );
 }
 
-/**
- * Notify the assigned agent on a ticket.
- */
+/** Notify the assigned agent only when they belong to the ticket organization. */
 export async function notifyAssignee(
+  organizationId: string,
   ticketId: string,
-  input: Omit<CreateNotificationInput, "userId" | "ticketId">,
+  input: Omit<
+    CreateNotificationInput,
+    "organizationId" | "userId" | "ticketId"
+  >,
 ) {
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, organizationId },
     select: { assigneeEmail: true },
   });
 
@@ -78,8 +100,21 @@ export async function notifyAssignee(
 
   if (!user) return;
 
+  const membership = await prisma.organizationMember.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: user.id,
+      },
+    },
+    select: { status: true },
+  });
+
+  if (membership?.status !== "active") return;
+
   await createNotification({
     ...input,
+    organizationId,
     userId: user.id,
     ticketId,
   });
