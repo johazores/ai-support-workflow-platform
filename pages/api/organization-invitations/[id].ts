@@ -27,8 +27,14 @@ export default async function handler(
     });
     return res.status(200).json({ data: invitation });
   } catch (error) {
-    if (error instanceof Error && error.message === "Invitation not found") {
-      return res.status(404).json({ message: error.message });
+    if (error instanceof Error) {
+      if (error.message === "Invitation not found") {
+        return res.status(404).json({ message: error.message });
+      }
+
+      if (error.message.startsWith("Clerk invitations are unavailable")) {
+        return res.status(503).json({ message: error.message });
+      }
     }
 
     console.error("Failed to revoke organization invitation", error);
