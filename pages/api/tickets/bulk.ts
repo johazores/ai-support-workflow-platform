@@ -48,14 +48,20 @@ export default async function handler(
       .json({ message: "Invalid input", errors: parsed.error.flatten() });
   }
 
+  let action;
+  if (parsed.data.action === "change-status") {
+    action = { type: "change-status" as const, value: parsed.data.value };
+  } else if (parsed.data.action === "change-priority") {
+    action = { type: "change-priority" as const, value: parsed.data.value };
+  } else {
+    action = { type: "assign" as const, value: parsed.data.value };
+  }
+
   try {
     const result = await bulkUpdateTickets({
       organizationId: auth.user.organizationId,
       ticketIds: parsed.data.ticketIds,
-      action: {
-        type: parsed.data.action,
-        value: parsed.data.value,
-      },
+      action,
     });
 
     return res.status(200).json({ data: result });
