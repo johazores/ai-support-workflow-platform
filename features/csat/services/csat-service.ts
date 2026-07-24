@@ -60,13 +60,6 @@ export async function getCsatRating(
     return null;
   }
 
-  if (!rating.organizationId) {
-    return prisma.csatRating.update({
-      where: { ticketId },
-      data: { organizationId },
-    });
-  }
-
   return rating;
 }
 
