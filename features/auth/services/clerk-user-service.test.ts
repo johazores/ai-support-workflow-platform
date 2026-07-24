@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   membershipFindMany: vi.fn(),
   requireMembership: vi.fn(),
   ensureLegacy: vi.fn(),
+  acceptPendingInvitations: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -30,6 +31,13 @@ vi.mock("@/features/organizations/services/organization-service", () => ({
   requireOrganizationMembership: mocks.requireMembership,
   ensureLegacyOrganizationForUser: mocks.ensureLegacy,
 }));
+
+vi.mock(
+  "@/features/organizations/services/organization-invitation-service",
+  () => ({
+    acceptPendingOrganizationInvitations: mocks.acceptPendingInvitations,
+  }),
+);
 
 const baseUser = {
   id: "user-1",
@@ -54,6 +62,7 @@ describe("Clerk identity organization resolution", () => {
       organizationId: "org-default",
       role: "agent",
     });
+    mocks.acceptPendingInvitations.mockResolvedValue([]);
     mocks.userUpdate.mockImplementation(async ({ data }: { data: object }) => ({
       ...baseUser,
       ...data,
@@ -63,7 +72,8 @@ describe("Clerk identity organization resolution", () => {
   it("keeps a brand-new Clerk-only identity organization-less", async () => {
     mocks.userFindUnique
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(baseUser);
     mocks.userCreate.mockResolvedValueOnce(baseUser);
 
     const user = await syncClerkIdentity({
@@ -72,6 +82,10 @@ describe("Clerk identity organization resolution", () => {
       name: "New User",
     });
 
+    expect(mocks.acceptPendingInvitations).toHaveBeenCalledWith({
+      userId: "user-1",
+      email: "new@example.com",
+    });
     expect(user).toEqual({
       id: "user-1",
       name: "New User",
@@ -81,6 +95,37 @@ describe("Clerk identity organization resolution", () => {
       authProvider: "clerk",
     });
     expect(mocks.ensureLegacy).not.toHaveBeenCalled();
+  });
+
+  it("resolves an organization accepted from an invitation before session creation", async () => {
+    const invitedUser = {
+      ...baseUser,
+      defaultOrganizationId: "org-invited",
+    };
+    mocks.userFindUnique
+      .mockResolvedValueOnce(baseUser)
+      .mockResolvedValueOnce(invitedUser);
+    mocks.acceptPendingInvitations.mockResolvedValueOnce(["org-invited"]);
+    mocks.requireMembership.mockResolvedValueOnce({
+      organizationId: "org-invited",
+      role: "supervisor",
+    });
+
+    const user = await syncClerkIdentity({
+      clerkUserId: "clerk-1",
+      email: "new@example.com",
+      name: "New User",
+    });
+
+    expect(mocks.acceptPendingInvitations).toHaveBeenCalledBefore(
+      mocks.requireMembership,
+    );
+    expect(user).toEqual(
+      expect.objectContaining({
+        organizationId: "org-invited",
+        role: "supervisor",
+      }),
+    );
   });
 
   it("keeps password-backed users on the legacy migration path", async () => {
