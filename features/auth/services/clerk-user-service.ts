@@ -13,6 +13,13 @@ type ClerkIdentityInput = {
   name: string;
 };
 
+export class InactiveProductUserError extends Error {
+  constructor() {
+    super("User account is inactive");
+    this.name = "InactiveProductUserError";
+  }
+}
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -46,14 +53,10 @@ async function resolveOrganization(user: User) {
     return organization;
   }
 
-  // Existing password-backed users belong to the legacy migration path.
   if (user.passwordHash) {
     return ensureLegacyOrganizationForUser(user);
   }
 
-  // A Clerk-only user can carry a stale pointer after an organization was
-  // suspended/removed. Clear it so first-organization onboarding can claim
-  // the pointer atomically.
   if (user.defaultOrganizationId) {
     await prisma.user.update({
       where: { id: user.id },
@@ -61,8 +64,6 @@ async function resolveOrganization(user: User) {
     });
   }
 
-  // Brand-new Clerk-only users remain organization-less until onboarding or
-  // an invitation creates an active membership.
   return null;
 }
 
@@ -90,8 +91,16 @@ export async function syncClerkIdentity(
     where: { clerkUserId: input.clerkUserId },
   });
 
+  if (user && user.status !== "active") {
+    throw new InactiveProductUserError();
+  }
+
   if (!user) {
     const existingByEmail = await prisma.user.findUnique({ where: { email } });
+
+    if (existingByEmail && existingByEmail.status !== "active") {
+      throw new InactiveProductUserError();
+    }
 
     user = existingByEmail
       ? await prisma.user.update({
@@ -100,7 +109,6 @@ export async function syncClerkIdentity(
             clerkUserId: input.clerkUserId,
             email,
             name,
-            status: "active",
           },
         })
       : await prisma.user.create({
@@ -120,9 +128,6 @@ export async function syncClerkIdentity(
     });
   }
 
-  // Clerk verifies ownership of the identity email. Matching pending
-  // invitations are therefore safe to convert into internal memberships
-  // before the active organization is resolved for the session.
   await acceptPendingOrganizationInvitations({
     userId: user.id,
     email,
@@ -130,6 +135,9 @@ export async function syncClerkIdentity(
 
   const refreshedUser = await prisma.user.findUnique({ where: { id: user.id } });
   if (!refreshedUser) throw new Error("User disappeared during Clerk sync");
+  if (refreshedUser.status !== "active") {
+    throw new InactiveProductUserError();
+  }
 
   const organization = await resolveOrganization(refreshedUser);
   return toSessionUser(refreshedUser, organization);
@@ -143,6 +151,14 @@ export async function getInternalClerkUser(
 
   const organization = await resolveOrganization(user);
   return toSessionUser(user, organization);
+}
+
+export async function isInternalClerkUserInactive(clerkUserId: string) {
+  const user = await prisma.user.findUnique({
+    where: { clerkUserId },
+    select: { status: true },
+  });
+  return user?.status === "inactive";
 }
 
 export async function disableClerkUser(clerkUserId: string) {
