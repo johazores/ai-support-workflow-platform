@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 
 export async function listWorkflowExecutions(
   organizationId: string,
@@ -13,8 +14,14 @@ export async function listWorkflowExecutions(
   const workflowIds = [
     ...new Set(executions.map((execution) => execution.workflowId)),
   ];
+  const includeLegacy = await isLegacyOrganization(organizationId);
   const legacyRules = await prisma.workflowRule.findMany({
-    where: { id: { in: workflowIds } },
+    where: {
+      id: { in: workflowIds },
+      ...(includeLegacy
+        ? { OR: [{ organizationId }, { organizationId: null }] }
+        : { organizationId }),
+    },
   });
   const names = new Map(legacyRules.map((rule) => [rule.id, rule.name]));
 
@@ -33,12 +40,20 @@ export async function getWorkflowExecution(
   });
   if (!execution) return null;
 
+  const includeLegacy = await isLegacyOrganization(organizationId);
   const [steps, rule] = await Promise.all([
     prisma.workflowExecutionStep.findMany({
       where: { executionId, organizationId },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.workflowRule.findUnique({ where: { id: execution.workflowId } }),
+    prisma.workflowRule.findFirst({
+      where: {
+        id: execution.workflowId,
+        ...(includeLegacy
+          ? { OR: [{ organizationId }, { organizationId: null }] }
+          : { organizationId }),
+      },
+    }),
   ]);
 
   return {
