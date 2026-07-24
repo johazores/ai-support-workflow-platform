@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   membershipFindUnique: vi.fn(),
   membershipCreate: vi.fn(),
   membershipUpdate: vi.fn(),
+  membershipDelete: vi.fn(),
   clerkCreateInvitation: vi.fn(),
   clerkRevokeInvitation: vi.fn(),
   recordAuditEvent: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.membershipFindUnique,
       create: mocks.membershipCreate,
       update: mocks.membershipUpdate,
+      delete: mocks.membershipDelete,
     },
   },
 }));
@@ -55,6 +57,10 @@ vi.mock("@clerk/nextjs/server", () => ({
       revokeInvitation: mocks.clerkRevokeInvitation,
     },
   })),
+}));
+
+vi.mock("@/features/auth/services/clerk-config", () => ({
+  isClerkConfigured: vi.fn(() => true),
 }));
 
 vi.mock("@/features/audit/services/audit-event-service", () => ({
@@ -93,6 +99,7 @@ describe("organization invitation lifecycle", () => {
     mocks.membershipFindUnique.mockResolvedValue(null);
     mocks.membershipCreate.mockResolvedValue({ id: "membership-1" });
     mocks.membershipUpdate.mockResolvedValue({});
+    mocks.membershipDelete.mockResolvedValue({});
     mocks.clerkCreateInvitation.mockResolvedValue({ id: "clerk-invite-1" });
     mocks.clerkRevokeInvitation.mockResolvedValue({});
     mocks.recordAuditEvent.mockResolvedValue({});
@@ -148,6 +155,28 @@ describe("organization invitation lifecycle", () => {
     expect(mocks.clerkCreateInvitation).not.toHaveBeenCalled();
   });
 
+  it("does not allow an inactive internal identity to be re-invited", async () => {
+    mocks.userFindUnique.mockResolvedValueOnce({
+      id: "user-2",
+      email: "member@example.com",
+      status: "inactive",
+      clerkUserId: "clerk-user-2",
+      defaultOrganizationId: null,
+    });
+
+    await expect(
+      createOrganizationInvitation({
+        organizationId: "org-1",
+        invitedByUserId: "admin-1",
+        email: "member@example.com",
+        role: "agent",
+      }),
+    ).rejects.toThrow("User account is inactive");
+
+    expect(mocks.membershipCreate).not.toHaveBeenCalled();
+    expect(mocks.clerkCreateInvitation).not.toHaveBeenCalled();
+  });
+
   it("adds an existing active Clerk identity directly without sending email", async () => {
     mocks.userFindUnique.mockResolvedValueOnce({
       id: "user-2",
@@ -185,6 +214,36 @@ describe("organization invitation lifecycle", () => {
     });
     expect(mocks.clerkCreateInvitation).not.toHaveBeenCalled();
     expect(result.delivery).toBe("member-added");
+  });
+
+  it("rolls back a direct membership when invitation persistence fails", async () => {
+    mocks.userFindUnique.mockResolvedValueOnce({
+      id: "user-2",
+      email: "member@example.com",
+      status: "active",
+      clerkUserId: "clerk-user-2",
+      defaultOrganizationId: null,
+    });
+    mocks.organizationInvitationCreate.mockRejectedValueOnce(
+      new Error("database unavailable"),
+    );
+
+    await expect(
+      createOrganizationInvitation({
+        organizationId: "org-1",
+        invitedByUserId: "admin-1",
+        email: "member@example.com",
+        role: "agent",
+      }),
+    ).rejects.toThrow("database unavailable");
+
+    expect(mocks.membershipDelete).toHaveBeenCalledWith({
+      where: { id: "membership-1" },
+    });
+    expect(mocks.userUpdate).toHaveBeenLastCalledWith({
+      where: { id: "user-2" },
+      data: { defaultOrganizationId: null },
+    });
   });
 
   it("revokes only a pending invitation owned by the requested organization", async () => {
@@ -234,6 +293,26 @@ describe("organization invitation lifecycle", () => {
     expect(result).toEqual(["org-1"]);
   });
 
+  it("rolls back a newly created membership when accepting the invitation fails", async () => {
+    mocks.organizationInvitationFindMany.mockResolvedValueOnce([
+      pendingInvitation,
+    ]);
+    mocks.organizationInvitationUpdate.mockRejectedValueOnce(
+      new Error("database unavailable"),
+    );
+
+    await expect(
+      acceptPendingOrganizationInvitations({
+        userId: "user-2",
+        email: "member@example.com",
+      }),
+    ).rejects.toThrow("database unavailable");
+
+    expect(mocks.membershipDelete).toHaveBeenCalledWith({
+      where: { id: "membership-1" },
+    });
+  });
+
   it("revokes an internal invitation when its organization is no longer active", async () => {
     mocks.organizationInvitationFindMany.mockResolvedValueOnce([
       pendingInvitation,
@@ -267,8 +346,8 @@ describe("organization invitation lifecycle", () => {
       }),
     ).rejects.toThrow("database unavailable");
 
-    expect(mocks.clerkRevokeInvitation).toHaveBeenCalledWith(
-      "clerk-invite-1",
-    );
+    expect(mocks.clerkRevokeInvitation).toHaveBeenCalledWith({
+      invitationId: "clerk-invite-1",
+    });
   });
 });
