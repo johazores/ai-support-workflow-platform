@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
-import { requireApiPermission } from "@/lib/api-auth";
 import {
   listEmailTemplates,
   createEmailTemplate,
 } from "@/features/email/services/email-template-service";
+import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -16,11 +16,13 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const auth = await requireApiPermission(req, res, "email-logs:read");
+  const permission =
+    req.method === "GET" ? "email-logs:read" : "email-settings:manage";
+  const auth = await requireTenantApiPermission(req, res, permission);
   if (!auth.ok) return;
 
   if (req.method === "GET") {
-    const templates = await listEmailTemplates();
+    const templates = await listEmailTemplates(auth.user.organizationId);
     return res.status(200).json({ data: templates });
   }
 
@@ -32,7 +34,10 @@ export default async function handler(
         .json({ message: "Invalid input", errors: parsed.error.flatten() });
     }
 
-    const template = await createEmailTemplate(parsed.data);
+    const template = await createEmailTemplate({
+      ...parsed.data,
+      organizationId: auth.user.organizationId,
+    });
     return res.status(201).json({ data: template });
   }
 
