@@ -2,7 +2,7 @@
 
 This document tracks the current migration from the original single-workspace support application to a production-oriented SaaS platform.
 
-Development continues on `feat/saas-foundation` in draft PR #3. It supersedes PR #2, which GitHub automatically closed when the original source branch was renamed.
+The initial SaaS foundation from PR #3 is merged into `master`. The status below reflects the current implementation and remaining production work.
 
 ## Implemented
 
@@ -21,10 +21,10 @@ Development continues on `feat/saas-foundation` in draft PR #3. It supersedes PR
 - Security response headers
 - CI validation for Prisma, TypeScript, ESLint, Prettier, tests, and production builds
 - Complete API inventory and repository-wide authorization audit
+- Tenant-safe composite uniqueness for customers, tags, SLA policies, and mailboxes
 
 ## Active Migration Work
 
-- Apply tenant-safe composite uniqueness to customers, tags, SLA policies, and mailboxes
 - Complete tenant scoping for analytics, notifications, email templates/logs, CSAT, bulk operations, users, SLA, polling, and inbound email paths
 - Resolve tests affected by Clerk-aware and tenant-aware service signatures
 - Remove temporary migration workflows after their one-time commits complete
