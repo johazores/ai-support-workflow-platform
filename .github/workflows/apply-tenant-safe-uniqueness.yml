@@ -3,6 +3,8 @@ name: Apply Tenant Safe Uniqueness
 on:
   push:
     branches: [feat/tenant-safe-uniqueness]
+  pull_request:
+    branches: [master]
 
 permissions:
   contents: write
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   apply:
-    if: github.repository == 'johazores/ai-support-workflow-platform' && github.actor != 'github-actions[bot]'
+    if: github.repository == 'johazores/ai-support-workflow-platform' && github.actor != 'github-actions[bot]' && (github.ref == 'refs/heads/feat/tenant-safe-uniqueness' || github.head_ref == 'feat/tenant-safe-uniqueness')
     runs-on: ubuntu-latest
 
     steps:
