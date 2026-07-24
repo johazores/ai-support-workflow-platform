@@ -15,6 +15,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 - Legacy JWT authentication retained only as a migration fallback when Clerk is unavailable
 - Tenant-aware authorization middleware for API routes and protected pages
 - Tenant-scoped ticket listing, details, assignment, status, priority, replies, internal notes, tags, AI drafts, saved drafts, saved replies, and customer queries
+- Tenant-scoped bulk ticket status, priority, assignment, and activity-log operations with all-or-nothing ownership checks
 - Tenant-scoped notifications, mailbox configuration, email templates, delivery logs, IMAP polling, and inbound email processing
 - Tenant-scoped analytics counts, trends, status/priority breakdowns, and first-response metrics
 - Tenant-scoped CSAT reads, submissions, and aggregate statistics with ticket ownership enforcement
@@ -32,7 +33,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 
 ## Active Migration Work
 
-- Complete tenant scoping for bulk operations, users, and SLA paths
+- Complete tenant scoping for users and SLA paths
 - Resolve tests affected by Clerk-aware and tenant-aware service signatures
 - Remove temporary migration workflows after their one-time commits complete
 
