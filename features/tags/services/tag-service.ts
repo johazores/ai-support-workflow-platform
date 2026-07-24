@@ -99,7 +99,9 @@ export async function addTagToTicket(
     ? await tenantFilter(requestedOrganizationId)
     : undefined;
   const ticket = await prisma.ticket.findFirst({
-    where: requestedFilter ? { id: ticketId, ...requestedFilter } : { id: ticketId },
+    where: requestedFilter
+      ? { id: ticketId, ...requestedFilter }
+      : { id: ticketId },
     select: { id: true, tagIds: true, organizationId: true },
   });
   if (!ticket) throw new Error("Ticket not found");
