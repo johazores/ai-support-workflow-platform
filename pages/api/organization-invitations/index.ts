@@ -54,6 +54,14 @@ export default async function handler(
         if (error.message === "Organization not found") {
           return res.status(404).json({ message: error.message });
         }
+
+        if (error.message === "User account is inactive") {
+          return res.status(400).json({ message: error.message });
+        }
+
+        if (error.message.startsWith("Clerk invitations are unavailable")) {
+          return res.status(503).json({ message: error.message });
+        }
       }
 
       console.error("Failed to create organization invitation", error);
