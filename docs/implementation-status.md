@@ -17,6 +17,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 - Tenant-scoped ticket listing, details, assignment, status, priority, replies, internal notes, tags, AI drafts, saved drafts, saved replies, and customer queries
 - Tenant-scoped notifications, mailbox configuration, email templates, delivery logs, IMAP polling, and inbound email processing
 - Tenant-scoped analytics counts, trends, status/priority breakdowns, and first-response metrics
+- Tenant-scoped CSAT reads, submissions, and aggregate statistics with ticket ownership enforcement
 - Raw-body HMAC verification and mailbox-to-organization routing for inbound email webhooks
 - Real tenant-aware SMTP delivery for manual replies and saved AI drafts, including threading and delivery-failure rollback
 - Durable workflow execution records, step records, execution inspection, idempotency, and failure reporting
@@ -31,7 +32,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 
 ## Active Migration Work
 
-- Complete tenant scoping for CSAT, bulk operations, users, and SLA paths
+- Complete tenant scoping for bulk operations, users, and SLA paths
 - Resolve tests affected by Clerk-aware and tenant-aware service signatures
 - Remove temporary migration workflows after their one-time commits complete
 
