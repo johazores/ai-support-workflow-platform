@@ -7,6 +7,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 ## Implemented
 
 - Organization and membership models with a legacy default-workspace migration path
+- Tenant-scoped user listing, membership roles, add/reactivate flows, removal, last-admin protection, and membership-change audit events
 - Independent Root Admin authentication, sessions, lockout, revocation, and audit events
 - Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
 - AES-256-GCM encryption for provider, SMTP, IMAP, and system secrets
@@ -33,7 +34,7 @@ The initial SaaS foundation from PR #3 is merged into `master`. The status below
 
 ## Active Migration Work
 
-- Complete tenant scoping for users and SLA paths
+- Complete tenant scoping for SLA paths
 - Resolve tests affected by Clerk-aware and tenant-aware service signatures
 - Remove temporary migration workflows after their one-time commits complete
 
