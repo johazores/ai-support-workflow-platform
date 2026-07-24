@@ -151,15 +151,15 @@ model WorkflowRule {
 }
 
 model Workflow {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  organizationId  String   @db.ObjectId
-  name            String
-  description     String?
-  status          String   @default("draft")
-  currentVersion  Int      @default(0)
-  createdByUserId String?  @db.ObjectId
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  name           String
+  description    String?
+  status         String   @default("draft")
+  currentVersion Int      @default(0)
+  createdByUserId String? @db.ObjectId
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([organizationId, status, updatedAt])
 }
@@ -281,17 +281,17 @@ model AiUsageLog {
 }
 
 model Provider {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  key           String   @unique
-  name          String
-  category      String
-  isEnabled     Boolean  @default(false)
-  priority      Int      @default(100)
-  defaultModel  String?
-  baseUrl       String?
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  key          String   @unique
+  name         String
+  category     String
+  isEnabled    Boolean  @default(false)
+  priority     Int      @default(100)
+  defaultModel String?
+  baseUrl      String?
   configuration Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([category, isEnabled, priority])
 }
@@ -332,16 +332,16 @@ model ProviderUsageRecord {
 }
 
 model SystemSetting {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  key                  String   @unique
-  category             String
-  value                Json?
-  encryptedValue       String?
-  isSecret             Boolean  @default(false)
-  description          String?
-  updatedByRootAdminId String?  @db.ObjectId
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  key                   String   @unique
+  category              String
+  value                 Json?
+  encryptedValue        String?
+  isSecret              Boolean  @default(false)
+  description           String?
+  updatedByRootAdminId  String?  @db.ObjectId
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([category])
 }
@@ -414,12 +414,12 @@ model SavedReply {
 }
 
 model SlaPolicy {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  organizationId       String?  @db.ObjectId
-  name                 String
-  priority             String
-  firstResponseMinutes Int
-  resolutionMinutes    Int
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId        String?  @db.ObjectId
+  name                  String
+  priority              String
+  firstResponseMinutes  Int
+  resolutionMinutes     Int
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
