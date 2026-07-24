@@ -1,5 +1,6 @@
 import type { User } from "@prisma/client";
 import type { SessionUser } from "@/features/auth/services/session-service";
+import { acceptPendingOrganizationInvitations } from "@/features/organizations/services/organization-invitation-service";
 import {
   ensureLegacyOrganizationForUser,
   requireOrganizationMembership,
@@ -119,8 +120,19 @@ export async function syncClerkIdentity(
     });
   }
 
-  const organization = await resolveOrganization(user);
-  return toSessionUser(user, organization);
+  // Clerk verifies ownership of the identity email. Matching pending
+  // invitations are therefore safe to convert into internal memberships
+  // before the active organization is resolved for the session.
+  await acceptPendingOrganizationInvitations({
+    userId: user.id,
+    email,
+  });
+
+  const refreshedUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!refreshedUser) throw new Error("User disappeared during Clerk sync");
+
+  const organization = await resolveOrganization(refreshedUser);
+  return toSessionUser(refreshedUser, organization);
 }
 
 export async function getInternalClerkUser(
