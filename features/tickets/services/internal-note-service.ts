@@ -1,3 +1,4 @@
+import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 import { prisma } from "@/lib/prisma";
 import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
@@ -11,10 +12,14 @@ export async function addInternalNote(input: AddInternalNoteInput) {
   const ticket = await prisma.ticket.findFirst({
     where: {
       id: input.ticketId,
-      OR: [
-        { organizationId: input.organizationId },
-        { organizationId: null },
-      ],
+      ...((await isLegacyOrganization(input.organizationId))
+        ? {
+            OR: [
+              { organizationId: input.organizationId },
+              { organizationId: null },
+            ],
+          }
+        : { organizationId: input.organizationId }),
     },
   });
   if (!ticket) throw new Error("Ticket not found");
