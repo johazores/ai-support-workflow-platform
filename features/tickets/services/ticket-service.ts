@@ -1,28 +1,58 @@
-import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import {
+  isLegacyOrganization,
+  requireOrganizationMembership,
+} from "@/features/organizations/services/organization-service";
 import type {
   TicketStatus,
   TicketSummary,
 } from "@/features/tickets/types/ticket";
-import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
+import { dispatchTicketUpdatedWorkflows } from "@/features/workflows/services/workflow-event-service";
+import { prisma } from "@/lib/prisma";
 import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
-import {
-  ensureLegacyOrganizationForUser,
-  requireOrganizationMembership,
-} from "@/features/organizations/services/organization-service";
 
-function tenantTicketFilter(organizationId: string): Prisma.TicketWhereInput {
-  return {
-    OR: [{ organizationId }, { organizationId: null }],
-  };
+async function tenantTicketFilter(
+  organizationId: string,
+): Promise<Prisma.TicketWhereInput> {
+  return (await isLegacyOrganization(organizationId))
+    ? { OR: [{ organizationId }, { organizationId: null }] }
+    : { organizationId };
 }
 
 async function findTenantTicket(ticketId: string, organizationId: string) {
   return prisma.ticket.findFirst({
     where: {
       id: ticketId,
-      ...tenantTicketFilter(organizationId),
+      ...(await tenantTicketFilter(organizationId)),
     },
+  });
+}
+
+async function recordTicketMutation(input: {
+  organizationId: string;
+  ticketId: string;
+  type: string;
+  message: string;
+}) {
+  return prisma.activityLog.create({
+    data: {
+      organizationId: input.organizationId,
+      ticketId: input.ticketId,
+      type: input.type,
+      message: input.message,
+    },
+  });
+}
+
+async function dispatchMutationWorkflows(input: {
+  organizationId: string;
+  ticketId: string;
+  activityId: string;
+}) {
+  await dispatchTicketUpdatedWorkflows({
+    organizationId: input.organizationId,
+    ticketId: input.ticketId,
+    eventId: input.activityId,
   });
 }
 
@@ -30,7 +60,7 @@ export async function getTicketSummaries(
   organizationId: string,
 ): Promise<TicketSummary[]> {
   const tickets = await prisma.ticket.findMany({
-    where: tenantTicketFilter(organizationId),
+    where: await tenantTicketFilter(organizationId),
     orderBy: { updatedAt: "desc" },
     include: {
       customer: true,
@@ -51,7 +81,7 @@ export async function getTicketById(
   return prisma.ticket.findFirst({
     where: {
       id: ticketId,
-      ...tenantTicketFilter(organizationId),
+      ...(await tenantTicketFilter(organizationId)),
     },
     include: {
       customer: true,
@@ -75,17 +105,49 @@ export async function updateTicketStatus(
     data: { organizationId, status },
   });
 
-  await prisma.activityLog.create({
-    data: {
-      organizationId,
-      ticketId,
-      type: "status_changed",
-      message: `Ticket status changed to ${status}.`,
-    },
+  const activity = await recordTicketMutation({
+    organizationId,
+    ticketId,
+    type: "status_changed",
+    message: `Ticket status changed to ${status}.`,
   });
 
-  await executeWorkflowRules(ticketId, { organizationId });
+  await dispatchMutationWorkflows({
+    organizationId,
+    ticketId,
+    activityId: activity.id,
+  });
   broadcastTicketUpdate(ticketId, "status-changed", { status });
+
+  return ticket;
+}
+
+export async function updateTicketPriority(
+  ticketId: string,
+  priority: "low" | "normal" | "high" | "urgent",
+  organizationId: string,
+) {
+  const existing = await findTenantTicket(ticketId, organizationId);
+  if (!existing) throw new Error("Ticket not found");
+
+  const ticket = await prisma.ticket.update({
+    where: { id: existing.id },
+    data: { organizationId, priority },
+  });
+
+  const activity = await recordTicketMutation({
+    organizationId,
+    ticketId,
+    type: "priority_changed",
+    message: `Priority changed to ${priority}.`,
+  });
+
+  await dispatchMutationWorkflows({
+    organizationId,
+    ticketId,
+    activityId: activity.id,
+  });
+  broadcastTicketUpdate(ticketId, "priority-changed", { priority });
 
   return ticket;
 }
@@ -108,13 +170,11 @@ export async function assignTicket(input: AssignTicketInput) {
     throw new Error("Assignee not found");
   }
 
-  const membership =
-    (await requireOrganizationMembership(
-      assignee.id,
-      input.organizationId,
-    )) ?? (await ensureLegacyOrganizationForUser(assignee));
-
-  if (membership.organizationId !== input.organizationId) {
+  const membership = await requireOrganizationMembership(
+    assignee.id,
+    input.organizationId,
+  );
+  if (!membership) {
     throw new Error("Assignee is not a member of this organization");
   }
 
@@ -127,17 +187,17 @@ export async function assignTicket(input: AssignTicketInput) {
     },
   });
 
-  await prisma.activityLog.create({
-    data: {
-      organizationId: input.organizationId,
-      ticketId: input.ticketId,
-      type: "ticket_assigned",
-      message: `Ticket assigned to ${assignee.name}.`,
-    },
+  const activity = await recordTicketMutation({
+    organizationId: input.organizationId,
+    ticketId: input.ticketId,
+    type: "ticket_assigned",
+    message: `Ticket assigned to ${assignee.name}.`,
   });
 
-  await executeWorkflowRules(input.ticketId, {
+  await dispatchMutationWorkflows({
     organizationId: input.organizationId,
+    ticketId: input.ticketId,
+    activityId: activity.id,
   });
 
   broadcastTicketUpdate(input.ticketId, "ticket-assigned", {
@@ -168,7 +228,7 @@ export async function getTickets(
   input: GetTicketsInput,
 ): Promise<PaginatedTickets> {
   const filters: Prisma.TicketWhereInput[] = [
-    tenantTicketFilter(input.organizationId),
+    await tenantTicketFilter(input.organizationId),
   ];
   const limit = Math.min(
     Math.max(input.limit ?? DEFAULT_PAGE_SIZE, 1),
