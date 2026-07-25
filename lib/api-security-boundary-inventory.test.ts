@@ -16,8 +16,19 @@ const intentionallyPublic = new Set([
   "pages/api/readiness.ts",
 ]);
 
-const productSecurityMarkers = [
+const compatibilityAliases = new Map([
+  [
+    "pages/api/workflows/create.ts",
+    'export { default } from "@/pages/api/workflows/index";',
+  ],
+]);
+
+const standardizedMarkers = [
   "createTenantApiRoute(",
+  "createProductIdentityApiRoute(",
+];
+
+const forbiddenDirectProductAuthMarkers = [
   "requireTenantApiPermission(",
   "requireApiPermission(",
   "requireApiAuth(",
@@ -43,7 +54,9 @@ function hasExplicitDedicatedBoundary(path: string) {
 }
 
 describe("Pages API security boundary inventory", () => {
-  const routeFiles = walk(apiRoot).filter((path) => /\.(ts|tsx|js|mjs)$/.test(path));
+  const routeFiles = walk(apiRoot).filter((path) =>
+    /\.(ts|tsx|js|mjs)$/.test(path),
+  );
 
   it("finds API routes to audit", () => {
     expect(routeFiles.length).toBeGreaterThan(0);
@@ -54,14 +67,27 @@ describe("Pages API security boundary inventory", () => {
     if (hasExplicitDedicatedBoundary(path)) return;
 
     const source = readFileSync(file, "utf8");
-    const hasProductBoundary = productSecurityMarkers.some((marker) =>
+    const alias = compatibilityAliases.get(path);
+    if (alias) {
+      expect(source.trim()).toBe(alias);
+      return;
+    }
+
+    const directMarkers = forbiddenDirectProductAuthMarkers.filter((marker) =>
       source.includes(marker),
     );
-
     expect(
-      hasProductBoundary,
-      `${path} has no recognized product authentication/authorization boundary. ` +
-        "Use createTenantApiRoute() for protected product APIs or document an intentional dedicated/public boundary.",
+      directMarkers,
+      `${path} still uses direct product auth: ${directMarkers.join(", ")}`,
+    ).toEqual([]);
+
+    const hasStandardBoundary = standardizedMarkers.some((marker) =>
+      source.includes(marker),
+    );
+    expect(
+      hasStandardBoundary,
+      `${path} has no recognized standardized product API boundary. ` +
+        "Use createTenantApiRoute() for tenant APIs or createProductIdentityApiRoute() before tenant selection.",
     ).toBe(true);
   });
 });
