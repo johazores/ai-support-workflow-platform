@@ -2,65 +2,81 @@
 
 This document tracks the current migration from the original single-workspace support application to a production-oriented SaaS platform.
 
-The initial SaaS foundation from PR #3 is merged into `master`. The status below reflects the current implementation and remaining production work.
+The SaaS foundation and the tenant/security/workflow increments through the current merged `master` are reflected below. Items are marked implemented only when the connected behavior exists in code; remaining work stays explicit.
 
 ## Implemented
 
-- Organization and membership models with a legacy default-workspace migration path
+### Identity, tenancy, and API security
+
+- Organization and membership models with a controlled deterministic legacy default-workspace migration path
 - Tenant-scoped organization listing and active organization selection with membership validation, active-organization checks, persistence, auditing, and responsive shell UI
 - First-organization onboarding for Clerk-only users with concurrency-safe organization creation, admin membership provisioning, default SLA seeding, rollback, and onboarding guards
 - Clerk-backed organization invitations with tenant-owned lifecycle records, seven-day expiry, verified-email acceptance, revocation, audit events, role preservation, and failure compensation
 - Invitation-first team administration UI with pending/accepted/revoked/expired states and direct membership for existing active Clerk identities
 - Tenant-scoped user listing, membership roles, add/reactivate flows, removal, last-admin protection, and membership-change audit events
-- Inactive internal product identities remain disabled across Clerk session fallback, identity synchronization, webhook updates, and organization invitations
+- Inactive internal product identities remain disabled across Clerk identity synchronization, webhook updates, invitations, and session resolution
+- Clerk-exclusive production product API authentication; the historical `support_session` cookie is accepted only when Clerk is absent and the explicit non-production migration gate is enabled
 - Independent Root Admin authentication, sessions, lockout, revocation, and audit events
-- Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
-- AES-256-GCM encryption for provider, SMTP, IMAP, and system secrets
-- Central provider catalog, credential rotation, connection testing, priority, and model configuration
-- Clerk product-user authentication with sign-in, sign-up, account controls, App Router support, Pages API support, and verified lifecycle webhooks
-- Legacy JWT authentication retained only as a migration fallback when Clerk is unavailable
-- Tenant-aware authorization middleware for API routes and protected pages
+- Standard tenant API boundary with request IDs, same-origin mutation checks, active-organization authorization, permissions, Zod validation, normalized errors, and IP/identity/organization rate limiting
+- Standard pre-tenant product identity API boundary for organization listing, organization selection, and first-workspace onboarding
+- Root Admin browser mutations protected by same-origin checks and Root-specific rate limiting; Root login also has sensitive IP throttling
+- Repository-wide Pages API deny-by-default inventory and CI audit that reject direct product-auth helpers or unclassified product routes
+- Security response headers
+- Tenant-safe composite uniqueness for customers, tags, SLA policies, and mailboxes
+
+### Support product and email
+
 - Tenant-scoped ticket listing, details, assignment, status, priority, replies, internal notes, tags, AI drafts, saved drafts, saved replies, and customer queries
 - Tenant-scoped bulk ticket status, priority, assignment, and activity-log operations with all-or-nothing ownership checks
-- Ticket status, priority, assignment, and manual tag changes now dispatch tenant-scoped `ticket-updated` workflow events without turning automation failures into false mutation failures
 - Tenant-scoped notifications, mailbox configuration, email templates, delivery logs, IMAP polling, and inbound email processing
 - Tenant-scoped analytics counts, trends, status/priority breakdowns, and first-response metrics
 - Tenant-scoped CSAT reads, submissions, and aggregate statistics with ticket ownership enforcement
 - Tenant-scoped SLA ticket status, policy listing/editing, default-policy seeding, and policy-change audit events
 - Raw-body HMAC verification and mailbox-to-organization routing for inbound email webhooks
 - Real tenant-aware SMTP delivery for manual replies and saved AI drafts, including threading and delivery-failure rollback
-- Durable workflow execution records, step records, execution inspection, idempotency, and failure reporting
+- Customer, saved-reply, draft-save, and internal-note legacy-null compatibility paths restricted to the deterministic legacy workspace
+- Authenticated ticket Server-Sent Events with tenant ticket ownership verification and a feature-level in-process event bus
+
+### Workflow platform
+
+- Workflow, version, execution, and execution-step models
 - Tenant-isolated legacy workflow rule reads, mutations, execution, actions, assignee membership checks, and execution-history metadata
 - Versioned workflow graph schema and node registry with strict draft/publish validation, cycle detection, tenant-safe action configuration, and explicit true/false condition branches
 - Immutable published workflow versions with editable newer drafts, publish-pointer compensation, version history, and tenant-scoped create/read/save/publish/archive APIs
 - Published graph runtime for manual, ticket-created, ticket-updated, and message-received triggers with persisted step history, tenant-safe status/priority/assignment/tag actions, AI draft generation, and event-level idempotency checks
-- Visual workflow builder with draggable canvas nodes, inspector, explicit condition branches, validation feedback, debounced autosave, undo/redo, version history, manual published-run panel, and execution-history links
+- Safe latest-draft workflow test mode that persists test execution/step history while simulating ticket/action effects without live ticket, activity, AI-provider, email, or draft side effects
+- Visual workflow builder with draggable canvas nodes, inspector, explicit condition branches, validation feedback, debounced autosave, undo/redo, version history, safe test panel, manual published-run panel, and execution-history links
+- Ticket status, priority, assignment, and manual tag changes dispatch tenant-scoped `ticket-updated` workflow events without turning automation failures into false mutation failures
 - Inbound legacy/versioned automations run sequentially so ticket-created and message-received workflows cannot race on the same new ticket; workflow failures do not lose ingested email
-- Legacy null workflow/tag/SLA records exposed only through the deterministic default-workspace migration path
-- Tenant-aware development seed covering the default workspace, memberships, tickets, messages, workflows, and SLA policies
+
+### Configuration and operations foundation
+
+- Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
+- AES-256-GCM encryption for provider, SMTP, IMAP, and system secrets
+- Central provider catalog, credential rotation, connection testing, priority, model configuration, usage recording, and failure tracking
 - Database-managed OpenAI and Anthropic configuration with explicit provider failure behavior
 - Health and readiness endpoints
-- Security response headers
-- CI validation for Prisma, TypeScript, ESLint, Prettier, tests, and production builds
-- Complete API inventory and repository-wide authorization audit
-- Tenant-safe composite uniqueness for customers, tags, SLA policies, and mailboxes
+- Single cost-conscious GitHub Actions Quality Gate covering Prisma validation, API-boundary audit, TypeScript, ESLint, Prettier, tests, and production build
+- Production operations runbook covering release preparation, deployment, smoke tests, rollback, database backup/restore, credential incidents, workflow incidents, severity handling, and postmortems
 
-## Active Migration Work
+## Active Implementation Work
 
-- Validate the full stacked tenant/workflow migration against a green repository quality gate
-- Merge the CI baseline cleanup that removes completed one-time migration workflows
-- Resolve any remaining Clerk-aware, tenant-aware, or graph-builder signature/formatting regressions surfaced by the final quality gate
-- Add safe draft workflow test mode before considering create-test-publish-run complete
-- Development-gate or remove the remaining legacy product-password account creation/login paths after migration compatibility is no longer required
+- Reconcile `MASTER_IMPLEMENTATION_PLAN.md` phase checkboxes with the merged implementation while keeping partially completed goals open
+- Expand the encrypted provider/integration control plane beyond OpenAI and Anthropic
+- Replace synchronous/in-process workflow execution with durable queue/worker execution, retries, delays, cancellation/resume, and operational visibility
+- Replace the current process-local ticket event bus when multi-instance real-time delivery is introduced
+- Continue production-hardening work that is endpoint-specific and therefore not covered by the shared browser API rate limiter, including webhook replay/abuse controls where applicable
 
 ## Remaining Product Work
 
-- Queue-backed retries, delays, resumability, cancellation, webhook delivery, and scheduled workflow execution
-- Workflow variables/transformations, delay/webhook/schedule nodes, redaction, worker-backed integration tests, and builder accessibility/viewport polish
-- Stripe plans, subscriptions, usage entitlements, and billing portal
+- Additional AI provider adapters and integration configuration definitions
+- Workflow variables/transformations, delay/webhook/schedule nodes, execution payload redaction, real worker/database integration tests, and builder accessibility/viewport polish
+- Stripe plans, subscriptions, usage entitlements, checkout, billing portal, webhook reconciliation, and customer billing UI
 - Attachment storage and secure upload/download
-- End-to-end browser tests and deployment smoke tests
-- Production observability integrations and alerting
-- Final documentation reconciliation, retention/deletion controls, and launch runbooks
+- Mailbox diagnostics, notification preferences/channels, provider-aware AI usage/cost UI, workflow templates, and import/export
+- End-to-end browser tests, deployment smoke tests, load/failure-mode testing, and performance audits
+- Production observability integrations, structured logging/metrics/tracing/error tracking, alerting, and queue health visibility
+- Privacy, retention, deletion, and legal product controls
+- Final removal of the legacy product password/session code after migration compatibility is no longer required
 
-No feature should be marked production-ready until its tenant isolation, authorization, failure states, tests, and operational behavior have been validated end-to-end.
+No feature should be called production-ready until its tenant isolation, authorization, failure states, tests, deployment behavior, and operational recovery path have been validated end-to-end.
