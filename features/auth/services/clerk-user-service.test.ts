@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getInternalClerkUser,
+  InactiveProductUserError,
   syncClerkIdentity,
 } from "@/features/auth/services/clerk-user-service";
 
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   membershipFindMany: vi.fn(),
   requireMembership: vi.fn(),
   ensureLegacy: vi.fn(),
+  acceptPendingInvitations: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -30,6 +32,13 @@ vi.mock("@/features/organizations/services/organization-service", () => ({
   requireOrganizationMembership: mocks.requireMembership,
   ensureLegacyOrganizationForUser: mocks.ensureLegacy,
 }));
+
+vi.mock(
+  "@/features/organizations/services/organization-invitation-service",
+  () => ({
+    acceptPendingOrganizationInvitations: mocks.acceptPendingInvitations,
+  }),
+);
 
 const baseUser = {
   id: "user-1",
@@ -54,6 +63,7 @@ describe("Clerk identity organization resolution", () => {
       organizationId: "org-default",
       role: "agent",
     });
+    mocks.acceptPendingInvitations.mockResolvedValue([]);
     mocks.userUpdate.mockImplementation(async ({ data }: { data: object }) => ({
       ...baseUser,
       ...data,
@@ -63,7 +73,8 @@ describe("Clerk identity organization resolution", () => {
   it("keeps a brand-new Clerk-only identity organization-less", async () => {
     mocks.userFindUnique
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(baseUser);
     mocks.userCreate.mockResolvedValueOnce(baseUser);
 
     const user = await syncClerkIdentity({
@@ -72,6 +83,10 @@ describe("Clerk identity organization resolution", () => {
       name: "New User",
     });
 
+    expect(mocks.acceptPendingInvitations).toHaveBeenCalledWith({
+      userId: "user-1",
+      email: "new@example.com",
+    });
     expect(user).toEqual({
       id: "user-1",
       name: "New User",
@@ -81,6 +96,75 @@ describe("Clerk identity organization resolution", () => {
       authProvider: "clerk",
     });
     expect(mocks.ensureLegacy).not.toHaveBeenCalled();
+  });
+
+  it("resolves an accepted invitation before creating the product session", async () => {
+    const invitedUser = {
+      ...baseUser,
+      defaultOrganizationId: "org-invited",
+    };
+    mocks.userFindUnique
+      .mockResolvedValueOnce(baseUser)
+      .mockResolvedValueOnce(invitedUser);
+    mocks.acceptPendingInvitations.mockResolvedValueOnce(["org-invited"]);
+    mocks.requireMembership.mockResolvedValueOnce({
+      organizationId: "org-invited",
+      role: "supervisor",
+    });
+
+    const user = await syncClerkIdentity({
+      clerkUserId: "clerk-1",
+      email: "new@example.com",
+      name: "New User",
+    });
+
+    const inviteCall = mocks.acceptPendingInvitations.mock.invocationCallOrder[0];
+    const membershipCall = mocks.requireMembership.mock.invocationCallOrder[0];
+    expect(inviteCall).toBeLessThan(membershipCall);
+    expect(user).toEqual(
+      expect.objectContaining({
+        organizationId: "org-invited",
+        role: "supervisor",
+      }),
+    );
+  });
+
+  it("refuses to sync an inactive user linked to the Clerk identity", async () => {
+    mocks.userFindUnique.mockResolvedValueOnce({
+      ...baseUser,
+      status: "inactive",
+    });
+
+    await expect(
+      syncClerkIdentity({
+        clerkUserId: "clerk-1",
+        email: "new@example.com",
+        name: "New User",
+      }),
+    ).rejects.toBeInstanceOf(InactiveProductUserError);
+
+    expect(mocks.acceptPendingInvitations).not.toHaveBeenCalled();
+  });
+
+  it("refuses to relink an inactive internal identity by email", async () => {
+    mocks.userFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...baseUser,
+        clerkUserId: null,
+        status: "inactive",
+      });
+
+    await expect(
+      syncClerkIdentity({
+        clerkUserId: "clerk-new",
+        email: "new@example.com",
+        name: "New User",
+      }),
+    ).rejects.toBeInstanceOf(InactiveProductUserError);
+
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.acceptPendingInvitations).not.toHaveBeenCalled();
   });
 
   it("keeps password-backed users on the legacy migration path", async () => {
