@@ -3,6 +3,7 @@ import { hasPermission } from "@/features/auth/services/role-service";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { UserManager } from "@/features/auth/components/user-manager";
+import { OrganizationInvitationManager } from "@/features/organizations/components/organization-invitation-manager";
 
 export default async function UsersPage() {
   const user = await requireSupervisor();
@@ -21,11 +22,18 @@ export default async function UsersPage() {
               Admin
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
-              User Management
+              Team Management
             </h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Invite teammates, manage organization roles, and revoke access from
+              one tenant without affecting memberships in other organizations.
+            </p>
           </div>
 
-          <UserManager />
+          <div className="space-y-10">
+            <OrganizationInvitationManager />
+            <UserManager />
+          </div>
         </section>
       </main>
     </>

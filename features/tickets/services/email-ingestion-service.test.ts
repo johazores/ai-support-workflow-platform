@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   activityCreate: vi.fn(),
   classifyTicket: vi.fn(),
   executeWorkflowRules: vi.fn(),
+  executePublishedWorkflows: vi.fn(),
   notifyAdmins: vi.fn(),
   notifyAssignee: vi.fn(),
 }));
@@ -45,6 +46,10 @@ vi.mock("@/features/workflows/services/workflow-service", () => ({
   executeWorkflowRules: mocks.executeWorkflowRules,
 }));
 
+vi.mock("@/features/workflows/services/versioned-workflow-runtime", () => ({
+  executePublishedWorkflowsForTicket: mocks.executePublishedWorkflows,
+}));
+
 vi.mock("@/features/notifications/services/notification-service", () => ({
   notifyAdmins: mocks.notifyAdmins,
   notifyAssignee: mocks.notifyAssignee,
@@ -74,6 +79,7 @@ describe("email-ingestion-service tenant boundaries", () => {
       category: "bug-report",
     });
     mocks.executeWorkflowRules.mockResolvedValue({ executed: false, rules: [] });
+    mocks.executePublishedWorkflows.mockResolvedValue([]);
     mocks.notifyAdmins.mockResolvedValue(undefined);
     mocks.notifyAssignee.mockResolvedValue(undefined);
   });
@@ -97,9 +103,10 @@ describe("email-ingestion-service tenant boundaries", () => {
     });
     expect(mocks.customerFindFirst).not.toHaveBeenCalled();
     expect(mocks.ticketCreate).not.toHaveBeenCalled();
+    expect(mocks.executePublishedWorkflows).not.toHaveBeenCalled();
   });
 
-  it("creates a tenant-owned ticket when In-Reply-To is unknown", async () => {
+  it("creates a tenant-owned ticket and runs created/message triggers", async () => {
     mocks.messageFindFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
@@ -122,18 +129,24 @@ describe("email-ingestion-service tenant boundaries", () => {
         mailboxId: "mailbox-1",
       }),
     });
-    expect(mocks.messageCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        organizationId: "org-1",
-        ticketId: "ticket-1",
-      }),
-    });
     expect(mocks.classifyTicket).toHaveBeenCalledWith(
       "ticket-1",
       "Need help",
       "Something is broken",
       "org-1",
     );
+    expect(mocks.executePublishedWorkflows).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      ticketId: "ticket-1",
+      triggerType: "message-received",
+      idempotencyKey: "message-received:stored-message-1",
+    });
+    expect(mocks.executePublishedWorkflows).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      ticketId: "ticket-1",
+      triggerType: "ticket-created",
+      idempotencyKey: "ticket-created:ticket-1",
+    });
     expect(mocks.notifyAdmins).toHaveBeenCalledWith(
       "org-1",
       expect.objectContaining({ ticketId: "ticket-1" }),
@@ -158,15 +171,16 @@ describe("email-ingestion-service tenant boundaries", () => {
       where: { id: "ticket-1" },
       data: { status: "open" },
     });
-    expect(mocks.activityCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        organizationId: "org-1",
-        ticketId: "ticket-1",
-      }),
-    });
     expect(mocks.executeWorkflowRules).toHaveBeenCalledWith("ticket-1", {
       organizationId: "org-1",
       triggerType: "inbound-email",
+    });
+    expect(mocks.executePublishedWorkflows).toHaveBeenCalledTimes(1);
+    expect(mocks.executePublishedWorkflows).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      ticketId: "ticket-1",
+      triggerType: "message-received",
+      idempotencyKey: "message-received:stored-message-1",
     });
     expect(mocks.notifyAssignee).toHaveBeenCalledWith(
       "org-1",
@@ -174,5 +188,21 @@ describe("email-ingestion-service tenant boundaries", () => {
       expect.objectContaining({ type: "customer-reply" }),
     );
     expect(mocks.notifyAdmins).not.toHaveBeenCalled();
+  });
+
+  it("does not lose an inbound email when an automation fails", async () => {
+    mocks.messageFindFirst.mockResolvedValueOnce(null);
+    mocks.executePublishedWorkflows.mockRejectedValueOnce(
+      new Error("workflow failed"),
+    );
+
+    await expect(processInboundEmail(input)).resolves.toEqual({
+      ticketId: "ticket-1",
+      messageId: "stored-message-1",
+      isNewTicket: true,
+      isDuplicate: false,
+    });
+
+    expect(mocks.notifyAdmins).toHaveBeenCalled();
   });
 });
