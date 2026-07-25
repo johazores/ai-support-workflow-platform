@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   getRootTokenFromRequest: vi.fn(),
   parseRootSession: vi.fn(),
   revokeRootSession: vi.fn(),
+  enforceRequestRateLimit: vi.fn(),
+  applyRateLimitHeaders: vi.fn(),
 }));
 
 vi.mock("@/features/root-auth/services/root-auth-service", () => ({
@@ -25,6 +27,19 @@ vi.mock("@/features/root-auth/services/root-session-service", () => ({
   parseRootSession: mocks.parseRootSession,
   revokeRootSession: mocks.revokeRootSession,
 }));
+
+vi.mock("@/lib/rate-limit", () => ({
+  enforceRequestRateLimit: mocks.enforceRequestRateLimit,
+  applyRateLimitHeaders: mocks.applyRateLimitHeaders,
+}));
+
+const allowedRateLimit = {
+  allowed: true,
+  limit: 30,
+  remaining: 29,
+  resetAt: new Date("2026-07-25T06:15:00.000Z"),
+  retryAfterSeconds: 60,
+};
 
 function request(input?: {
   method?: string;
@@ -54,12 +69,13 @@ function response() {
   return res as never;
 }
 
-describe("Root Admin auth route origin protection", () => {
+describe("Root Admin auth route protection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.enforceRequestRateLimit.mockResolvedValue(allowedRateLimit);
   });
 
-  it("rejects cross-origin login before checking credentials", async () => {
+  it("rejects cross-origin login before checking credentials or rate limits", async () => {
     const res = response();
 
     await loginHandler(
@@ -72,6 +88,30 @@ describe("Root Admin auth route origin protection", () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith({ message: "Invalid request origin" });
+    expect(mocks.enforceRequestRateLimit).not.toHaveBeenCalled();
+    expect(mocks.loginRootAdmin).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits same-origin Root Admin login before credential checks", async () => {
+    mocks.enforceRequestRateLimit.mockResolvedValue({
+      ...allowedRateLimit,
+      allowed: false,
+      remaining: 0,
+      blockedDimension: "ip",
+    });
+    const req = request({
+      body: { username: "root", password: "secret" },
+    });
+    const res = response();
+
+    await loginHandler(req, res);
+
+    expect(mocks.enforceRequestRateLimit).toHaveBeenCalledWith({
+      req,
+      rateLimitClass: "sensitive",
+    });
+    expect(mocks.applyRateLimitHeaders).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(429);
     expect(mocks.loginRootAdmin).not.toHaveBeenCalled();
   });
 
