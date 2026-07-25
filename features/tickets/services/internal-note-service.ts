@@ -1,6 +1,6 @@
 import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
+import { publishTicketEvent } from "@/features/tickets/services/ticket-event-bus";
 import { prisma } from "@/lib/prisma";
-import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
 type AddInternalNoteInput = {
   organizationId: string;
@@ -42,7 +42,7 @@ export async function addInternalNote(input: AddInternalNoteInput) {
     },
   });
 
-  broadcastTicketUpdate(ticket.id, "message-created", {
+  publishTicketEvent(ticket.id, "message-created", {
     messageId: message.id,
   });
 
