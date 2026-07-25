@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { loginRootAdmin } from "@/features/root-auth/services/root-auth-service";
+import { isSameOriginMutation } from "@/lib/request-origin";
 
 const schema = z.object({
   username: z.string().trim().min(1).max(100),
@@ -14,6 +15,10 @@ export default async function handler(
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ message: "Method not allowed" });
+  }
+
+  if (!isSameOriginMutation(req)) {
+    return res.status(403).json({ message: "Invalid request origin" });
   }
 
   const parsed = schema.safeParse(req.body);

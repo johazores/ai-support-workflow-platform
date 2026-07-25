@@ -1,62 +1,48 @@
-# Tenant Product Mutation Origin Protection
+# Browser Mutation Origin Protection
 
-State-changing tenant product APIs using `createTenantApiRoute()` require a same-origin browser request before product authentication is evaluated.
+Cookie-authenticated browser mutations must prove that they originated from the application itself before authentication or business logic runs.
 
-Protected methods:
+## Tenant product APIs
 
-- `POST`
-- `PUT`
-- `PATCH`
-- `DELETE`
+Routes using `createTenantApiRoute()` automatically reject unsafe mutation methods (`POST`, `PUT`, `PATCH`, and `DELETE`) unless the request `Origin` or fallback `Referer` matches a trusted application origin.
 
-Read-only `GET` routes are not subject to this mutation-origin check.
+Trusted origins are derived from:
 
-## Why this exists
+- `NEXT_PUBLIC_APP_URL` when configured;
+- the request host or forwarded host;
+- the forwarded protocol, with secure production defaults.
 
-Product authentication is cookie/session based. Even with secure and SameSite cookie settings, state-changing routes should not rely on cookie policy alone for CSRF protection.
+Safe `GET` reads do not require an Origin header.
 
-The shared tenant route boundary therefore validates the request origin once for every standardized mutation instead of requiring each feature route to implement its own check.
+## Root Admin APIs
 
-## Accepted origins
+Authenticated Root Admin mutations use the same origin policy through `requireRootApiAuth()`.
 
-The validator builds a small allowlist from:
+The Root Admin login and logout endpoints also enforce the origin check directly because they execute before or outside the authenticated Root Admin API helper.
 
-1. `NEXT_PUBLIC_APP_URL`, when it is configured with a valid absolute URL;
-2. the current trusted application host derived from `X-Forwarded-Host`/`Host` and `X-Forwarded-Proto`.
+## Fail-closed behavior
 
-The request must provide either:
+Mutation requests are rejected with HTTP `403` when:
 
-- a matching `Origin` header; or
-- when `Origin` is absent, a matching `Referer` origin.
-
-Malformed values, `Origin: null`, cross-site origins, and requests with neither Origin nor Referer fail closed.
+- `Origin` is cross-site;
+- `Origin` is `null` or malformed;
+- neither `Origin` nor a usable `Referer` is present;
+- no trusted request/application origin can be established.
 
 ## Proxy expectations
 
-Production hosting must preserve the real application host and protocol in the standard forwarded headers. The platform should run only behind infrastructure where those headers are normalized by a trusted proxy/hosting layer.
-
-`NEXT_PUBLIC_APP_URL` is recommended in production so the canonical application origin is explicit even when internal routing hosts differ.
+Production hosting must preserve the real application host and protocol in standard forwarded headers. `NEXT_PUBLIC_APP_URL` should be configured in production so the canonical public origin remains explicit even when internal routing hosts differ.
 
 ## Server-to-server access
 
-Do not bypass this protection by accepting missing Origin headers on the browser product API.
+Do not weaken this browser protection to accommodate server-to-server integrations. Future API-key or service-token access should use a separate authenticated boundary with tenant binding, explicit scopes, rate limiting, and replay protection where appropriate.
 
-Future server-to-server integrations/API keys should use a distinct authenticated API boundary with:
+## Dedicated non-browser boundaries
 
-- dedicated API-key/service identity authentication;
-- tenant binding;
-- scopes/permissions;
-- rate limiting;
-- replay protection where appropriate;
-- no dependency on browser cookies.
-
-## Dedicated boundaries
-
-This tenant wrapper does not govern:
+This origin policy does not replace purpose-built authentication for:
 
 - Clerk-signed lifecycle webhooks;
 - raw-body HMAC inbound email webhooks;
-- independent Root Admin APIs;
 - intentionally public health/readiness routes.
 
-Those surfaces require their own appropriate CSRF/signature/origin policy.
+Those surfaces keep their own signature, replay, or public-endpoint controls.

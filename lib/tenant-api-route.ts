@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { ZodType } from "zod";
 import type { Permission } from "@/features/auth/services/role-service";
 import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import { isSameOriginMutation } from "@/lib/request-origin";
 
 export const tenantApiMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 export type TenantApiMethod = (typeof tenantApiMethods)[number];
@@ -95,6 +96,13 @@ export function createTenantApiRoute(routes: TenantApiRouteMap) {
     if (!route) {
       res.setHeader("Allow", allowedMethods);
       return res.status(405).json({ message: "Method not allowed", requestId });
+    }
+
+    if (method !== "GET" && !isSameOriginMutation(req)) {
+      return res.status(403).json({
+        message: "Invalid request origin",
+        requestId,
+      });
     }
 
     const auth = await requireTenantApiPermission(req, res, route.permission);
