@@ -26,6 +26,74 @@ export const providerCatalog = [
   { key: "storage", name: "Storage", category: "infrastructure" },
 ] as const;
 
+type ProviderConfiguration = Record<string, unknown>;
+
+export type ProviderRuntimeMode = "database" | "environment" | "disabled";
+
+export type ProviderRuntimePolicy = {
+  key: string;
+  name: string;
+  priority: number;
+  mode: ProviderRuntimeMode;
+};
+
+export type ProviderRuntimeConfiguration =
+  | { mode: "environment" }
+  | { mode: "disabled" }
+  | {
+      mode: "database";
+      key: string;
+      name: string;
+      defaultModel: string | null;
+      baseUrl: string | null;
+      configuration: unknown;
+      credential: string | null;
+    };
+
+function asConfiguration(value: unknown): ProviderConfiguration {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...(value as ProviderConfiguration) }
+    : {};
+}
+
+function hasLegacyManagedSignals(input: {
+  isEnabled: boolean;
+  priority: number;
+  defaultModel: string | null;
+  baseUrl: string | null;
+  configuration: unknown;
+  hasCredential: boolean;
+}) {
+  const configuration = asConfiguration(input.configuration);
+  if (configuration.runtimeManaged === true) return true;
+
+  const nonMarkerConfigurationKeys = Object.keys(configuration).filter(
+    (key) => key !== "runtimeManaged",
+  );
+
+  return Boolean(
+    input.hasCredential ||
+      input.isEnabled ||
+      input.priority !== 100 ||
+      input.defaultModel ||
+      input.baseUrl ||
+      nonMarkerConfigurationKeys.length > 0,
+  );
+}
+
+function runtimeMode(input: {
+  isEnabled: boolean;
+  priority: number;
+  defaultModel: string | null;
+  baseUrl: string | null;
+  configuration: unknown;
+  hasCredential: boolean;
+}): ProviderRuntimeMode {
+  const managed = hasLegacyManagedSignals(input);
+  if (!managed) return "environment";
+  return input.isEnabled ? "database" : "disabled";
+}
+
 export async function ensureProviderCatalog() {
   await Promise.all(
     providerCatalog.map((definition) =>
@@ -61,8 +129,19 @@ export async function listProviders() {
 
   return providers.map((provider) => {
     const credential = credentialsByProvider.get(provider.id);
+    const mode = runtimeMode({
+      isEnabled: provider.isEnabled,
+      priority: provider.priority,
+      defaultModel: provider.defaultModel,
+      baseUrl: provider.baseUrl,
+      configuration: provider.configuration,
+      hasCredential: Boolean(credential),
+    });
+
     return {
       ...provider,
+      runtimeMode: mode,
+      runtimeManaged: mode !== "environment",
       credential: credential
         ? {
             id: credential.id,
@@ -92,6 +171,13 @@ type SaveProviderInput = {
 };
 
 export async function saveProvider(input: SaveProviderInput) {
+  const existing = await prisma.provider.findUnique({ where: { key: input.key } });
+  const configuration = {
+    ...asConfiguration(existing?.configuration),
+    ...(input.configuration ?? {}),
+    runtimeManaged: true,
+  };
+
   const provider = await prisma.provider.upsert({
     where: { key: input.key },
     update: {
@@ -101,7 +187,7 @@ export async function saveProvider(input: SaveProviderInput) {
       priority: input.priority,
       defaultModel: input.defaultModel || null,
       baseUrl: input.baseUrl || null,
-      configuration: input.configuration as never,
+      configuration: configuration as never,
     },
     create: {
       key: input.key,
@@ -111,7 +197,7 @@ export async function saveProvider(input: SaveProviderInput) {
       priority: input.priority,
       defaultModel: input.defaultModel || null,
       baseUrl: input.baseUrl || null,
-      configuration: input.configuration as never,
+      configuration: configuration as never,
     },
   });
 
@@ -135,16 +221,29 @@ export async function saveProvider(input: SaveProviderInput) {
   return provider;
 }
 
-export async function getEnabledProviderConfiguration(key: string) {
+export async function getProviderRuntimeConfiguration(
+  key: string,
+): Promise<ProviderRuntimeConfiguration> {
   const provider = await prisma.provider.findUnique({ where: { key } });
-  if (!provider?.isEnabled) return null;
+  if (!provider) return { mode: "environment" };
 
   const credential = await prisma.providerCredential.findFirst({
     where: { providerId: provider.id, isActive: true },
     orderBy: { createdAt: "desc" },
   });
+  const mode = runtimeMode({
+    isEnabled: provider.isEnabled,
+    priority: provider.priority,
+    defaultModel: provider.defaultModel,
+    baseUrl: provider.baseUrl,
+    configuration: provider.configuration,
+    hasCredential: Boolean(credential),
+  });
+
+  if (mode !== "database") return { mode };
 
   return {
+    mode: "database",
     key: provider.key,
     name: provider.name,
     defaultModel: provider.defaultModel,
@@ -152,6 +251,50 @@ export async function getEnabledProviderConfiguration(key: string) {
     configuration: provider.configuration,
     credential: credential ? decryptSecret(credential.encryptedValue) : null,
   };
+}
+
+export async function listAiProviderRuntimePolicies(): Promise<
+  ProviderRuntimePolicy[]
+> {
+  await ensureProviderCatalog();
+
+  const providers = await prisma.provider.findMany({
+    where: { category: "ai" },
+    orderBy: [{ priority: "asc" }, { name: "asc" }],
+  });
+  const credentials = await prisma.providerCredential.findMany({
+    where: {
+      providerId: { in: providers.map((provider) => provider.id) },
+      isActive: true,
+    },
+  });
+  const providerIdsWithCredential = new Set(
+    credentials.map((credential) => credential.providerId),
+  );
+
+  return providers.map((provider) => ({
+    key: provider.key,
+    name: provider.name,
+    priority: provider.priority,
+    mode: runtimeMode({
+      isEnabled: provider.isEnabled,
+      priority: provider.priority,
+      defaultModel: provider.defaultModel,
+      baseUrl: provider.baseUrl,
+      configuration: provider.configuration,
+      hasCredential: providerIdsWithCredential.has(provider.id),
+    }),
+  }));
+}
+
+/**
+ * Compatibility helper for callers that only want explicitly enabled database
+ * configuration. Environment migration fallback is intentionally not represented
+ * by this helper.
+ */
+export async function getEnabledProviderConfiguration(key: string) {
+  const runtime = await getProviderRuntimeConfiguration(key);
+  return runtime.mode === "database" ? runtime : null;
 }
 
 export async function updateProviderTestResult(
