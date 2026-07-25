@@ -1,11 +1,16 @@
 import type { NextApiRequest } from "next";
 import { getTicketById } from "@/features/tickets/services/ticket-service";
-import { subscribeTicketEvents } from "@/features/tickets/services/ticket-event-bus";
+import {
+  publishTicketEvent,
+  subscribeTicketEvents,
+} from "@/features/tickets/services/ticket-event-bus";
 import {
   createTenantApiRoute,
   tenantApiRoute,
   TenantApiError,
 } from "@/lib/tenant-api-route";
+
+export const broadcastTicketUpdate = publishTicketEvent;
 
 function ticketIdFrom(req: NextApiRequest) {
   const ticketId = req.query["ticket-id"];
