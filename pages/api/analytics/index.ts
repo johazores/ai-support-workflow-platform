@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getAnalytics } from "@/features/analytics/services/analytics-service";
-import { requireApiPermission } from "@/lib/api-auth";
+import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -11,7 +11,7 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const auth = await requireApiPermission(req, res, "analytics:read");
+  const auth = await requireTenantApiPermission(req, res, "analytics:read");
   if (!auth.ok) return;
 
   try {
@@ -21,7 +21,7 @@ export default async function handler(
         ? Math.min(Math.max(parseInt(daysParam, 10) || 30, 1), 365)
         : 30;
 
-    const data = await getAnalytics(days);
+    const data = await getAnalytics(auth.user.organizationId, days);
 
     return res.status(200).json({ data });
   } catch (error) {

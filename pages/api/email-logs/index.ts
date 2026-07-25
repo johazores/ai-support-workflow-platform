@@ -1,24 +1,32 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { requireApiPermission } from "@/lib/api-auth";
+import { z } from "zod";
 import { listEmailLogs } from "@/features/email-logs/services/email-log-service";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+} from "@/lib/tenant-api-route";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const auth = await requireApiPermission(req, res, "email-logs:read");
-  if (!auth.ok) return;
+const querySchema = z.object({
+  status: z.string().trim().min(1).max(50).optional(),
+  mailboxId: z.string().trim().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
-  if (req.method === "GET") {
-    const status =
-      typeof req.query.status === "string" ? req.query.status : undefined;
-    const limit = Math.min(Number(req.query.limit) || 50, 100);
-    const offset = Math.max(Number(req.query.offset) || 0, 0);
-
-    const result = await listEmailLogs({ status, limit, offset });
-    return res.status(200).json({ data: result });
-  }
-
-  res.setHeader("Allow", ["GET"]);
-  return res.status(405).json({ message: "Method not allowed" });
-}
+export default createTenantApiRoute({
+  GET: tenantApiRoute({
+    permission: "email-logs:read",
+    schema: querySchema,
+    parse: (req) => ({
+      status: typeof req.query.status === "string" ? req.query.status : undefined,
+      mailboxId:
+        typeof req.query.mailboxId === "string" ? req.query.mailboxId : undefined,
+      limit: req.query.limit ?? 50,
+      offset: req.query.offset ?? 0,
+    }),
+    handle: async ({ res, user, input }) => {
+      const result = await listEmailLogs(user.organizationId, input);
+      res.status(200).json({ data: result });
+    },
+    unexpectedErrorMessage: "Failed to list email logs",
+  }),
+});

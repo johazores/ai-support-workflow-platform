@@ -1,12 +1,14 @@
-import { prisma } from "@/lib/prisma";
-import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
-import {
-  notifyAssignee,
-  notifyAdmins,
-} from "@/features/notifications/services/notification-service";
 import { classifyTicket } from "@/features/ai-drafts/services/classification-service";
+import {
+  notifyAdmins,
+  notifyAssignee,
+} from "@/features/notifications/services/notification-service";
+import { executePublishedWorkflowsForTicket } from "@/features/workflows/services/versioned-workflow-runtime";
+import { executeWorkflowRules } from "@/features/workflows/services/workflow-service";
+import { prisma } from "@/lib/prisma";
 
 type InboundEmailInput = {
+  organizationId: string;
   from: string;
   fromName: string;
   subject: string;
@@ -16,27 +18,94 @@ type InboundEmailInput = {
   mailboxId?: string;
 };
 
+async function safelyRunAutomation(label: string, task: () => Promise<unknown>) {
+  try {
+    await task();
+  } catch (error) {
+    console.error(`${label} workflow automation failed`, error);
+  }
+}
+
+async function runInboundAutomations(input: {
+  organizationId: string;
+  ticketId: string;
+  messageId: string;
+  isNewTicket: boolean;
+}) {
+  // Keep migration rules first so the versioned runtime sees any legacy changes.
+  await safelyRunAutomation("Legacy inbound", () =>
+    executeWorkflowRules(input.ticketId, {
+      organizationId: input.organizationId,
+      triggerType: "inbound-email",
+    }),
+  );
+
+  // Event runs are serialized because both may mutate the same ticket.
+  if (input.isNewTicket) {
+    await safelyRunAutomation("Ticket-created", () =>
+      executePublishedWorkflowsForTicket({
+        organizationId: input.organizationId,
+        ticketId: input.ticketId,
+        triggerType: "ticket-created",
+        idempotencyKey: `ticket-created:${input.ticketId}`,
+      }),
+    );
+  }
+
+  await safelyRunAutomation("Message-received", () =>
+    executePublishedWorkflowsForTicket({
+      organizationId: input.organizationId,
+      ticketId: input.ticketId,
+      triggerType: "message-received",
+      idempotencyKey: `message-received:${input.messageId}`,
+    }),
+  );
+}
+
 export async function processInboundEmail(input: InboundEmailInput) {
-  // Find or create customer by email
-  let customer = await prisma.customer.findUnique({
-    where: { email: input.from },
+  const existingMessage = await prisma.message.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      externalMessageId: input.messageId,
+    },
+    select: { id: true, ticketId: true },
+  });
+
+  if (existingMessage) {
+    return {
+      ticketId: existingMessage.ticketId,
+      messageId: existingMessage.id,
+      isNewTicket: false,
+      isDuplicate: true,
+    };
+  }
+
+  let customer = await prisma.customer.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      email: input.from,
+    },
   });
 
   if (!customer) {
     customer = await prisma.customer.create({
       data: {
+        organizationId: input.organizationId,
         name: input.fromName || input.from,
         email: input.from,
       },
     });
   }
 
-  // Try to find existing thread via inReplyTo
   let ticketId: string | null = null;
+  let isNewTicket = false;
 
   if (input.inReplyTo) {
     const parentMessage = await prisma.message.findFirst({
-      where: { externalMessageId: input.inReplyTo },
+      where: {
+        organizationId: input.organizationId,
+        externalMessageId: input.inReplyTo,
+      },
       select: { ticketId: true },
     });
 
@@ -45,10 +114,10 @@ export async function processInboundEmail(input: InboundEmailInput) {
     }
   }
 
-  // If no thread found, create a new ticket
   if (!ticketId) {
     const ticket = await prisma.ticket.create({
       data: {
+        organizationId: input.organizationId,
         subject: input.subject,
         status: "open",
         priority: "normal",
@@ -58,14 +127,19 @@ export async function processInboundEmail(input: InboundEmailInput) {
     });
 
     ticketId = ticket.id;
+    isNewTicket = true;
 
-    // Auto-classify new tickets by priority
-    await classifyTicket(ticketId, input.subject, input.body);
+    await classifyTicket(
+      ticketId,
+      input.subject,
+      input.body,
+      input.organizationId,
+    );
   }
 
-  // Create the message
   const message = await prisma.message.create({
     data: {
+      organizationId: input.organizationId,
       ticketId,
       author: "customer",
       body: input.body,
@@ -74,9 +148,8 @@ export async function processInboundEmail(input: InboundEmailInput) {
     },
   });
 
-  // Re-open ticket if it was resolved/closed
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, organizationId: input.organizationId },
     select: { status: true },
   });
 
@@ -88,6 +161,7 @@ export async function processInboundEmail(input: InboundEmailInput) {
 
     await prisma.activityLog.create({
       data: {
+        organizationId: input.organizationId,
         ticketId,
         type: "status_changed",
         message: "Ticket re-opened by new customer email.",
@@ -95,23 +169,32 @@ export async function processInboundEmail(input: InboundEmailInput) {
     });
   }
 
-  await executeWorkflowRules(ticketId);
+  await runInboundAutomations({
+    organizationId: input.organizationId,
+    ticketId,
+    messageId: message.id,
+    isNewTicket,
+  });
 
-  // Notify relevant users
-  if (input.inReplyTo) {
-    await notifyAssignee(ticketId, {
-      type: "customer-reply",
-      title: "New customer reply",
-      message: `${input.fromName} replied to a ticket.`,
-    });
-  } else {
-    await notifyAdmins({
+  if (isNewTicket) {
+    await notifyAdmins(input.organizationId, {
       type: "new-ticket",
       title: "New ticket from email",
       message: `${input.fromName}: ${input.subject}`,
       ticketId,
     });
+  } else {
+    await notifyAssignee(input.organizationId, ticketId, {
+      type: "customer-reply",
+      title: "New customer reply",
+      message: `${input.fromName} replied to a ticket.`,
+    });
   }
 
-  return { ticketId, messageId: message.id, isNewTicket: !input.inReplyTo };
+  return {
+    ticketId,
+    messageId: message.id,
+    isNewTicket,
+    isDuplicate: false,
+  };
 }

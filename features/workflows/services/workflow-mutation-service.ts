@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 
-function organizationWhere(organizationId: string) {
-  return { OR: [{ organizationId }, { organizationId: null }] };
+async function organizationWhere(organizationId: string) {
+  return (await isLegacyOrganization(organizationId))
+    ? { OR: [{ organizationId }, { organizationId: null }] }
+    : { organizationId };
 }
 
 type CreateWorkflowRuleInput = {
@@ -34,7 +37,7 @@ export async function updateWorkflowStatus(input: UpdateWorkflowStatusInput) {
   const workflow = await prisma.workflowRule.findFirst({
     where: {
       id: input.workflowId,
-      ...organizationWhere(input.organizationId),
+      ...(await organizationWhere(input.organizationId)),
     },
   });
 
@@ -58,7 +61,7 @@ export async function deleteWorkflowRule(input: DeleteWorkflowInput) {
   const workflow = await prisma.workflowRule.findFirst({
     where: {
       id: input.workflowId,
-      ...organizationWhere(input.organizationId),
+      ...(await organizationWhere(input.organizationId)),
     },
   });
 

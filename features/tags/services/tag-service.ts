@@ -1,15 +1,25 @@
+import {
+  ensureDefaultOrganization,
+  isLegacyOrganization,
+} from "@/features/organizations/services/organization-service";
+import { dispatchTicketUpdatedWorkflows } from "@/features/workflows/services/workflow-event-service";
 import { prisma } from "@/lib/prisma";
-import { ensureDefaultOrganization } from "@/features/organizations/services/organization-service";
 
-function tenantFilter(organizationId: string) {
-  return {
-    OR: [{ organizationId }, { organizationId: null }],
-  };
+async function tenantFilter(organizationId: string) {
+  return (await isLegacyOrganization(organizationId))
+    ? { OR: [{ organizationId }, { organizationId: null }] }
+    : { organizationId };
+}
+
+function sameTagSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((tagId) => rightSet.has(tagId));
 }
 
 export async function getAllTags(organizationId: string) {
   return prisma.tag.findMany({
-    where: tenantFilter(organizationId),
+    where: await tenantFilter(organizationId),
     orderBy: { name: "asc" },
   });
 }
@@ -43,34 +53,55 @@ export async function setTicketTags(
   ticketId: string,
   tagIds: string[],
 ) {
+  const organizationFilter = await tenantFilter(organizationId);
   const ticket = await prisma.ticket.findFirst({
-    where: { id: ticketId, ...tenantFilter(organizationId) },
+    where: { id: ticketId, ...organizationFilter },
   });
   if (!ticket) throw new Error("Ticket not found");
 
+  const uniqueTagIds = [...new Set(tagIds)];
   const tags = await prisma.tag.findMany({
     where: {
-      id: { in: tagIds },
-      ...tenantFilter(organizationId),
+      id: { in: uniqueTagIds },
+      ...organizationFilter,
     },
     select: { id: true },
   });
-  if (tags.length !== new Set(tagIds).size) {
+  if (tags.length !== uniqueTagIds.length) {
     throw new Error("One or more tags are unavailable");
   }
 
-  return prisma.ticket.update({
+  if (sameTagSet(ticket.tagIds, uniqueTagIds)) return ticket;
+
+  const updated = await prisma.ticket.update({
     where: { id: ticket.id },
-    data: { organizationId, tagIds },
+    data: { organizationId, tagIds: uniqueTagIds },
   });
+  const activity = await prisma.activityLog.create({
+    data: {
+      organizationId,
+      ticketId,
+      type: "tags_changed",
+      message: "Ticket tags were updated.",
+    },
+  });
+
+  await dispatchTicketUpdatedWorkflows({
+    organizationId,
+    ticketId,
+    eventId: activity.id,
+  });
+
+  return updated;
 }
 
 export async function getTagsForTicket(
   organizationId: string,
   ticketId: string,
 ) {
+  const organizationFilter = await tenantFilter(organizationId);
   const ticket = await prisma.ticket.findFirst({
-    where: { id: ticketId, ...tenantFilter(organizationId) },
+    where: { id: ticketId, ...organizationFilter },
     select: { tagIds: true },
   });
 
@@ -79,7 +110,7 @@ export async function getTagsForTicket(
   return prisma.tag.findMany({
     where: {
       id: { in: ticket.tagIds },
-      ...tenantFilter(organizationId),
+      ...organizationFilter,
     },
     orderBy: { name: "asc" },
   });
@@ -90,26 +121,27 @@ export async function addTagToTicket(
   tagId: string,
   requestedOrganizationId?: string,
 ) {
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
+  const requestedFilter = requestedOrganizationId
+    ? await tenantFilter(requestedOrganizationId)
+    : undefined;
+  const ticket = await prisma.ticket.findFirst({
+    where: requestedFilter
+      ? { id: ticketId, ...requestedFilter }
+      : { id: ticketId },
     select: { id: true, tagIds: true, organizationId: true },
   });
   if (!ticket) throw new Error("Ticket not found");
 
-  if (
-    requestedOrganizationId &&
-    ticket.organizationId &&
-    ticket.organizationId !== requestedOrganizationId
-  ) {
-    throw new Error("Ticket not found");
-  }
-
-  const defaultOrganization = await ensureDefaultOrganization();
+  const defaultOrganization = ticket.organizationId
+    ? null
+    : await ensureDefaultOrganization();
   const organizationId =
-    requestedOrganizationId || ticket.organizationId || defaultOrganization.id;
+    requestedOrganizationId || ticket.organizationId || defaultOrganization?.id;
+
+  if (!organizationId) throw new Error("Organization not found");
 
   const tag = await prisma.tag.findFirst({
-    where: { id: tagId, ...tenantFilter(organizationId) },
+    where: { id: tagId, ...(await tenantFilter(organizationId)) },
     select: { id: true },
   });
 

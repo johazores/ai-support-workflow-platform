@@ -70,13 +70,15 @@ export async function classifyTicket(
   ticketId: string,
   subject: string,
   body: string,
+  organizationId: string,
 ): Promise<Classification> {
   const { name, provider } = getProvider();
+  let classification: Classification | null = null;
 
-  // If OpenAI is configured, try AI classification
   if (name === "openai") {
     try {
       const result = await provider.generateDraft({
+        organizationId,
         subject,
         customerName: "",
         customerMessage: `Classify this support ticket. Respond with ONLY a JSON object like {"priority":"normal","category":"general"}.
@@ -97,20 +99,23 @@ Message: ${body}`,
         ) &&
         typeof parsed.category === "string"
       ) {
-        return parsed as unknown as Classification;
+        classification = parsed as unknown as Classification;
       }
     } catch {
-      // Fall through to keyword-based classification
+      // Fall through to deterministic keyword classification.
     }
   }
 
-  // Keyword-based fallback (always available, no API call)
-  const classification = classifyByKeywords(subject, body);
+  classification ??= classifyByKeywords(subject, body);
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
+  const updated = await prisma.ticket.updateMany({
+    where: { id: ticketId, organizationId },
     data: { priority: classification.priority },
   });
+
+  if (updated.count !== 1) {
+    throw new Error("Ticket not found in organization");
+  }
 
   return classification;
 }
