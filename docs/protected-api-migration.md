@@ -84,11 +84,16 @@ Legacy null-owned tickets used by draft-save and internal-note flows are accessi
 - saved-reply update and deletion
 - legacy null-owned customers, customer tickets, and saved replies are visible only through the deterministic legacy workspace
 
-## Remaining migration work
+### Legacy workflow-rule compatibility
 
-Continue by domain rather than performing a blind repository rewrite:
+- legacy workflow creation
+- legacy workflow status changes
+- legacy workflow deletion
+- legacy manual rule execution against a ticket
+- `/api/workflows/create` remains a compatibility alias to the canonical `/api/workflows` handler rather than a duplicate implementation
 
-1. remaining legacy workflow-rule endpoints;
-2. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
+The legacy rule engine remains temporary migration compatibility. New workflow product development belongs on the versioned graph model.
 
-Do not convert a route until its current service contract, HTTP verbs, and domain-specific error behavior have been reviewed. Preserving working client behavior is more important than mechanically replacing middleware calls.
+## Remaining migration verification
+
+The known protected product API domains are standardized. The remaining task is repository-wide verification: every Pages API product route must either use `createTenantApiRoute()` or be explicitly documented as a dedicated/public boundary. The security inventory test and audit script own that invariant.

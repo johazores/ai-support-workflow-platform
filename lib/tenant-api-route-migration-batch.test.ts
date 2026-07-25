@@ -30,6 +30,10 @@ const migratedRoutes = [
   "pages/api/tags/index.ts",
   "pages/api/email-config/index.ts",
   "pages/api/email-config/[id].ts",
+  "pages/api/workflows/index.ts",
+  "pages/api/workflows/[workflow-id]/index.ts",
+  "pages/api/workflows/[workflow-id]/status.ts",
+  "pages/api/tickets/[ticket-id]/workflows/run.ts",
 ] as const;
 
 describe("protected tenant API migration batch", () => {
@@ -40,6 +44,17 @@ describe("protected tenant API migration batch", () => {
     expect(source).not.toContain("requireTenantApiPermission(");
     expect(source).not.toContain("requireApiPermission(");
     expect(source).not.toContain("parseSessionValue(");
+  });
+
+  it("keeps the legacy create URL as a compatibility alias", () => {
+    const source = readFileSync(
+      join(process.cwd(), "pages/api/workflows/create.ts"),
+      "utf8",
+    );
+
+    expect(source.trim()).toBe(
+      'export { default } from "@/pages/api/workflows/index";',
+    );
   });
 
   it("keeps direct password-based team creation development-gated", () => {
