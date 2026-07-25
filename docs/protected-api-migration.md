@@ -8,18 +8,20 @@ Product APIs should use `createTenantApiRoute()` unless they intentionally belon
 
 - supported HTTP method routing and `Allow` responses;
 - request correlation IDs;
+- same-origin enforcement for browser mutations;
 - product identity and active-organization resolution through `requireTenantApiPermission()`;
 - route-specific permission checks;
+- IP, identity, and organization rate limiting;
 - optional Zod body/query parsing;
 - normalized validation failures;
 - explicit expected-domain error mapping;
 - safe unexpected 500 responses.
 
-Rate limiting, CSRF/origin enforcement, and additional audit/security hooks remain launch-hardening work and should be added to this shared boundary instead of copied into each route.
+Additional audit/security hooks should be added to this shared boundary instead of copied into each route when they are truly cross-cutting.
 
 ## Dedicated boundaries that should not use this wrapper
 
-- Root Admin APIs use the independent Root Admin session/permission boundary.
+- Root Admin APIs use the independent Root Admin session boundary, with their own origin and rate-limit enforcement.
 - Clerk lifecycle webhooks use Clerk signature verification.
 - Inbound email webhooks use their raw-body HMAC boundary and mailbox-to-organization resolution.
 - Public health/readiness endpoints remain intentionally separate.
@@ -52,14 +54,21 @@ Rate limiting, CSRF/origin enforcement, and additional audit/security hooks rema
 - notifications
 - CSAT ticket rating and CSAT aggregate statistics
 
+### Team administration
+
+- user/member collection reads
+- user/member detail reads
+- role updates
+- organization-member removal
+- legacy direct password-based creation remains development-gated; production team onboarding uses organization invitations
+
 ## Remaining migration work
 
 Continue by domain rather than performing a blind repository rewrite:
 
-1. team/user administration;
-2. SLA administration and ticket SLA reads;
-3. bulk ticket operations;
-4. saved replies, customer/admin reads, AI/audit logs, and remaining legacy workflow-rule endpoints;
-5. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
+1. SLA administration and ticket SLA reads;
+2. bulk ticket operations;
+3. saved replies, customer/admin reads, AI/audit logs, and remaining legacy workflow-rule endpoints;
+4. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
 
 Do not convert a route until its current service contract, HTTP verbs, and domain-specific error behavior have been reviewed. Preserving working client behavior is more important than mechanically replacing middleware calls.
