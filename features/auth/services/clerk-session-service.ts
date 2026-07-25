@@ -3,6 +3,8 @@ import { auth, clerkClient, getAuth } from "@clerk/nextjs/server";
 import { isClerkConfigured } from "@/features/auth/services/clerk-config";
 import {
   getInternalClerkUser,
+  InactiveProductUserError,
+  isInternalClerkUserInactive,
   syncClerkIdentity,
 } from "@/features/auth/services/clerk-user-service";
 import type { SessionUser } from "@/features/auth/services/session-service";
@@ -12,6 +14,10 @@ async function resolveClerkSessionUser(
 ): Promise<SessionUser | null> {
   const existingUser = await getInternalClerkUser(clerkUserId);
   if (existingUser) return existingUser;
+
+  if (await isInternalClerkUserInactive(clerkUserId)) {
+    return null;
+  }
 
   const client = await clerkClient();
   const clerkUser = await client.users.getUser(clerkUserId);
@@ -29,11 +35,16 @@ async function resolveClerkSessionUser(
     clerkUser.username ||
     primaryEmail.emailAddress;
 
-  return syncClerkIdentity({
-    clerkUserId,
-    email: primaryEmail.emailAddress,
-    name,
-  });
+  try {
+    return await syncClerkIdentity({
+      clerkUserId,
+      email: primaryEmail.emailAddress,
+      name,
+    });
+  } catch (error) {
+    if (error instanceof InactiveProductUserError) return null;
+    throw error;
+  }
 }
 
 export async function getClerkAppSessionUser() {

@@ -2,8 +2,10 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public details?: Record<string, unknown>,
   ) {
     super(message);
+    this.name = "ApiError";
   }
 }
 
@@ -45,6 +47,7 @@ export async function apiClient<T = unknown>(
     throw new ApiError(
       response.status,
       (result.message as string) ?? "Request failed",
+      result,
     );
   }
 

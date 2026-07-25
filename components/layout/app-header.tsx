@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { CurrentUserBadge } from "@/features/auth/components/current-user-badge";
 import { ProductAccountControl } from "@/features/auth/components/product-account-control";
-import { NotificationBell } from "@/features/notifications/components/notification-bell";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { isElevatedRole } from "@/features/auth/services/role-service";
+import { NotificationBell } from "@/features/notifications/components/notification-bell";
+import { OrganizationSwitcher } from "@/features/organizations/components/organization-switcher";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 type AppHeaderProps = {
   user: {
@@ -22,16 +23,20 @@ export function AppHeader({ user }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/80 backdrop-blur-lg dark:border-slate-700/60 dark:bg-slate-900/80">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-        <div className="flex items-center gap-8">
+        <div className="flex min-w-0 items-center gap-4 lg:gap-8">
           <Link
             href="/inbox"
-            className="flex items-center gap-2 text-slate-950 dark:text-white"
+            className="flex shrink-0 items-center gap-2 text-slate-950 dark:text-white"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-xs font-bold text-white dark:bg-white dark:text-slate-950">
               AI
             </span>
             <span className="text-sm font-semibold tracking-tight">Support</span>
           </Link>
+
+          <div className="hidden lg:block">
+            <OrganizationSwitcher />
+          </div>
 
           <nav className="hidden items-center gap-1 md:flex">
             <Link
@@ -84,7 +89,7 @@ export function AppHeader({ user }: AppHeaderProps) {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H3.75"
               />
             )}
           </svg>
@@ -93,6 +98,10 @@ export function AppHeader({ user }: AppHeaderProps) {
 
       {mobileOpen && (
         <div className="animate-in border-t border-slate-100 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-900 md:hidden">
+          <div className="mb-3">
+            <OrganizationSwitcher />
+          </div>
+
           <nav className="flex flex-col gap-1">
             <Link
               href="/inbox"
