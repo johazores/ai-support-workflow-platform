@@ -1,99 +1,81 @@
 # Protected Product API Migration
 
-Product APIs should use `createTenantApiRoute()` unless they intentionally belong to a different security boundary.
+Product APIs use one of two standardized browser boundaries depending on whether an active tenant already exists.
 
-## Standard protected product boundary
+## Tenant product boundary
 
-`createTenantApiRoute()` owns:
+`createTenantApiRoute()` is the default for product APIs after an active organization can be resolved. It owns:
 
 - supported HTTP method routing and `Allow` responses;
 - request correlation IDs;
 - same-origin enforcement for browser mutations;
-- product identity and active-organization resolution through `requireTenantApiPermission()`;
-- route-specific permission checks;
+- Clerk product identity and active-organization resolution;
+- active `OrganizationMember` role/permission checks;
 - IP, identity, and organization rate limiting;
 - optional Zod body/query parsing;
 - normalized validation failures;
 - explicit expected-domain error mapping;
 - safe unexpected 500 responses.
 
-Additional audit/security hooks should be added to this shared boundary instead of copied into each route when they are truly cross-cutting.
+## Pre-tenant product identity boundary
 
-## Dedicated boundaries that should not use this wrapper
+`createProductIdentityApiRoute()` is used only when the operation must happen before an active organization exists or while choosing it. It provides the same request/origin/rate-limit/validation/error guarantees but authenticates the product identity without inventing a tenant.
 
-- Root Admin APIs use the independent Root Admin session boundary, with their own origin and rate-limit enforcement.
-- Clerk lifecycle webhooks use Clerk signature verification.
-- Inbound email webhooks use their raw-body HMAC boundary and mailbox-to-organization resolution.
-- Public health/readiness endpoints remain intentionally separate.
+Current pre-tenant routes are:
 
-## Migrated product APIs
+- organization membership listing;
+- active organization selection;
+- first-organization Clerk onboarding.
 
-### Versioned workflows
+`requireApiAuth()` is Clerk-exclusive whenever Clerk is configured. It never falls back to `support_session` after a failed Clerk lookup. Historical local product sessions are available only when Clerk is absent and the explicit non-production legacy-auth gate is enabled.
 
-- `/api/workflow-definitions`
-- `/api/workflow-definitions/[id]`
-- `/api/workflow-definitions/[id]/publish`
-- `/api/workflow-definitions/[id]/run`
-- `/api/workflow-definitions/[id]/test`
-- `/api/workflow-definitions/[id]/versions`
-- `/api/workflow-definitions/options`
+## Dedicated boundaries
 
-### Core ticket and AI operations
+These routes intentionally do not use the product wrappers:
 
-- ticket collection reads
-- ticket status, priority, assignment, and tag mutations
-- bulk ticket status, priority, and assignment changes
-- internal notes
-- manual replies
-- AI draft generation
-- AI draft persistence
-- AI draft send
+- Root Admin APIs use the independent Root Admin session boundary, with Root-specific origin and rate-limit enforcement;
+- `/api/auth/*` owns product login/logout/session migration behavior;
+- Clerk lifecycle webhooks use Clerk signature verification;
+- inbound email webhooks use raw-body HMAC verification and mailbox-to-organization resolution;
+- public health/readiness endpoints remain intentionally unauthenticated.
 
-Legacy null-owned tickets used by draft-save and internal-note flows are accessible only through the deterministic legacy workspace.
+## Standardized product domains
 
-### Reporting and email administration
+The standardized tenant boundary now covers:
 
-- analytics
-- email delivery logs
-- email template collection/detail
-- tenant inbox polling
-- notifications
-- CSAT ticket rating and CSAT aggregate statistics
-- tag collection reads and creation
-- mailbox configuration collection/detail reads
-- mailbox creation, update, and deletion with masked API responses and encrypted stored secrets
+- versioned workflow definition, publishing, run, test, history, and editor-option APIs;
+- legacy workflow-rule compatibility create/status/delete/manual-run APIs;
+- ticket collection reads, status, priority, assignment, tags, bulk changes, SLA, internal notes, replies, and ticket event streams;
+- AI draft generation, persistence, and send;
+- analytics and CSAT;
+- customers and saved replies;
+- notifications;
+- email delivery logs, templates, mailbox polling, and mailbox configuration;
+- tag administration;
+- team/member administration;
+- organization invitation list/create/revoke;
+- SLA policy administration.
 
-### Team administration
+The legacy `/api/workflows/create` URL remains only as a compatibility alias to the canonical `/api/workflows` handler rather than a duplicate implementation.
 
-- user/member collection reads
-- user/member detail reads
-- role updates
-- organization-member removal
-- legacy direct password-based creation remains development-gated; production team onboarding uses organization invitations
+## Tenant-isolation corrections discovered during migration
 
-### SLA administration and status
+The migration review also fixed service-layer compatibility paths so normal organizations cannot see or adopt `organizationId:null` records for:
 
-- SLA policy collection reads
-- SLA policy timing updates
-- per-ticket SLA status reads
+- customers and their ticket history;
+- saved replies;
+- AI draft ticket lookup;
+- internal note ticket lookup.
 
-### Customers and saved replies
+Only the deterministic legacy workspace retains controlled null-owned migration access.
 
-- customer collection and detail reads
-- saved-reply collection reads and creation
-- saved-reply update and deletion
-- legacy null-owned customers, customer tickets, and saved replies are visible only through the deterministic legacy workspace
+The ticket Server-Sent Events endpoint was also found to be unauthenticated. It now requires `tickets:read`, verifies tenant ticket ownership before opening the stream, and uses a feature-level ticket event bus rather than exposing the connection registry as business logic.
 
-### Legacy workflow-rule compatibility
+## Enforcement
 
-- legacy workflow creation
-- legacy workflow status changes
-- legacy workflow deletion
-- legacy manual rule execution against a ticket
-- `/api/workflows/create` remains a compatibility alias to the canonical `/api/workflows` handler rather than a duplicate implementation
+Two repository checks make the migration deny-by-default:
 
-The legacy rule engine remains temporary migration compatibility. New workflow product development belongs on the versioned graph model.
+- `lib/api-security-boundary-inventory.test.ts` walks every Pages API route and requires a standardized wrapper or explicit dedicated/public classification;
+- `scripts/audit-product-api-boundaries.mjs` exits non-zero for direct product-auth helpers or unclassified product routes.
 
-## Remaining migration verification
-
-The known protected product API domains are standardized. The remaining task is repository-wide verification: every Pages API product route must either use `createTenantApiRoute()` or be explicitly documented as a dedicated/public boundary. The security inventory test and audit script own that invariant.
+The standalone audit runs inside the existing single GitHub Actions Quality Gate. New product APIs should fail CI if they bypass the standardized boundaries.
