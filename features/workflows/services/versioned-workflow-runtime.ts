@@ -1,7 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
 import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
-import { parseWorkflowDefinition } from "@/features/workflows/services/workflow-definition-validation";
+import {
+  parseWorkflowDefinition,
+  validateWorkflowForPublish,
+} from "@/features/workflows/services/workflow-definition-validation";
 import type {
   WorkflowActionNode,
   WorkflowConditionNode,
@@ -31,6 +34,26 @@ type ExecuteInput = {
   workflowId?: string;
   idempotencyKey?: string;
 };
+
+type ExecutionMode = "live" | "test";
+type RuntimeTriggerType = WorkflowTriggerType | "test";
+type TicketMutation = {
+  status?: string;
+  priority?: string;
+  assigneeName?: string | null;
+  assigneeEmail?: string | null;
+  tagIds?: string[];
+};
+
+export class WorkflowExecutionError extends Error {
+  constructor(
+    message: string,
+    readonly executionId: string,
+  ) {
+    super(message);
+    this.name = "WorkflowExecutionError";
+  }
+}
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -130,86 +153,113 @@ async function resolveTag(organizationId: string, tagId: string) {
 async function updateTenantTicket(input: {
   organizationId: string;
   ticketId: string;
-  data: Prisma.TicketUpdateManyMutationInput;
+  data: TicketMutation;
 }) {
   const updated = await prisma.ticket.updateMany({
     where: {
       id: input.ticketId,
       ...(await ticketTenantWhere(input.organizationId)),
     },
-    data: { organizationId: input.organizationId, ...input.data },
+    data: { ...input.data, organizationId: input.organizationId },
   });
 
   if (updated.count !== 1) throw new Error("Ticket not found");
+}
+
+async function recordActivity(input: {
+  mode: ExecutionMode;
+  organizationId: string;
+  ticketId: string;
+  type: string;
+  message: string;
+}) {
+  if (input.mode === "test") return;
+  await prisma.activityLog.create({
+    data: {
+      organizationId: input.organizationId,
+      ticketId: input.ticketId,
+      type: input.type,
+      message: input.message,
+    },
+  });
 }
 
 async function applyAction(input: {
   organizationId: string;
   ticket: RuntimeTicket;
   node: WorkflowActionNode;
+  mode: ExecutionMode;
 }) {
-  const { organizationId, node } = input;
-  const ticket = { ...input.ticket };
+  const { organizationId, node, mode } = input;
+  const ticket = { ...input.ticket, tagIds: [...input.ticket.tagIds] };
+  const simulated = mode === "test";
 
   if (node.data.actionType === "change-status") {
-    await updateTenantTicket({
-      organizationId,
-      ticketId: ticket.id,
-      data: { status: node.data.value },
-    });
-    ticket.status = node.data.value;
-    await prisma.activityLog.create({
-      data: {
+    if (mode === "live") {
+      await updateTenantTicket({
         organizationId,
         ticketId: ticket.id,
-        type: "workflow_change_status",
-        message: `Workflow changed status to ${node.data.value}`,
-      },
+        data: { status: node.data.value },
+      });
+    }
+    ticket.status = node.data.value;
+    await recordActivity({
+      mode,
+      organizationId,
+      ticketId: ticket.id,
+      type: "workflow_change_status",
+      message: `Workflow changed status to ${node.data.value}`,
     });
-    return { ticket, output: { status: node.data.value } };
+    return { ticket, output: { status: node.data.value, simulated } };
   }
 
   if (node.data.actionType === "change-priority") {
-    await updateTenantTicket({
-      organizationId,
-      ticketId: ticket.id,
-      data: { priority: node.data.value },
-    });
-    ticket.priority = node.data.value;
-    await prisma.activityLog.create({
-      data: {
+    if (mode === "live") {
+      await updateTenantTicket({
         organizationId,
         ticketId: ticket.id,
-        type: "workflow_change_priority",
-        message: `Workflow changed priority to ${node.data.value}`,
-      },
+        data: { priority: node.data.value },
+      });
+    }
+    ticket.priority = node.data.value;
+    await recordActivity({
+      mode,
+      organizationId,
+      ticketId: ticket.id,
+      type: "workflow_change_priority",
+      message: `Workflow changed priority to ${node.data.value}`,
     });
-    return { ticket, output: { priority: node.data.value } };
+    return { ticket, output: { priority: node.data.value, simulated } };
   }
 
   if (node.data.actionType === "assign-ticket") {
     const assignee = await resolveAssignee(organizationId, node.data.value);
-    await updateTenantTicket({
-      organizationId,
-      ticketId: ticket.id,
-      data: {
-        assigneeName: assignee.name,
-        assigneeEmail: assignee.email,
-      },
-    });
-    ticket.assigneeName = assignee.name;
-    ticket.assigneeEmail = assignee.email;
-    await prisma.activityLog.create({
-      data: {
+    if (mode === "live") {
+      await updateTenantTicket({
         organizationId,
         ticketId: ticket.id,
-        type: "workflow_assignment",
-        message: `Workflow assigned ticket to ${assignee.name}`,
-      },
+        data: {
+          assigneeName: assignee.name,
+          assigneeEmail: assignee.email,
+        },
+      });
+    }
+    ticket.assigneeName = assignee.name;
+    ticket.assigneeEmail = assignee.email;
+    await recordActivity({
+      mode,
+      organizationId,
+      ticketId: ticket.id,
+      type: "workflow_assignment",
+      message: `Workflow assigned ticket to ${assignee.name}`,
     });
     return {
       ticket,
-      output: { assigneeName: assignee.name, assigneeEmail: assignee.email },
+      output: {
+        assigneeName: assignee.name,
+        assigneeEmail: assignee.email,
+        simulated,
+      },
     };
   }
 
@@ -219,25 +269,38 @@ async function applyAction(input: {
 
     if (!alreadyPresent) {
       const nextTagIds = [...ticket.tagIds, tag.id];
-      await updateTenantTicket({
-        organizationId,
-        ticketId: ticket.id,
-        data: { tagIds: nextTagIds },
-      });
-      ticket.tagIds = nextTagIds;
-      await prisma.activityLog.create({
-        data: {
+      if (mode === "live") {
+        await updateTenantTicket({
           organizationId,
           ticketId: ticket.id,
-          type: "workflow_add_tag",
-          message: `Workflow added tag ${tag.name}`,
-        },
+          data: { tagIds: nextTagIds },
+        });
+      }
+      ticket.tagIds = nextTagIds;
+      await recordActivity({
+        mode,
+        organizationId,
+        ticketId: ticket.id,
+        type: "workflow_add_tag",
+        message: `Workflow added tag ${tag.name}`,
       });
     }
 
     return {
       ticket,
-      output: { tagId: tag.id, tagName: tag.name, alreadyPresent },
+      output: {
+        tagId: tag.id,
+        tagName: tag.name,
+        alreadyPresent,
+        simulated,
+      },
+    };
+  }
+
+  if (mode === "test") {
+    return {
+      ticket,
+      output: { wouldGenerateDraft: true, simulated: true },
     };
   }
 
@@ -254,16 +317,15 @@ async function applyAction(input: {
       body: result.draft,
     },
   });
-  await prisma.activityLog.create({
-    data: {
-      organizationId,
-      ticketId: ticket.id,
-      type: "workflow_generate_draft",
-      message: "Workflow generated an AI draft for review.",
-    },
+  await recordActivity({
+    mode,
+    organizationId,
+    ticketId: ticket.id,
+    type: "workflow_generate_draft",
+    message: "Workflow generated an AI draft for review.",
   });
 
-  return { ticket, output: { draftId: draft.id } };
+  return { ticket, output: { draftId: draft.id, simulated: false } };
 }
 
 function childIdsForResult(input: {
@@ -285,6 +347,7 @@ async function runNode(input: {
   executionId: string;
   node: WorkflowNode;
   ticket: RuntimeTicket;
+  mode: ExecutionMode;
 }) {
   const step = await prisma.workflowExecutionStep.create({
     data: {
@@ -294,14 +357,14 @@ async function runNode(input: {
       nodeType: input.node.type,
       status: "running",
       attempt: 1,
-      input: asJson({ ticketId: input.ticket.id }),
+      input: asJson({ ticketId: input.ticket.id, testMode: input.mode === "test" }),
       startedAt: new Date(),
     },
   });
 
   try {
     if (input.node.type === "trigger") {
-      const output = { triggered: true };
+      const output = { triggered: true, simulated: input.mode === "test" };
       await prisma.workflowExecutionStep.update({
         where: { id: step.id },
         data: {
@@ -315,7 +378,7 @@ async function runNode(input: {
 
     if (input.node.type === "condition") {
       const matched = matchesCondition(input.node, input.ticket);
-      const output = { matched };
+      const output = { matched, simulated: input.mode === "test" };
       await prisma.workflowExecutionStep.update({
         where: { id: step.id },
         data: {
@@ -331,6 +394,7 @@ async function runNode(input: {
       organizationId: input.organizationId,
       ticket: input.ticket,
       node: input.node,
+      mode: input.mode,
     });
     await prisma.workflowExecutionStep.update({
       where: { id: step.id },
@@ -362,16 +426,23 @@ async function runNode(input: {
 async function executeWorkflow(input: {
   organizationId: string;
   ticket: RuntimeTicket;
-  triggerType: WorkflowTriggerType;
+  triggerType: RuntimeTriggerType;
   workflow: { id: string; currentVersion: number };
   version: { id: string; definition: Prisma.JsonValue };
   idempotencyKey?: string;
+  mode: ExecutionMode;
 }) {
-  const definition = parseWorkflowDefinition(input.version.definition);
-  const trigger = definition.nodes.find(
-    (node) =>
-      node.type === "trigger" && node.data.triggerType === input.triggerType,
-  );
+  const definition =
+    input.mode === "test"
+      ? validateWorkflowForPublish(input.version.definition)
+      : parseWorkflowDefinition(input.version.definition);
+  const trigger =
+    input.mode === "test"
+      ? definition.nodes.find((node) => node.type === "trigger")
+      : definition.nodes.find(
+          (node) =>
+            node.type === "trigger" && node.data.triggerType === input.triggerType,
+        );
   if (!trigger) return null;
 
   if (input.idempotencyKey) {
@@ -400,12 +471,15 @@ async function executeWorkflow(input: {
       triggerType: input.triggerType,
       status: "running",
       idempotencyKey: input.idempotencyKey || null,
-      input: asJson({ ticketId: input.ticket.id }),
+      input: asJson({
+        ticketId: input.ticket.id,
+        testMode: input.mode === "test",
+      }),
       startedAt: new Date(),
     },
   });
 
-  let ticket = { ...input.ticket };
+  let ticket = { ...input.ticket, tagIds: [...input.ticket.tagIds] };
   const visited = new Set<string>();
   const queue = [trigger.id];
   const executedNodeIds: string[] = [];
@@ -424,6 +498,7 @@ async function executeWorkflow(input: {
         executionId: execution.id,
         node,
         ticket,
+        mode: input.mode,
       });
       ticket = result.ticket;
       executedNodeIds.push(node.id);
@@ -440,7 +515,21 @@ async function executeWorkflow(input: {
       where: { id: execution.id },
       data: {
         status: "succeeded",
-        output: asJson({ ticketId: ticket.id, executedNodeIds }),
+        output: asJson({
+          ticketId: ticket.id,
+          executedNodeIds,
+          testMode: input.mode === "test",
+          preview:
+            input.mode === "test"
+              ? {
+                  status: ticket.status,
+                  priority: ticket.priority,
+                  assigneeName: ticket.assigneeName,
+                  assigneeEmail: ticket.assigneeEmail,
+                  tagIds: ticket.tagIds,
+                }
+              : undefined,
+        }),
         finishedAt: new Date(),
       },
     });
@@ -453,11 +542,15 @@ async function executeWorkflow(input: {
       data: {
         status: "failed",
         error: message,
-        output: asJson({ ticketId: ticket.id, executedNodeIds }),
+        output: asJson({
+          ticketId: ticket.id,
+          executedNodeIds,
+          testMode: input.mode === "test",
+        }),
         finishedAt: new Date(),
       },
     });
-    throw error;
+    throw new WorkflowExecutionError(message, execution.id);
   }
 }
 
@@ -493,6 +586,7 @@ export async function executePublishedWorkflowsForTicket(input: ExecuteInput) {
       idempotencyKey: input.idempotencyKey
         ? `${input.idempotencyKey}:${workflow.id}`
         : undefined,
+      mode: "live",
     });
     if (!result) continue;
 
@@ -501,4 +595,43 @@ export async function executePublishedWorkflowsForTicket(input: ExecuteInput) {
   }
 
   return results;
+}
+
+export async function testLatestWorkflowDraftForTicket(input: {
+  organizationId: string;
+  workflowId: string;
+  ticketId: string;
+  idempotencyKey: string;
+}) {
+  const workflow = await prisma.workflow.findFirst({
+    where: {
+      id: input.workflowId,
+      organizationId: input.organizationId,
+      status: { not: "archived" },
+    },
+  });
+  if (!workflow) throw new Error("Workflow not found");
+
+  const version = await prisma.workflowVersion.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      workflowId: workflow.id,
+    },
+    orderBy: { version: "desc" },
+  });
+  if (!version) throw new Error("Workflow version not found");
+
+  const ticket = await loadTicket(input.organizationId, input.ticketId);
+  const result = await executeWorkflow({
+    organizationId: input.organizationId,
+    ticket,
+    triggerType: "test",
+    workflow,
+    version,
+    idempotencyKey: input.idempotencyKey,
+    mode: "test",
+  });
+
+  if (!result) throw new Error("Workflow does not contain a trigger");
+  return result.execution;
 }
