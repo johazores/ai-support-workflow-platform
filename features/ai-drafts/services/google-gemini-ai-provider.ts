@@ -6,7 +6,7 @@ import type {
   AiDraftProvider,
   GenerateDraftInput,
 } from "@/features/ai-drafts/types/ai-provider";
-import { getEnabledProviderConfiguration } from "@/features/providers/services/provider-service";
+import { getProviderRuntimeConfiguration } from "@/features/providers/services/provider-service";
 
 function normalizeModel(model: string) {
   return model.replace(/^models\//, "");
@@ -14,10 +14,14 @@ function normalizeModel(model: string) {
 
 export const googleGeminiProvider: AiDraftProvider = {
   async generateDraft(input: GenerateDraftInput) {
-    const configuredProvider =
-      await getEnabledProviderConfiguration("google-gemini");
+    const runtime = await getProviderRuntimeConfiguration("google-gemini");
+    if (runtime.mode === "disabled") {
+      throw new Error("Google Gemini is disabled");
+    }
+
+    const database = runtime.mode === "database" ? runtime : null;
     const apiKey =
-      configuredProvider?.credential ??
+      database?.credential ??
       process.env.GEMINI_API_KEY?.trim() ??
       process.env.GOOGLE_GEMINI_API_KEY?.trim();
 
@@ -26,13 +30,12 @@ export const googleGeminiProvider: AiDraftProvider = {
     }
 
     const model = normalizeModel(
-      configuredProvider?.defaultModel ||
+      database?.defaultModel ||
         process.env.GEMINI_MODEL?.trim() ||
         "gemini-3.6-flash",
     );
     const baseUrl =
-      configuredProvider?.baseUrl ||
-      "https://generativelanguage.googleapis.com/v1beta";
+      database?.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
     const url = `${baseUrl.replace(/\/$/, "")}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const response = await fetch(url, {

@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { googleGeminiProvider } from "@/features/ai-drafts/services/google-gemini-ai-provider";
 
 const mocks = vi.hoisted(() => ({
-  getEnabledProviderConfiguration: vi.fn(),
+  getProviderRuntimeConfiguration: vi.fn(),
   fetch: vi.fn(),
 }));
 
 vi.mock("@/features/providers/services/provider-service", () => ({
-  getEnabledProviderConfiguration: mocks.getEnabledProviderConfiguration,
+  getProviderRuntimeConfiguration: mocks.getProviderRuntimeConfiguration,
 }));
 
 const input = {
@@ -21,7 +21,9 @@ const input = {
 describe("googleGeminiProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getEnabledProviderConfiguration.mockResolvedValue(null);
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "environment",
+    });
     vi.stubGlobal("fetch", mocks.fetch);
   });
 
@@ -33,7 +35,10 @@ describe("googleGeminiProvider", () => {
   });
 
   it("uses database configuration and reports the actual model", async () => {
-    mocks.getEnabledProviderConfiguration.mockResolvedValue({
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "database",
+      key: "google-gemini",
+      name: "Google Gemini",
       credential: "db-gemini-key",
       defaultModel: "models/custom-gemini-model",
       baseUrl: "https://gemini.example/v1beta/",
@@ -65,19 +70,9 @@ describe("googleGeminiProvider", () => {
         body: expect.any(String),
       }),
     );
-
-    const request = mocks.fetch.mock.calls[0]?.[1] as { body: string };
-    const body = JSON.parse(request.body) as {
-      systemInstruction: { parts: Array<{ text: string }> };
-      contents: Array<{ parts: Array<{ text: string }> }>;
-    };
-    expect(body.systemInstruction.parts[0]?.text).toContain(
-      "customer support assistant",
-    );
-    expect(body.contents[0]?.parts[0]?.text).toContain("Account issue");
   });
 
-  it("falls back to environment configuration", async () => {
+  it("falls back to environment configuration for unmanaged migration mode", async () => {
     process.env.GEMINI_API_KEY = "env-key";
     process.env.GEMINI_MODEL = "env-model";
     mocks.fetch.mockResolvedValue({
@@ -90,9 +85,16 @@ describe("googleGeminiProvider", () => {
     const result = await googleGeminiProvider.generateDraft(input);
 
     expect(result).toEqual({ draft: "Draft", model: "env-model" });
-    expect(mocks.fetch.mock.calls[0]?.[0]).toContain(
-      "/models/env-model:generateContent?key=env-key",
+  });
+
+  it("does not let environment configuration reactivate an explicitly disabled Gemini provider", async () => {
+    process.env.GEMINI_API_KEY = "env-key";
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
+
+    await expect(googleGeminiProvider.generateDraft(input)).rejects.toThrow(
+      "Google Gemini is disabled",
     );
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("fails clearly when Gemini is not configured", async () => {

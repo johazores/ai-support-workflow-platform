@@ -7,7 +7,7 @@ import type {
   AiDraftProvider,
   GenerateDraftInput,
 } from "@/features/ai-drafts/types/ai-provider";
-import { getEnabledProviderConfiguration } from "@/features/providers/services/provider-service";
+import { getProviderRuntimeConfiguration } from "@/features/providers/services/provider-service";
 
 type ProviderConfiguration = Record<string, unknown>;
 
@@ -42,18 +42,21 @@ export function createOpenAiCompatibleProvider(
 ): AiDraftProvider {
   return {
     async generateDraft(input: GenerateDraftInput) {
-      const configuredProvider = await getEnabledProviderConfiguration(
-        options.key,
-      );
+      const runtime = await getProviderRuntimeConfiguration(options.key);
+      if (runtime.mode === "disabled") {
+        throw new Error(`${options.displayName} is disabled`);
+      }
+
+      const database = runtime.mode === "database" ? runtime : null;
       const apiKey =
-        configuredProvider?.credential ?? firstEnvironmentValue(options.envApiKeys);
+        database?.credential ?? firstEnvironmentValue(options.envApiKeys);
 
       if (!apiKey) {
         throw new Error(`${options.displayName} is not configured`);
       }
 
       const model =
-        configuredProvider?.defaultModel ||
+        database?.defaultModel ||
         (options.envModel ? process.env[options.envModel]?.trim() : undefined) ||
         options.defaultModel;
 
@@ -61,10 +64,10 @@ export function createOpenAiCompatibleProvider(
         throw new Error(`${options.displayName} model is not configured`);
       }
 
-      const configuration = asConfiguration(configuredProvider?.configuration);
+      const configuration = asConfiguration(database?.configuration);
       const client = new OpenAI({
         apiKey,
-        baseURL: configuredProvider?.baseUrl || options.defaultBaseUrl,
+        baseURL: database?.baseUrl || options.defaultBaseUrl,
         defaultHeaders: options.defaultHeaders?.(configuration),
       });
 
