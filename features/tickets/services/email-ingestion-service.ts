@@ -18,27 +18,31 @@ type InboundEmailInput = {
   mailboxId?: string;
 };
 
+async function safelyRunAutomation(label: string, task: () => Promise<unknown>) {
+  try {
+    await task();
+  } catch (error) {
+    console.error(`${label} workflow automation failed`, error);
+  }
+}
+
 async function runInboundAutomations(input: {
   organizationId: string;
   ticketId: string;
   messageId: string;
   isNewTicket: boolean;
 }) {
-  const tasks: Promise<unknown>[] = [
+  // Keep migration rules first so the versioned runtime sees any legacy changes.
+  await safelyRunAutomation("Legacy inbound", () =>
     executeWorkflowRules(input.ticketId, {
       organizationId: input.organizationId,
       triggerType: "inbound-email",
     }),
-    executePublishedWorkflowsForTicket({
-      organizationId: input.organizationId,
-      ticketId: input.ticketId,
-      triggerType: "message-received",
-      idempotencyKey: `message-received:${input.messageId}`,
-    }),
-  ];
+  );
 
+  // Event runs are serialized because both may mutate the same ticket.
   if (input.isNewTicket) {
-    tasks.push(
+    await safelyRunAutomation("Ticket-created", () =>
       executePublishedWorkflowsForTicket({
         organizationId: input.organizationId,
         ticketId: input.ticketId,
@@ -48,12 +52,14 @@ async function runInboundAutomations(input: {
     );
   }
 
-  const results = await Promise.allSettled(tasks);
-  for (const result of results) {
-    if (result.status === "rejected") {
-      console.error("Inbound workflow automation failed", result.reason);
-    }
-  }
+  await safelyRunAutomation("Message-received", () =>
+    executePublishedWorkflowsForTicket({
+      organizationId: input.organizationId,
+      ticketId: input.ticketId,
+      triggerType: "message-received",
+      idempotencyKey: `message-received:${input.messageId}`,
+    }),
+  );
 }
 
 export async function processInboundEmail(input: InboundEmailInput) {
