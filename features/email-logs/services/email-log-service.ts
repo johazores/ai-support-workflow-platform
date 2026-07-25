@@ -1,12 +1,16 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-export async function listEmailLogs(opts?: {
-  status?: string;
-  mailboxId?: string;
-  limit?: number;
-  offset?: number;
-}) {
-  const where: Record<string, unknown> = {};
+export async function listEmailLogs(
+  organizationId: string,
+  opts?: {
+    status?: string;
+    mailboxId?: string;
+    limit?: number;
+    offset?: number;
+  },
+) {
+  const where: Prisma.EmailLogWhereInput = { organizationId };
   if (opts?.status) where.status = opts.status;
   if (opts?.mailboxId) where.mailboxId = opts.mailboxId;
 

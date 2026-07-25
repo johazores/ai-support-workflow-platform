@@ -11,19 +11,24 @@ export async function sendDraft(input: SendDraftInput) {
   const draft = await prisma.draft.findFirst({
     where: {
       id: input.draftId,
-      OR: [
-        { organizationId: input.organizationId },
-        { organizationId: null },
-      ],
+      organizationId: input.organizationId,
     },
     include: {
       ticket: {
-        include: { customer: true },
+        include: {
+          customer: true,
+          messages: {
+            where: { externalMessageId: { not: null } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { externalMessageId: true },
+          },
+        },
       },
     },
   });
 
-  if (!draft || (draft.ticket.organizationId && draft.ticket.organizationId !== input.organizationId)) {
+  if (!draft || draft.ticket.organizationId !== input.organizationId) {
     throw new Error("Draft not found");
   }
 
@@ -36,14 +41,36 @@ export async function sendDraft(input: SendDraftInput) {
     },
   });
 
+  const delivery = await sendTicketEmail({
+    organizationId: input.organizationId,
+    ticketId: draft.ticketId,
+    messageId: message.id,
+    to: draft.ticket.customer.email,
+    subject: `Re: ${draft.ticket.subject}`,
+    body: draft.body,
+    mailboxId: draft.ticket.mailboxId ?? undefined,
+    inReplyTo: draft.ticket.messages[0]?.externalMessageId ?? undefined,
+  });
+
+  if (!delivery.success) {
+    await prisma.message.delete({ where: { id: message.id } });
+    await prisma.activityLog.create({
+      data: {
+        organizationId: input.organizationId,
+        ticketId: draft.ticketId,
+        type: "reply_failed",
+        message: "Saved draft failed to send and remains available for retry.",
+      },
+    });
+
+    throw new Error(delivery.error || "Failed to send draft");
+  }
+
   await prisma.draft.delete({ where: { id: draft.id } });
 
   await prisma.ticket.update({
     where: { id: draft.ticketId },
-    data: {
-      organizationId: input.organizationId,
-      status: "pending",
-    },
+    data: { status: "pending" },
   });
 
   await prisma.activityLog.createMany({
@@ -63,17 +90,12 @@ export async function sendDraft(input: SendDraftInput) {
     ],
   });
 
-  await sendTicketEmail({
-    ticketId: draft.ticketId,
-    messageId: message.id,
-    to: draft.ticket.customer.email,
-    subject: `Re: ${draft.ticket.subject}`,
-    body: draft.body,
-  });
-
   broadcastTicketUpdate(draft.ticketId, "message-created", {
     messageId: message.id,
   });
 
-  return message;
+  return {
+    ...message,
+    externalMessageId: delivery.externalMessageId,
+  };
 }

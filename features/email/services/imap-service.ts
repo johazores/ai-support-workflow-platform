@@ -15,12 +15,20 @@ type PollResult = {
   error?: string;
 };
 
-/**
- * Polls all active IMAP mailboxes for unseen messages.
- * Returns per-mailbox results for visibility into failures.
- */
-export async function pollAllInboxes(): Promise<PollResult[]> {
-  const configs = await getActiveEmailConfigs();
+function markMessageSeen(imap: Imap, uid: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    imap.addFlags(uid, "\\Seen", (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+/** Poll all active IMAP mailboxes owned by one organization. */
+export async function pollAllInboxes(
+  organizationId: string,
+): Promise<PollResult[]> {
+  const configs = await getActiveEmailConfigs(organizationId);
 
   if (configs.length === 0) {
     return [];
@@ -28,7 +36,7 @@ export async function pollAllInboxes(): Promise<PollResult[]> {
 
   const results = await Promise.allSettled(
     configs.map(async (config) => {
-      const processed = await pollSingleInbox(config);
+      const processed = await pollSingleInbox(config, organizationId);
       return {
         mailboxId: config.id,
         mailboxName: config.name,
@@ -37,47 +45,52 @@ export async function pollAllInboxes(): Promise<PollResult[]> {
     }),
   );
 
-  return results.map((r, i) =>
-    r.status === "fulfilled"
-      ? r.value
+  return results.map((result, index) =>
+    result.status === "fulfilled"
+      ? result.value
       : {
-          mailboxId: configs[i].id,
-          mailboxName: configs[i].name,
+          mailboxId: configs[index].id,
+          mailboxName: configs[index].name,
           processed: 0,
-          error: r.reason instanceof Error ? r.reason.message : "Unknown error",
+          error:
+            result.reason instanceof Error
+              ? result.reason.message
+              : "Unknown error",
         },
   );
 }
 
-/**
- * Polls a single IMAP inbox by mailbox ID.
- */
+/** Poll a single IMAP inbox owned by one organization. */
 export async function pollInboxById(
+  organizationId: string,
   mailboxId: string,
 ): Promise<{ processed: number }> {
-  const config = await getEmailConfigById(mailboxId);
+  const config = await getEmailConfigById(mailboxId, organizationId);
   if (!config || !config.isActive) {
     return { processed: 0 };
   }
-  const processed = await pollSingleInbox(config);
+
+  const processed = await pollSingleInbox(config, organizationId);
   return { processed };
 }
 
-/**
- * @deprecated Use pollAllInboxes() or pollInboxById() instead.
- * Polls the default mailbox (backward-compatible).
- */
-export async function pollInbox(): Promise<{ processed: number }> {
-  const config = await getEmailConfig();
+/** @deprecated Use pollAllInboxes() or pollInboxById() instead. */
+export async function pollInbox(
+  organizationId: string,
+): Promise<{ processed: number }> {
+  const config = await getEmailConfig(organizationId);
   if (!config || !config.isActive) {
     return { processed: 0 };
   }
-  const processed = await pollSingleInbox(config);
+
+  const processed = await pollSingleInbox(config, organizationId);
   return { processed };
 }
 
-/** Internal: polls a single IMAP mailbox config. */
-function pollSingleInbox(config: EmailConfig): Promise<number> {
+function pollSingleInbox(
+  config: EmailConfig,
+  organizationId: string,
+): Promise<number> {
   return new Promise((resolve, reject) => {
     const imap = new Imap({
       user: config.imapUser,
@@ -85,10 +98,10 @@ function pollSingleInbox(config: EmailConfig): Promise<number> {
       host: config.imapHost,
       port: config.imapPort,
       tls: true,
-      tlsOptions: { rejectUnauthorized: false },
     });
 
     let processed = 0;
+    const pending = new Set<Promise<void>>();
 
     imap.once("ready", () => {
       imap.openBox("INBOX", false, (err) => {
@@ -108,16 +121,31 @@ function pollSingleInbox(config: EmailConfig): Promise<number> {
             return resolve(0);
           }
 
-          const fetch = imap.fetch(uids, { bodies: "", markSeen: true });
+          const fetch = imap.fetch(uids, { bodies: "", markSeen: false });
 
           fetch.on("message", (msg) => {
+            const uidPromise = new Promise<number>((resolveUid, rejectUid) => {
+              msg.once("attributes", (attributes) => {
+                if (typeof attributes.uid === "number") {
+                  resolveUid(attributes.uid);
+                  return;
+                }
+
+                rejectUid(new Error("IMAP message is missing a UID"));
+              });
+            });
+
             msg.on("body", (stream) => {
-              simpleParser(stream as unknown as import("stream").Readable)
+              let task: Promise<void>;
+              task = simpleParser(
+                stream as unknown as import("stream").Readable,
+              )
                 .then(async (parsed) => {
                   const from = parsed.from?.value?.[0];
                   if (!from?.address) return;
 
                   await processInboundEmail({
+                    organizationId,
                     from: from.address,
                     fromName: from.name || from.address.split("@")[0],
                     subject: parsed.subject || "(no subject)",
@@ -127,15 +155,26 @@ function pollSingleInbox(config: EmailConfig): Promise<number> {
                     mailboxId: config.id,
                   });
 
+                  const uid = await uidPromise;
+                  await markMessageSeen(imap, uid);
                   processed++;
                 })
                 .catch((parseErr) => {
-                  console.error("Failed to parse email:", parseErr);
+                  console.error(
+                    `Failed to process email for mailbox ${config.id}:`,
+                    parseErr,
+                  );
+                })
+                .finally(() => {
+                  pending.delete(task);
                 });
+
+              pending.add(task);
             });
           });
 
-          fetch.once("end", () => {
+          fetch.once("end", async () => {
+            await Promise.allSettled([...pending]);
             imap.end();
           });
         });

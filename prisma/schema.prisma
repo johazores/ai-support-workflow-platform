@@ -49,6 +49,27 @@ model OrganizationMember {
   @@index([organizationId, status])
 }
 
+model OrganizationInvitation {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId    String    @db.ObjectId
+  email             String
+  role              String    @default("agent")
+  status            String    @default("pending")
+  clerkInvitationId String?
+  invitedByUserId   String    @db.ObjectId
+  acceptedByUserId  String?   @db.ObjectId
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, email, status])
+  @@index([email, status, expiresAt])
+  @@index([clerkInvitationId])
+}
+
 model RootAdmin {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   username           String    @unique
@@ -84,11 +105,12 @@ model Customer {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   organizationId String?  @db.ObjectId
   name           String
-  email          String   @unique
+  email          String
   tickets        Ticket[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([organizationId, email])
   @@index([organizationId])
 }
 
@@ -392,10 +414,11 @@ model Notification {
 model Tag {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   organizationId String?  @db.ObjectId
-  name           String   @unique
+  name           String
   color          String   @default("slate")
   createdAt      DateTime @default(now())
 
+  @@unique([organizationId, name])
   @@index([organizationId])
 }
 
@@ -415,12 +438,13 @@ model SlaPolicy {
   id                    String   @id @default(auto()) @map("_id") @db.ObjectId
   organizationId        String?  @db.ObjectId
   name                  String
-  priority              String   @unique
+  priority              String
   firstResponseMinutes  Int
   resolutionMinutes     Int
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  @@unique([organizationId, priority])
   @@index([organizationId])
 }
 
@@ -447,13 +471,14 @@ model EmailConfig {
   imapPort       Int      @default(993)
   imapUser       String
   imapPass       String
-  fromAddress    String   @unique
+  fromAddress    String
   fromName       String   @default("Support")
   isActive       Boolean  @default(false)
   isDefault      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([organizationId, fromAddress])
   @@index([organizationId, isActive])
 }
 

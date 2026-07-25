@@ -1,3 +1,4 @@
+import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 import { prisma } from "@/lib/prisma";
 
 export async function listWorkflowExecutions(
@@ -13,10 +14,28 @@ export async function listWorkflowExecutions(
   const workflowIds = [
     ...new Set(executions.map((execution) => execution.workflowId)),
   ];
-  const legacyRules = await prisma.workflowRule.findMany({
-    where: { id: { in: workflowIds } },
-  });
-  const names = new Map(legacyRules.map((rule) => [rule.id, rule.name]));
+  if (workflowIds.length === 0) return [];
+
+  const includeLegacy = await isLegacyOrganization(organizationId);
+  const [workflows, legacyRules] = await Promise.all([
+    prisma.workflow.findMany({
+      where: { organizationId, id: { in: workflowIds } },
+      select: { id: true, name: true },
+    }),
+    prisma.workflowRule.findMany({
+      where: {
+        id: { in: workflowIds },
+        ...(includeLegacy
+          ? { OR: [{ organizationId }, { organizationId: null }] }
+          : { organizationId }),
+      },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  const names = new Map<string, string>();
+  for (const rule of legacyRules) names.set(rule.id, rule.name);
+  for (const workflow of workflows) names.set(workflow.id, workflow.name);
 
   return executions.map((execution) => ({
     ...execution,
@@ -33,17 +52,33 @@ export async function getWorkflowExecution(
   });
   if (!execution) return null;
 
-  const [steps, rule] = await Promise.all([
+  const includeLegacy = await isLegacyOrganization(organizationId);
+  const [steps, workflow, rule] = await Promise.all([
     prisma.workflowExecutionStep.findMany({
       where: { executionId, organizationId },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.workflowRule.findUnique({ where: { id: execution.workflowId } }),
+    prisma.workflow.findFirst({
+      where: {
+        id: execution.workflowId,
+        organizationId,
+      },
+      select: { name: true },
+    }),
+    prisma.workflowRule.findFirst({
+      where: {
+        id: execution.workflowId,
+        ...(includeLegacy
+          ? { OR: [{ organizationId }, { organizationId: null }] }
+          : { organizationId }),
+      },
+      select: { name: true },
+    }),
   ]);
 
   return {
     ...execution,
-    workflowName: rule?.name || "Workflow",
+    workflowName: workflow?.name || rule?.name || "Workflow",
     steps,
   };
 }

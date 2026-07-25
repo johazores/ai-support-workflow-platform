@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const LEGACY_ORGANIZATION_SLUG = "default-workspace";
+export const LEGACY_ORGANIZATION_SLUG = "default-workspace";
 
 export type OrganizationContext = {
   organizationId: string;
@@ -16,6 +16,15 @@ export async function ensureDefaultOrganization() {
       slug: LEGACY_ORGANIZATION_SLUG,
     },
   });
+}
+
+export async function isLegacyOrganization(organizationId: string) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+
+  return organization?.slug === LEGACY_ORGANIZATION_SLUG;
 }
 
 /**
