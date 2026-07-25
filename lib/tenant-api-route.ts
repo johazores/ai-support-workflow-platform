@@ -3,6 +3,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { ZodType } from "zod";
 import type { Permission } from "@/features/auth/services/role-service";
 import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import {
+  applyRateLimitHeaders,
+  enforceRequestRateLimit,
+  type RateLimitClass,
+} from "@/lib/rate-limit";
 import { isSameOriginMutation } from "@/lib/request-origin";
 
 export const tenantApiMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
@@ -45,6 +50,7 @@ type TenantApiRouteDefinition<TInput = unknown> = {
   permission: Permission;
   parse?: (req: NextApiRequest) => unknown;
   schema?: ZodType<TInput>;
+  rateLimit?: RateLimitClass | false;
   handle: (context: TenantApiRouteContext<TInput>) => Promise<void> | void;
   mapError?: (error: unknown) => TenantApiErrorResponse | null;
   unexpectedErrorMessage?: string;
@@ -107,6 +113,32 @@ export function createTenantApiRoute(routes: TenantApiRouteMap) {
 
     const auth = await requireTenantApiPermission(req, res, route.permission);
     if (!auth.ok) return;
+
+    if (route.rateLimit !== false) {
+      try {
+        const rateLimit = await enforceRequestRateLimit({
+          req,
+          rateLimitClass:
+            route.rateLimit ?? (method === "GET" ? "read" : "write"),
+          identityId: auth.user.id,
+          organizationId: auth.user.organizationId,
+        });
+        applyRateLimitHeaders(res, rateLimit);
+
+        if (!rateLimit.allowed) {
+          return res.status(429).json({
+            message: "Too many requests",
+            requestId,
+          });
+        }
+      } catch (error) {
+        console.error(`[${requestId}] tenant API rate limiting failed`, error);
+        return res.status(503).json({
+          message: "Request temporarily unavailable",
+          requestId,
+        });
+      }
+    }
 
     let input: unknown = undefined;
     if (route.schema) {

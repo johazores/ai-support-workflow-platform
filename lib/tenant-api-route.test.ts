@@ -8,10 +8,17 @@ import {
 
 const mocks = vi.hoisted(() => ({
   requireTenantApiPermission: vi.fn(),
+  enforceRequestRateLimit: vi.fn(),
+  applyRateLimitHeaders: vi.fn(),
 }));
 
 vi.mock("@/lib/tenant-api-auth", () => ({
   requireTenantApiPermission: mocks.requireTenantApiPermission,
+}));
+
+vi.mock("@/lib/rate-limit", () => ({
+  enforceRequestRateLimit: mocks.enforceRequestRateLimit,
+  applyRateLimitHeaders: mocks.applyRateLimitHeaders,
 }));
 
 const user = {
@@ -20,6 +27,14 @@ const user = {
   email: "admin@example.com",
   role: "admin",
   organizationId: "org-1",
+};
+
+const allowedRateLimit = {
+  allowed: true,
+  limit: 90,
+  remaining: 89,
+  resetAt: new Date("2026-07-25T06:01:00.000Z"),
+  retryAfterSeconds: 50,
 };
 
 function request(input?: {
@@ -59,6 +74,7 @@ describe("createTenantApiRoute", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requireTenantApiPermission.mockResolvedValue({ ok: true, user });
+    mocks.enforceRequestRateLimit.mockResolvedValue(allowedRateLimit);
   });
 
   it("rejects unsupported methods before authentication", async () => {
@@ -77,6 +93,7 @@ describe("createTenantApiRoute", () => {
     expect(res.setHeader).toHaveBeenCalledWith("Allow", ["GET"]);
     expect(res.status).toHaveBeenCalledWith(405);
     expect(mocks.requireTenantApiPermission).not.toHaveBeenCalled();
+    expect(mocks.enforceRequestRateLimit).not.toHaveBeenCalled();
   });
 
   it("rejects cross-origin mutations before authentication", async () => {
@@ -106,9 +123,10 @@ describe("createTenantApiRoute", () => {
       }),
     );
     expect(mocks.requireTenantApiPermission).not.toHaveBeenCalled();
+    expect(mocks.enforceRequestRateLimit).not.toHaveBeenCalled();
   });
 
-  it("authenticates with the route-specific permission", async () => {
+  it("authenticates and rate-limits with the route-specific permission", async () => {
     const handle = vi.fn(async ({ res }) => {
       res.status(200).json({ data: true });
     });
@@ -128,9 +146,77 @@ describe("createTenantApiRoute", () => {
       res,
       "analytics:read",
     );
+    expect(mocks.enforceRequestRateLimit).toHaveBeenCalledWith({
+      req,
+      rateLimitClass: "read",
+      identityId: "user-1",
+      organizationId: "org-1",
+    });
+    expect(mocks.applyRateLimitHeaders).toHaveBeenCalledWith(
+      res,
+      allowedRateLimit,
+    );
     expect(handle).toHaveBeenCalledWith(
       expect.objectContaining({ user, input: undefined }),
     );
+  });
+
+  it("returns 429 without invoking the handler when a limit is exceeded", async () => {
+    const handle = vi.fn();
+    mocks.enforceRequestRateLimit.mockResolvedValue({
+      ...allowedRateLimit,
+      allowed: false,
+      remaining: 0,
+      blockedDimension: "identity",
+    });
+    const handler = createTenantApiRoute({
+      POST: tenantApiRoute({ permission: "tickets:write", handle }),
+    });
+    const res = response();
+
+    await handler(request({ method: "POST" }), res);
+
+    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Too many requests",
+        requestId: expect.any(String),
+      }),
+    );
+    expect(handle).not.toHaveBeenCalled();
+  });
+
+  it("allows a route to opt out for a dedicated non-standard boundary", async () => {
+    const handle = vi.fn(async ({ res }) => {
+      res.status(200).json({ data: true });
+    });
+    const handler = createTenantApiRoute({
+      GET: tenantApiRoute({
+        permission: "tickets:read",
+        rateLimit: false,
+        handle,
+      }),
+    });
+    const res = response();
+
+    await handler(request({ method: "GET" }), res);
+
+    expect(mocks.enforceRequestRateLimit).not.toHaveBeenCalled();
+    expect(handle).toHaveBeenCalled();
+  });
+
+  it("fails closed when the rate-limit store is unavailable", async () => {
+    const handle = vi.fn();
+    mocks.enforceRequestRateLimit.mockRejectedValue(new Error("database down"));
+    const handler = createTenantApiRoute({
+      GET: tenantApiRoute({ permission: "tickets:read", handle }),
+    });
+    const res = response();
+
+    await handler(request({ method: "GET" }), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(handle).not.toHaveBeenCalled();
   });
 
   it("parses Zod input and exposes it to the handler", async () => {

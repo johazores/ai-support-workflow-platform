@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { loginRootAdmin } from "@/features/root-auth/services/root-auth-service";
+import {
+  applyRateLimitHeaders,
+  enforceRequestRateLimit,
+} from "@/lib/rate-limit";
 import { isSameOriginMutation } from "@/lib/request-origin";
 
 const schema = z.object({
@@ -19,6 +23,23 @@ export default async function handler(
 
   if (!isSameOriginMutation(req)) {
     return res.status(403).json({ message: "Invalid request origin" });
+  }
+
+  try {
+    const rateLimit = await enforceRequestRateLimit({
+      req,
+      rateLimitClass: "sensitive",
+    });
+    applyRateLimitHeaders(res, rateLimit);
+
+    if (!rateLimit.allowed) {
+      return res.status(429).json({
+        message: "Too many login attempts. Try again later.",
+      });
+    }
+  } catch (error) {
+    console.error("Root Admin login rate limiting failed", error);
+    return res.status(503).json({ message: "Login temporarily unavailable" });
   }
 
   const parsed = schema.safeParse(req.body);
