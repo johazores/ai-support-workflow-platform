@@ -24,6 +24,7 @@ const migratedRoutes = [
   "pages/api/tickets/index.ts",
   "pages/api/tickets/[ticket-id]/notes.ts",
   "pages/api/tickets/[ticket-id]/reply.ts",
+  "pages/api/tickets/[ticket-id]/events.ts",
   "pages/api/ai-drafts/generate.ts",
   "pages/api/ai-drafts/save.ts",
   "pages/api/ai-drafts/[draft-id]/send.ts",
