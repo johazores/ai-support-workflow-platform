@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { isClerkConfigured } from "@/features/auth/services/clerk-config";
 import { getClerkApiSessionUser } from "@/features/auth/services/clerk-session-service";
+import { isLegacyProductAuthEnabled } from "@/features/auth/services/legacy-auth-config";
 import {
   parseSessionValue,
   type SessionUser,
@@ -8,13 +10,23 @@ import { hasPermission } from "@/features/auth/services/role-service";
 
 type AuthResult = { ok: true; user: SessionUser } | { ok: false; user: null };
 
-/** Authenticate a product API request through Clerk or the migration JWT. */
+/** Authenticate a product API request through Clerk or the explicit development migration session. */
 export async function requireApiAuth(
   req: NextApiRequest,
   res: NextApiResponse,
 ): Promise<AuthResult> {
-  const clerkUser = await getClerkApiSessionUser(req);
-  if (clerkUser) return { ok: true, user: clerkUser };
+  if (isClerkConfigured()) {
+    const clerkUser = await getClerkApiSessionUser(req);
+    if (clerkUser) return { ok: true, user: clerkUser };
+
+    res.status(401).json({ message: "Unauthorized" });
+    return { ok: false, user: null };
+  }
+
+  if (!isLegacyProductAuthEnabled()) {
+    res.status(401).json({ message: "Product authentication unavailable" });
+    return { ok: false, user: null };
+  }
 
   const legacySession = await parseSessionValue(req.cookies.support_session);
   if (!legacySession) {
