@@ -1,6 +1,25 @@
 import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 import { prisma } from "@/lib/prisma";
 
+const terminalQueueStatuses = new Set(["succeeded", "failed", "cancelled"]);
+
+function publicExecutionStep<
+  T extends {
+    nodeType: string;
+    status: string;
+    error: string | null;
+    finishedAt: Date | null;
+  },
+>(step: T) {
+  if (step.nodeType !== "queue") return step;
+
+  return {
+    ...step,
+    error: step.status === "failed" ? step.error : null,
+    finishedAt: terminalQueueStatuses.has(step.status) ? step.finishedAt : null,
+  };
+}
+
 export async function listWorkflowExecutions(
   organizationId: string,
   options?: { limit?: number },
@@ -79,6 +98,6 @@ export async function getWorkflowExecution(
   return {
     ...execution,
     workflowName: workflow?.name || rule?.name || "Workflow",
-    steps,
+    steps: steps.map(publicExecutionStep),
   };
 }
