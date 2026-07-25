@@ -5,13 +5,13 @@ import {
 } from "@/features/ai-drafts/services/openai-compatible-ai-provider";
 
 const mocks = vi.hoisted(() => ({
-  getEnabledProviderConfiguration: vi.fn(),
+  getProviderRuntimeConfiguration: vi.fn(),
   chatCreate: vi.fn(),
   clientOptions: vi.fn(),
 }));
 
 vi.mock("@/features/providers/services/provider-service", () => ({
-  getEnabledProviderConfiguration: mocks.getEnabledProviderConfiguration,
+  getProviderRuntimeConfiguration: mocks.getProviderRuntimeConfiguration,
 }));
 
 vi.mock("openai", () => ({
@@ -39,7 +39,9 @@ const input = {
 describe("createOpenAiCompatibleProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getEnabledProviderConfiguration.mockResolvedValue(null);
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "environment",
+    });
     mocks.chatCreate.mockResolvedValue({
       choices: [{ message: { content: "  We can help with that.  " } }],
     });
@@ -51,7 +53,10 @@ describe("createOpenAiCompatibleProvider", () => {
   });
 
   it("prefers database-managed credential, model, base URL, and headers", async () => {
-    mocks.getEnabledProviderConfiguration.mockResolvedValue({
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "database",
+      key: "openrouter",
+      name: "OpenRouter",
       credential: "db-secret",
       defaultModel: "db-model",
       baseUrl: "https://provider.example/v1",
@@ -87,7 +92,7 @@ describe("createOpenAiCompatibleProvider", () => {
     );
   });
 
-  it("falls back to environment credentials and model during migration", async () => {
+  it("falls back to environment credentials and model for unmanaged migration mode", async () => {
     process.env.TEST_PROVIDER_API_KEY = "env-secret";
     process.env.TEST_PROVIDER_MODEL = "env-model";
 
@@ -107,6 +112,23 @@ describe("createOpenAiCompatibleProvider", () => {
       baseURL: "https://provider.example/v1",
       defaultHeaders: undefined,
     });
+  });
+
+  it("does not let an environment key reactivate an explicitly disabled provider", async () => {
+    process.env.TEST_PROVIDER_API_KEY = "env-secret";
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
+    const provider = createOpenAiCompatibleProvider({
+      key: "custom",
+      displayName: "Custom Provider",
+      envApiKeys: ["TEST_PROVIDER_API_KEY"],
+      defaultBaseUrl: "https://provider.example/v1",
+      defaultModel: "model-1",
+    });
+
+    await expect(provider.generateDraft(input)).rejects.toThrow(
+      "Custom Provider is disabled",
+    );
+    expect(mocks.chatCreate).not.toHaveBeenCalled();
   });
 
   it("requires an explicit model when no safe default exists", async () => {
