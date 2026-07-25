@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { publishTicketEvent } from "@/features/tickets/services/ticket-event-bus";
 import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
-import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
+import { prisma } from "@/lib/prisma";
 
 type SendDraftInput = {
   organizationId: string;
@@ -62,7 +62,6 @@ export async function sendDraft(input: SendDraftInput) {
         message: "Saved draft failed to send and remains available for retry.",
       },
     });
-
     throw new Error(delivery.error || "Failed to send draft");
   }
 
@@ -90,7 +89,7 @@ export async function sendDraft(input: SendDraftInput) {
     ],
   });
 
-  broadcastTicketUpdate(draft.ticketId, "message-created", {
+  publishTicketEvent(draft.ticketId, "message-created", {
     messageId: message.id,
   });
 
