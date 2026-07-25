@@ -1,12 +1,18 @@
+import type { Prisma } from "@prisma/client";
+import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 import { prisma } from "@/lib/prisma";
 
-function tenantFilter(organizationId: string) {
-  return { OR: [{ organizationId }, { organizationId: null }] };
+async function tenantFilter(
+  organizationId: string,
+): Promise<Prisma.SavedReplyWhereInput> {
+  return (await isLegacyOrganization(organizationId))
+    ? { OR: [{ organizationId }, { organizationId: null }] }
+    : { organizationId };
 }
 
 export async function getAllSavedReplies(organizationId: string) {
   return prisma.savedReply.findMany({
-    where: tenantFilter(organizationId),
+    where: await tenantFilter(organizationId),
     orderBy: { title: "asc" },
   });
 }
@@ -39,7 +45,7 @@ type UpdateSavedReplyInput = {
 
 export async function updateSavedReply(input: UpdateSavedReplyInput) {
   const existing = await prisma.savedReply.findFirst({
-    where: { id: input.id, ...tenantFilter(input.organizationId) },
+    where: { id: input.id, ...(await tenantFilter(input.organizationId)) },
   });
   if (!existing) throw new Error("Saved reply not found");
 
@@ -59,7 +65,7 @@ export async function deleteSavedReply(
   id: string,
 ) {
   const existing = await prisma.savedReply.findFirst({
-    where: { id, ...tenantFilter(organizationId) },
+    where: { id, ...(await tenantFilter(organizationId)) },
   });
   if (!existing) throw new Error("Saved reply not found");
 
