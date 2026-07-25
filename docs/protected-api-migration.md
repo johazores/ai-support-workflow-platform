@@ -62,13 +62,19 @@ Additional audit/security hooks should be added to this shared boundary instead 
 - organization-member removal
 - legacy direct password-based creation remains development-gated; production team onboarding uses organization invitations
 
+### SLA administration and status
+
+- SLA policy collection reads
+- SLA policy timing updates
+- per-ticket SLA status reads
+- policy mutations keep tenant ownership, last-known legacy-workspace migration behavior, timing validation, and audit recording in the SLA service
+
 ## Remaining migration work
 
 Continue by domain rather than performing a blind repository rewrite:
 
-1. SLA administration and ticket SLA reads;
-2. bulk ticket operations;
-3. saved replies, customer/admin reads, AI/audit logs, and remaining legacy workflow-rule endpoints;
-4. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
+1. bulk ticket operations;
+2. saved replies, customer/admin reads, AI/audit logs, and remaining legacy workflow-rule endpoints;
+3. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
 
 Do not convert a route until its current service contract, HTTP verbs, and domain-specific error behavior have been reviewed. Preserving working client behavior is more important than mechanically replacing middleware calls.
