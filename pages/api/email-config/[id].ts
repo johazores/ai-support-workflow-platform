@@ -1,12 +1,16 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
 import { z } from "zod";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
 import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import {
+  deleteEmailConfig,
   getEmailConfigById,
   updateEmailConfig,
-  deleteEmailConfig,
 } from "@/features/email/services/email-config-service";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
 function maskPasswords<T extends Record<string, unknown>>(config: T) {
   return { ...config, smtpPass: "••••••••", imapPass: "••••••••" };
@@ -28,78 +32,73 @@ const updateSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const auth = await requireTenantApiPermission(
-    req,
-    res,
-    "email-settings:manage",
-  );
-  if (!auth.ok) return;
-
+function mailboxIdFrom(req: NextApiRequest) {
   const id = req.query.id;
   if (typeof id !== "string") {
-    return res.status(400).json({ message: "Invalid mailbox ID" });
+    throw new TenantApiError(400, "Invalid mailbox ID");
   }
+  return id;
+}
 
-  if (req.method === "GET") {
-    const config = await getEmailConfigById(id, auth.user.organizationId);
-    if (!config) {
-      return res.status(404).json({ message: "Mailbox not found" });
-    }
-    return res.status(200).json({ data: maskPasswords(config) });
-  }
+function mapMailboxError(error: unknown) {
+  return error instanceof Error && error.message === "Mailbox not found"
+    ? { status: 404, message: error.message }
+    : null;
+}
 
-  if (req.method === "PUT") {
-    const parsed = updateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res
-        .status(400)
-        .json({ message: "Invalid input", errors: parsed.error.flatten() });
-    }
-
-    try {
-      const config = await updateEmailConfig(
-        id,
-        parsed.data,
-        auth.user.organizationId,
+export default createTenantApiRoute({
+  GET: tenantApiRoute({
+    permission: "email-settings:manage",
+    handle: async ({ req, res, user }) => {
+      const config = await getEmailConfigById(
+        mailboxIdFrom(req),
+        user.organizationId,
       );
+      if (!config) throw new TenantApiError(404, "Mailbox not found");
+      return res.status(200).json({ data: maskPasswords(config) });
+    },
+    unexpectedErrorMessage: "Failed to load mailbox",
+  }),
+  PUT: tenantApiRoute({
+    permission: "email-settings:manage",
+    schema: updateSchema,
+    rateLimit: "sensitive",
+    mapError: mapMailboxError,
+    handle: async ({ req, res, user, input }) => {
+      const id = mailboxIdFrom(req);
+      const config = await updateEmailConfig(id, input, user.organizationId);
 
       await recordAuditEvent({
         actorType: "user",
-        userId: auth.user.id,
-        organizationId: auth.user.organizationId,
+        userId: user.id,
+        organizationId: user.organizationId,
         action: "mailbox.updated",
         targetType: "EmailConfig",
         targetId: config.id,
-        metadata: { fields: Object.keys(parsed.data) },
+        metadata: { fields: Object.keys(input) },
       });
 
       return res.status(200).json({ data: maskPasswords(config) });
-    } catch {
-      return res.status(404).json({ message: "Mailbox not found" });
-    }
-  }
-
-  if (req.method === "DELETE") {
-    try {
-      await deleteEmailConfig(id, auth.user.organizationId);
+    },
+    unexpectedErrorMessage: "Failed to update mailbox",
+  }),
+  DELETE: tenantApiRoute({
+    permission: "email-settings:manage",
+    rateLimit: "sensitive",
+    mapError: mapMailboxError,
+    handle: async ({ req, res, user }) => {
+      const id = mailboxIdFrom(req);
+      await deleteEmailConfig(id, user.organizationId);
       await recordAuditEvent({
         actorType: "user",
-        userId: auth.user.id,
-        organizationId: auth.user.organizationId,
+        userId: user.id,
+        organizationId: user.organizationId,
         action: "mailbox.deleted",
         targetType: "EmailConfig",
         targetId: id,
       });
       return res.status(200).json({ data: { deleted: true } });
-    } catch {
-      return res.status(404).json({ message: "Mailbox not found" });
-    }
-  }
-
-  res.setHeader("Allow", ["GET", "PUT", "DELETE"]);
-  return res.status(405).json({ message: "Method not allowed" });
-}
+    },
+    unexpectedErrorMessage: "Failed to delete mailbox",
+  }),
+});
