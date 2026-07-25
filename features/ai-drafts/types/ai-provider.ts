@@ -10,6 +10,7 @@ export type GenerateDraftInput = {
 
 export type GenerateDraftResult = {
   draft: string;
+  model?: string;
 };
 
 export type AiDraftProvider = {
