@@ -1,43 +1,43 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
 import { revokeOrganizationInvitation } from "@/features/organizations/services/organization-invitation-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  if (req.method !== "DELETE") {
-    res.setHeader("Allow", ["DELETE"]);
-    return res.status(405).json({ message: "Method not allowed" });
-  }
-
-  const auth = await requireTenantApiPermission(req, res, "users:manage");
-  if (!auth.ok) return;
-
+function invitationIdFrom(req: NextApiRequest) {
   const { id } = req.query;
   if (typeof id !== "string") {
-    return res.status(400).json({ message: "Invalid invitation ID" });
+    throw new TenantApiError(400, "Invalid invitation ID");
   }
-
-  try {
-    const invitation = await revokeOrganizationInvitation({
-      organizationId: auth.user.organizationId,
-      invitationId: id,
-      actorUserId: auth.user.id,
-    });
-    return res.status(200).json({ data: invitation });
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === "Invitation not found") {
-        return res.status(404).json({ message: error.message });
-      }
-
-      if (error.message.startsWith("Clerk invitations are unavailable")) {
-        return res.status(503).json({ message: error.message });
-      }
-    }
-
-    console.error("Failed to revoke organization invitation", error);
-    return res.status(500).json({ message: "Failed to revoke invitation" });
-  }
+  return id;
 }
+
+function mapInvitationError(error: unknown) {
+  if (!(error instanceof Error)) return null;
+  if (error.message === "Invitation not found") {
+    return { status: 404, message: error.message };
+  }
+  if (error.message.startsWith("Clerk invitations are unavailable")) {
+    return { status: 503, message: error.message };
+  }
+  return null;
+}
+
+export default createTenantApiRoute({
+  DELETE: tenantApiRoute({
+    permission: "users:manage",
+    rateLimit: "sensitive",
+    mapError: mapInvitationError,
+    handle: async ({ req, res, user }) => {
+      const invitation = await revokeOrganizationInvitation({
+        organizationId: user.organizationId,
+        invitationId: invitationIdFrom(req),
+        actorUserId: user.id,
+      });
+      return res.status(200).json({ data: invitation });
+    },
+    unexpectedErrorMessage: "Failed to revoke invitation",
+  }),
+});

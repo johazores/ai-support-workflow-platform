@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { publishTicketEvent } from "@/features/tickets/services/ticket-event-bus";
 import { sendTicketEmail } from "@/features/tickets/services/email-send-service";
-import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
+import { prisma } from "@/lib/prisma";
 
 type SendManualReplyInput = {
   organizationId: string;
@@ -57,7 +57,6 @@ export async function sendManualReply(input: SendManualReplyInput) {
         message: "Manual support reply failed to send.",
       },
     });
-
     throw new Error(delivery.error || "Failed to send support reply");
   }
 
@@ -75,7 +74,7 @@ export async function sendManualReply(input: SendManualReplyInput) {
     },
   });
 
-  broadcastTicketUpdate(ticket.id, "message-created", {
+  publishTicketEvent(ticket.id, "message-created", {
     messageId: message.id,
   });
 

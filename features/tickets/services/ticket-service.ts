@@ -3,13 +3,13 @@ import {
   isLegacyOrganization,
   requireOrganizationMembership,
 } from "@/features/organizations/services/organization-service";
+import { publishTicketEvent } from "@/features/tickets/services/ticket-event-bus";
 import type {
   TicketStatus,
   TicketSummary,
 } from "@/features/tickets/types/ticket";
 import { dispatchTicketUpdatedWorkflows } from "@/features/workflows/services/workflow-event-service";
 import { prisma } from "@/lib/prisma";
-import { broadcastTicketUpdate } from "@/pages/api/tickets/[ticket-id]/events";
 
 async function tenantTicketFilter(
   organizationId: string,
@@ -117,7 +117,7 @@ export async function updateTicketStatus(
     ticketId,
     activityId: activity.id,
   });
-  broadcastTicketUpdate(ticketId, "status-changed", { status });
+  publishTicketEvent(ticketId, "status-changed", { status });
 
   return ticket;
 }
@@ -147,7 +147,7 @@ export async function updateTicketPriority(
     ticketId,
     activityId: activity.id,
   });
-  broadcastTicketUpdate(ticketId, "priority-changed", { priority });
+  publishTicketEvent(ticketId, "priority-changed", { priority });
 
   return ticket;
 }
@@ -200,7 +200,7 @@ export async function assignTicket(input: AssignTicketInput) {
     activityId: activity.id,
   });
 
-  broadcastTicketUpdate(input.ticketId, "ticket-assigned", {
+  publishTicketEvent(input.ticketId, "ticket-assigned", {
     assigneeName: assignee.name,
   });
 

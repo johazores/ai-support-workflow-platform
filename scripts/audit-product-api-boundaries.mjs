@@ -8,6 +8,7 @@ const apiRoot = join(root, "pages", "api");
 const dedicatedBoundaryPrefixes = [
   "pages/api/root/",
   "pages/api/webhooks/",
+  "pages/api/auth/",
 ];
 
 const intentionallyPublicRoutes = new Set([
@@ -15,7 +16,18 @@ const intentionallyPublicRoutes = new Set([
   "pages/api/readiness.ts",
 ]);
 
-const standardizedMarker = "createTenantApiRoute";
+const compatibilityAliases = new Map([
+  [
+    "pages/api/workflows/create.ts",
+    'export { default } from "@/pages/api/workflows/index";',
+  ],
+]);
+
+const standardizedMarkers = [
+  "createTenantApiRoute(",
+  "createProductIdentityApiRoute(",
+];
+
 const directProductAuthMarkers = [
   "requireTenantApiPermission(",
   "requireApiPermission(",
@@ -48,9 +60,10 @@ function isDedicatedBoundary(path) {
 }
 
 const files = await walk(apiRoot);
-const migrated = [];
+const standardized = [];
+const aliases = [];
 const dedicated = [];
-const remaining = [];
+const direct = [];
 const unclassified = [];
 
 for (const file of files) {
@@ -62,8 +75,9 @@ for (const file of files) {
     continue;
   }
 
-  if (source.includes(standardizedMarker)) {
-    migrated.push(path);
+  const alias = compatibilityAliases.get(path);
+  if (alias && source.trim() === alias) {
+    aliases.push(path);
     continue;
   }
 
@@ -71,7 +85,12 @@ for (const file of files) {
     source.includes(marker),
   );
   if (directMarkers.length > 0) {
-    remaining.push({ path, markers: directMarkers });
+    direct.push({ path, markers: directMarkers });
+    continue;
+  }
+
+  if (standardizedMarkers.some((marker) => source.includes(marker))) {
+    standardized.push(path);
     continue;
   }
 
@@ -79,26 +98,26 @@ for (const file of files) {
 }
 
 console.log("Protected product API boundary audit\n");
-console.log(`Standardized tenant routes: ${migrated.length}`);
+console.log(`Standardized product routes: ${standardized.length}`);
+console.log(`Compatibility aliases: ${aliases.length}`);
 console.log(`Dedicated/public boundaries: ${dedicated.length}`);
-console.log(`Direct product-auth routes remaining: ${remaining.length}`);
+console.log(`Direct product-auth regressions: ${direct.length}`);
 console.log(`Unclassified routes: ${unclassified.length}\n`);
 
-if (remaining.length > 0) {
-  console.log("Direct product-auth routes remaining:");
-  for (const item of remaining) {
+if (direct.length > 0) {
+  console.log("Direct product-auth routes are not allowed:");
+  for (const item of direct) {
     console.log(`- ${item.path}: ${item.markers.join(", ")}`);
   }
   console.log("");
 }
 
 if (unclassified.length > 0) {
-  console.log("Unclassified routes requiring review:");
+  console.log("Unclassified routes requiring an explicit boundary:");
   for (const path of unclassified) console.log(`- ${path}`);
   console.log("");
 }
 
-// This is an inventory tool while migration is active. It deliberately does not
-// fail the process for remaining routes until the repository-wide conversion is
-// complete; unclassified routes always require explicit review.
-if (unclassified.length > 0) process.exitCode = 2;
+if (direct.length > 0 || unclassified.length > 0) {
+  process.exitCode = 2;
+}

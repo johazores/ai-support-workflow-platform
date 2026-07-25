@@ -24,6 +24,7 @@ const migratedRoutes = [
   "pages/api/tickets/index.ts",
   "pages/api/tickets/[ticket-id]/notes.ts",
   "pages/api/tickets/[ticket-id]/reply.ts",
+  "pages/api/tickets/[ticket-id]/events.ts",
   "pages/api/ai-drafts/generate.ts",
   "pages/api/ai-drafts/save.ts",
   "pages/api/ai-drafts/[draft-id]/send.ts",
@@ -34,6 +35,8 @@ const migratedRoutes = [
   "pages/api/workflows/[workflow-id]/index.ts",
   "pages/api/workflows/[workflow-id]/status.ts",
   "pages/api/tickets/[ticket-id]/workflows/run.ts",
+  "pages/api/organization-invitations/index.ts",
+  "pages/api/organization-invitations/[id].ts",
 ] as const;
 
 describe("protected tenant API migration batch", () => {

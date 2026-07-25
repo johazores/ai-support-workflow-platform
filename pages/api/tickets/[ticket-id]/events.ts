@@ -1,70 +1,56 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
+import { getTicketById } from "@/features/tickets/services/ticket-service";
+import {
+  publishTicketEvent,
+  subscribeTicketEvents,
+} from "@/features/tickets/services/ticket-event-bus";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
-// In-memory set of active SSE connections per ticket
-const ticketConnections = new Map<string, Set<NextApiResponse>>();
+export const broadcastTicketUpdate = publishTicketEvent;
 
-export function broadcastTicketUpdate(
-  ticketId: string,
-  event: string,
-  data: unknown,
-) {
-  const connections = ticketConnections.get(ticketId);
-
-  if (!connections) return;
-
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-
-  for (const res of connections) {
-    res.write(payload);
+function ticketIdFrom(req: NextApiRequest) {
+  const ticketId = req.query["ticket-id"];
+  if (typeof ticketId !== "string" || !ticketId) {
+    throw new TenantApiError(400, "Missing ticket-id");
   }
+  return ticketId;
 }
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", ["GET"]);
-    return res.status(405).json({ message: "Method not allowed" });
-  }
+export default createTenantApiRoute({
+  GET: tenantApiRoute({
+    permission: "tickets:read",
+    handle: async ({ req, res, user }) => {
+      const ticketId = ticketIdFrom(req);
+      const ticket = await getTicketById(ticketId, user.organizationId);
+      if (!ticket) throw new TenantApiError(404, "Ticket not found");
 
-  const ticketId = req.query["ticket-id"] as string;
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      res.write(": connected\n\n");
 
-  if (!ticketId) {
-    return res.status(400).json({ message: "Missing ticket-id" });
-  }
+      const unsubscribe = subscribeTicketEvents(ticket.id, (event) => {
+        res.write(
+          `event: ${event.name}\ndata: ${JSON.stringify(event.data)}\n\n`,
+        );
+      });
 
-  // Set SSE headers
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-  });
+      const heartbeat = setInterval(() => {
+        res.write(": heartbeat\n\n");
+      }, 30_000);
 
-  // Send initial keepalive
-  res.write(": connected\n\n");
-
-  // Register connection
-  if (!ticketConnections.has(ticketId)) {
-    ticketConnections.set(ticketId, new Set());
-  }
-
-  ticketConnections.get(ticketId)!.add(res);
-
-  // Send heartbeat every 30 seconds to keep connection alive
-  const heartbeat = setInterval(() => {
-    res.write(": heartbeat\n\n");
-  }, 30_000);
-
-  // Cleanup on disconnect
-  req.on("close", () => {
-    clearInterval(heartbeat);
-
-    const connections = ticketConnections.get(ticketId);
-
-    if (connections) {
-      connections.delete(res);
-
-      if (connections.size === 0) {
-        ticketConnections.delete(ticketId);
-      }
-    }
-  });
-}
+      req.on("close", () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      });
+    },
+    unexpectedErrorMessage: "Failed to open ticket event stream",
+  }),
+});

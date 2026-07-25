@@ -6,11 +6,15 @@ const mocks = vi.hoisted(() => ({
   ticketFindFirst: vi.fn(),
   messageCreate: vi.fn(),
   activityCreate: vi.fn(),
-  broadcastTicketUpdate: vi.fn(),
+  publishTicketEvent: vi.fn(),
 }));
 
 vi.mock("@/features/organizations/services/organization-service", () => ({
   isLegacyOrganization: mocks.isLegacyOrganization,
+}));
+
+vi.mock("@/features/tickets/services/ticket-event-bus", () => ({
+  publishTicketEvent: mocks.publishTicketEvent,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -19,10 +23,6 @@ vi.mock("@/lib/prisma", () => ({
     message: { create: mocks.messageCreate },
     activityLog: { create: mocks.activityCreate },
   },
-}));
-
-vi.mock("@/pages/api/tickets/[ticket-id]/events", () => ({
-  broadcastTicketUpdate: mocks.broadcastTicketUpdate,
 }));
 
 describe("internal note tenant isolation", () => {
@@ -64,5 +64,19 @@ describe("internal note tenant isolation", () => {
         ],
       },
     });
+  });
+
+  it("publishes the created message through the ticket event bus", async () => {
+    await addInternalNote({
+      organizationId: "org-1",
+      ticketId: "ticket-1",
+      body: "Private note",
+    });
+
+    expect(mocks.publishTicketEvent).toHaveBeenCalledWith(
+      "ticket-1",
+      "message-created",
+      { messageId: "message-1" },
+    );
   });
 });
