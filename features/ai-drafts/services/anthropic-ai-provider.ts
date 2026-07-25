@@ -6,25 +6,27 @@ import type {
   AiDraftProvider,
   GenerateDraftInput,
 } from "@/features/ai-drafts/types/ai-provider";
-import { getEnabledProviderConfiguration } from "@/features/providers/services/provider-service";
+import { getProviderRuntimeConfiguration } from "@/features/providers/services/provider-service";
 
 export const anthropicProvider: AiDraftProvider = {
   async generateDraft(input: GenerateDraftInput) {
-    const configuredProvider =
-      await getEnabledProviderConfiguration("anthropic");
-    const apiKey =
-      configuredProvider?.credential ?? process.env.ANTHROPIC_API_KEY;
+    const runtime = await getProviderRuntimeConfiguration("anthropic");
+    if (runtime.mode === "disabled") {
+      throw new Error("Anthropic is disabled");
+    }
+
+    const database = runtime.mode === "database" ? runtime : null;
+    const apiKey = database?.credential ?? process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
       throw new Error("Anthropic is not configured");
     }
 
     const model =
-      configuredProvider?.defaultModel ||
+      database?.defaultModel ||
       process.env.ANTHROPIC_MODEL ||
       "claude-sonnet-4-20250514";
-    const baseUrl =
-      configuredProvider?.baseUrl || "https://api.anthropic.com/v1";
+    const baseUrl = database?.baseUrl || "https://api.anthropic.com/v1";
 
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/messages`, {
       method: "POST",
