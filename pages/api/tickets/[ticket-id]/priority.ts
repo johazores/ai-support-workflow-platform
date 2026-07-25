@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
+import { updateTicketPriority } from "@/features/tickets/services/ticket-service";
 import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
-import { prisma } from "@/lib/prisma";
 
 const updatePrioritySchema = z.object({
   priority: z.enum(["low", "normal", "high", "urgent"]),
@@ -26,38 +26,25 @@ export default async function handler(
 
   const parsed = updatePrioritySchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ message: "Invalid input", errors: parsed.error.flatten() });
+    return res.status(400).json({
+      message: "Invalid input",
+      errors: parsed.error.flatten(),
+    });
   }
 
-  const existing = await prisma.ticket.findFirst({
-    where: {
-      id: ticketId,
-      OR: [
-        { organizationId: auth.user.organizationId },
-        { organizationId: null },
-      ],
-    },
-  });
-  if (!existing) return res.status(404).json({ message: "Ticket not found" });
-
-  const ticket = await prisma.ticket.update({
-    where: { id: existing.id },
-    data: {
-      organizationId: auth.user.organizationId,
-      priority: parsed.data.priority,
-    },
-  });
-
-  await prisma.activityLog.create({
-    data: {
-      organizationId: auth.user.organizationId,
+  try {
+    const ticket = await updateTicketPriority(
       ticketId,
-      type: "priority_changed",
-      message: `Priority changed to ${parsed.data.priority}`,
-    },
-  });
+      parsed.data.priority,
+      auth.user.organizationId,
+    );
+    return res.status(200).json({ data: ticket });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Ticket not found") {
+      return res.status(404).json({ message: error.message });
+    }
 
-  return res.status(200).json({ data: ticket });
+    console.error("Failed to update ticket priority", error);
+    return res.status(500).json({ message: "Failed to update ticket priority" });
+  }
 }

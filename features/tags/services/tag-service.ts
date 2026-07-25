@@ -1,13 +1,20 @@
-import { prisma } from "@/lib/prisma";
 import {
   ensureDefaultOrganization,
   isLegacyOrganization,
 } from "@/features/organizations/services/organization-service";
+import { dispatchTicketUpdatedWorkflows } from "@/features/workflows/services/workflow-event-service";
+import { prisma } from "@/lib/prisma";
 
 async function tenantFilter(organizationId: string) {
   return (await isLegacyOrganization(organizationId))
     ? { OR: [{ organizationId }, { organizationId: null }] }
     : { organizationId };
+}
+
+function sameTagSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((tagId) => rightSet.has(tagId));
 }
 
 export async function getAllTags(organizationId: string) {
@@ -52,21 +59,40 @@ export async function setTicketTags(
   });
   if (!ticket) throw new Error("Ticket not found");
 
+  const uniqueTagIds = [...new Set(tagIds)];
   const tags = await prisma.tag.findMany({
     where: {
-      id: { in: tagIds },
+      id: { in: uniqueTagIds },
       ...organizationFilter,
     },
     select: { id: true },
   });
-  if (tags.length !== new Set(tagIds).size) {
+  if (tags.length !== uniqueTagIds.length) {
     throw new Error("One or more tags are unavailable");
   }
 
-  return prisma.ticket.update({
+  if (sameTagSet(ticket.tagIds, uniqueTagIds)) return ticket;
+
+  const updated = await prisma.ticket.update({
     where: { id: ticket.id },
-    data: { organizationId, tagIds },
+    data: { organizationId, tagIds: uniqueTagIds },
   });
+  const activity = await prisma.activityLog.create({
+    data: {
+      organizationId,
+      ticketId,
+      type: "tags_changed",
+      message: "Ticket tags were updated.",
+    },
+  });
+
+  await dispatchTicketUpdatedWorkflows({
+    organizationId,
+    ticketId,
+    eventId: activity.id,
+  });
+
+  return updated;
 }
 
 export async function getTagsForTicket(

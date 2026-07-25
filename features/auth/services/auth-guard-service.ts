@@ -23,7 +23,9 @@ export type AuthenticatedUser = {
 
 export async function requireUser(): Promise<AuthenticatedUser> {
   const clerkUser = await getClerkAppSessionUser();
-  if (clerkUser?.organizationId) {
+  if (clerkUser) {
+    if (!clerkUser.organizationId) redirect("/onboarding");
+
     return {
       id: clerkUser.id,
       name: clerkUser.name,
