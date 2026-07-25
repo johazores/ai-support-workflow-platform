@@ -1,8 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ApiError, apiClient } from "@/lib/api-client";
 
-// We can't easily test fetch in unit tests without mocking,
-// so test the ApiError class and structure
 describe("ApiError", () => {
   it("captures status and message", () => {
     const error = new ApiError(404, "Not found");
@@ -10,6 +8,16 @@ describe("ApiError", () => {
     expect(error.status).toBe(404);
     expect(error.message).toBe("Not found");
     expect(error).toBeInstanceOf(Error);
+  });
+
+  it("preserves structured server details for actionable UI errors", () => {
+    const details = {
+      message: "Workflow is not ready to publish",
+      issues: ["Connect the trigger to an action."],
+    };
+    const error = new ApiError(400, "Workflow is not ready to publish", details);
+
+    expect(error.details).toEqual(details);
   });
 
   it("is an instance of Error", () => {

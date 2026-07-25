@@ -492,15 +492,15 @@ Exit criteria: supported providers can be configured, tested, enabled, disabled,
 Goal: replace fragile synchronous rule execution with a versioned, observable runtime.
 
 - [x] Add workflow/version/execution/step models.
-- [ ] Define graph schema and node registry.
+- [x] Define graph schema and node registry.
 - [ ] Migrate legacy rules to graph definitions.
 - [ ] Add queue/worker infrastructure.
 - [ ] Add idempotency, retries, timeouts, cancellation, and delays.
-- [ ] Add variables, conditions, branching, webhooks, and schedules.
-- [ ] Add test mode.
+- [ ] Add variables, conditions, branching, webhooks, and schedules. Conditions and true/false branching are implemented; variables, webhooks, delays, and schedules remain.
+- [ ] Add test mode. Published manual-run mode is implemented; safe draft test mode remains.
 - [x] Add execution history and step inspector APIs.
 - [ ] Add redaction for execution inputs/outputs.
-- [ ] Add runtime integration tests.
+- [ ] Add runtime integration tests. Tenant/runtime unit coverage is present; a real database/worker integration suite remains.
 
 Exit criteria: workflows execute durably outside interactive requests and every run has accurate step-level history.
 
@@ -513,7 +513,7 @@ Goal: deliver the modern SaaS experience without breaking existing product flows
 - [x] Build Root Admin shell.
 - [ ] Migrate existing pages into the shell.
 - [ ] Add React Query provider and query conventions.
-- [ ] Build node palette, canvas, inspector, validation, autosave, undo/redo, test panel, and execution inspector.
+- [ ] Build node palette, canvas, inspector, validation, autosave, undo/redo, test panel, and execution inspector. The core canvas, inspector, validation, autosave, undo/redo, published-run panel, and execution-history link are implemented; searchable palette, draft test mode, viewport polish, and accessibility work remain.
 - [ ] Add polished responsive, loading, empty, unavailable, and error states.
 - [ ] Perform light/dark/accessibility audit.
 - [ ] Remove duplicate inline page patterns.
@@ -601,7 +601,7 @@ Do not combine schema foundations, UI redesign, workflow runtime, and provider m
 
 - Whether to retain MongoDB long-term or migrate before billing/workflow scale increases.
 - Queue technology and worker deployment model.
-- Workflow canvas library.
+- Workflow canvas library. The current builder uses a lightweight internal canvas; reassess before adding zoom, mini-map, keyboard connection tooling, or very large graphs.
 - KMS provider versus application-managed AES-GCM master key.
 - Storage provider abstraction and default implementation.
 - Initial pricing, plans, quotas, and usage metrics.
