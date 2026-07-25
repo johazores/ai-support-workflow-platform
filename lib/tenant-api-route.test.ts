@@ -32,7 +32,12 @@ function request(input?: {
     method: input?.method ?? "GET",
     body: input?.body,
     query: input?.query ?? {},
-    headers: input?.headers ?? {},
+    headers: {
+      host: "support.example.com",
+      "x-forwarded-proto": "https",
+      origin: "https://support.example.com",
+      ...(input?.headers ?? {}),
+    },
     url: "/api/test",
   } as never;
 }
@@ -71,6 +76,35 @@ describe("createTenantApiRoute", () => {
 
     expect(res.setHeader).toHaveBeenCalledWith("Allow", ["GET"]);
     expect(res.status).toHaveBeenCalledWith(405);
+    expect(mocks.requireTenantApiPermission).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-origin mutations before authentication", async () => {
+    const handler = createTenantApiRoute({
+      POST: tenantApiRoute({
+        permission: "tickets:write",
+        handle: async ({ res }) => {
+          res.status(200).json({ data: true });
+        },
+      }),
+    });
+    const res = response();
+
+    await handler(
+      request({
+        method: "POST",
+        headers: { origin: "https://evil.example" },
+      }),
+      res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Invalid request origin",
+        requestId: expect.any(String),
+      }),
+    );
     expect(mocks.requireTenantApiPermission).not.toHaveBeenCalled();
   });
 
