@@ -7,18 +7,10 @@ import {
   TenantApiError,
 } from "@/lib/tenant-api-route";
 
-const updateSchema = z
-  .object({
-    firstResponseMinutes: z.number().int().min(1).max(525_600),
-    resolutionMinutes: z.number().int().min(1).max(525_600),
-  })
-  .refine(
-    (value) => value.resolutionMinutes >= value.firstResponseMinutes,
-    {
-      message: "Resolution time must be greater than first response time",
-      path: ["resolutionMinutes"],
-    },
-  );
+const updateSchema = z.object({
+  firstResponseMinutes: z.number().int().min(1).max(525_600),
+  resolutionMinutes: z.number().int().min(1).max(525_600),
+});
 
 function policyIdFrom(req: NextApiRequest) {
   const { id } = req.query;
@@ -38,6 +30,13 @@ export default createTenantApiRoute({
         ? { status: 404, message: error.message }
         : null,
     handle: async ({ req, res, user, input }) => {
+      if (input.resolutionMinutes < input.firstResponseMinutes) {
+        throw new TenantApiError(
+          400,
+          "Resolution time must be greater than first response time",
+        );
+      }
+
       const policy = await updateSlaPolicy({
         organizationId: user.organizationId,
         actorUserId: user.id,
