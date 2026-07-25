@@ -1,10 +1,14 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
 import { z } from "zod";
 import {
-  updateSavedReply,
   deleteSavedReply,
+  updateSavedReply,
 } from "@/features/saved-replies/services/saved-reply-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(100),
@@ -12,60 +16,42 @@ const updateSchema = z.object({
   shortcut: z.string().trim().max(30).optional(),
 });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const auth = await requireTenantApiPermission(
-    req,
-    res,
-    "saved-replies:manage",
-  );
-  if (!auth.ok) return;
-
+function savedReplyIdFrom(req: NextApiRequest) {
   const id = req.query.id;
   if (typeof id !== "string") {
-    return res.status(400).json({ message: "Invalid saved reply id" });
+    throw new TenantApiError(400, "Invalid saved reply id");
   }
+  return id;
+}
 
-  if (req.method === "PUT") {
-    const result = updateSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({
-        message: "Invalid request body",
-        errors: result.error.flatten(),
-      });
-    }
+function mapSavedReplyError(error: unknown) {
+  return error instanceof Error && error.message === "Saved reply not found"
+    ? { status: 404, message: error.message }
+    : null;
+}
 
-    try {
+export default createTenantApiRoute({
+  PUT: tenantApiRoute({
+    permission: "saved-replies:manage",
+    schema: updateSchema,
+    mapError: mapSavedReplyError,
+    handle: async ({ req, res, user, input }) => {
       const reply = await updateSavedReply({
-        id,
-        organizationId: auth.user.organizationId,
-        ...result.data,
+        id: savedReplyIdFrom(req),
+        organizationId: user.organizationId,
+        ...input,
       });
       return res.status(200).json({ data: reply });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to update saved reply";
-      return res.status(message === "Saved reply not found" ? 404 : 500).json({
-        message,
-      });
-    }
-  }
-
-  if (req.method === "DELETE") {
-    try {
-      await deleteSavedReply(auth.user.organizationId, id);
+    },
+    unexpectedErrorMessage: "Failed to update saved reply",
+  }),
+  DELETE: tenantApiRoute({
+    permission: "saved-replies:manage",
+    mapError: mapSavedReplyError,
+    handle: async ({ req, res, user }) => {
+      await deleteSavedReply(user.organizationId, savedReplyIdFrom(req));
       return res.status(200).json({ data: { deleted: true } });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to delete saved reply";
-      return res.status(message === "Saved reply not found" ? 404 : 500).json({
-        message,
-      });
-    }
-  }
-
-  res.setHeader("Allow", ["PUT", "DELETE"]);
-  return res.status(405).json({ message: "Method not allowed" });
-}
+    },
+    unexpectedErrorMessage: "Failed to delete saved reply",
+  }),
+});

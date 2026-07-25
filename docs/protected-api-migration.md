@@ -68,13 +68,19 @@ Additional audit/security hooks should be added to this shared boundary instead 
 - SLA policy collection reads
 - SLA policy timing updates
 - per-ticket SLA status reads
-- policy mutations keep tenant ownership, legacy-workspace migration behavior, timing validation, and audit recording in the SLA service
+
+### Customers and saved replies
+
+- customer collection and detail reads
+- saved-reply collection reads and creation
+- saved-reply update and deletion
+- legacy null-owned customers, customer tickets, and saved replies are visible only through the deterministic legacy workspace
 
 ## Remaining migration work
 
 Continue by domain rather than performing a blind repository rewrite:
 
-1. saved replies, customer/admin reads, AI/audit logs, and remaining legacy workflow-rule endpoints;
+1. AI/ticket action APIs, audit/admin reads, and remaining legacy workflow-rule endpoints;
 2. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
 
 Do not convert a route until its current service contract, HTTP verbs, and domain-specific error behavior have been reviewed. Preserving working client behavior is more important than mechanically replacing middleware calls.
