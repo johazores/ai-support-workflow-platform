@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { executePublishedWorkflowsForTicket } from "@/features/workflows/services/versioned-workflow-runtime";
@@ -38,7 +39,7 @@ export default async function handler(
       ticketId: parsed.data.ticketId,
       workflowId: id,
       triggerType: "manual",
-      idempotencyKey: `manual:${auth.user.id}:${crypto.randomUUID()}`,
+      idempotencyKey: `manual:${auth.user.id}:${randomUUID()}`,
     });
 
     if (executions.length === 0) {
