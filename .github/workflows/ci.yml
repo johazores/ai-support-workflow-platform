@@ -48,6 +48,9 @@ jobs:
       - name: Validate Prisma Schema
         run: npm run prisma:validate
 
+      - name: Audit API Security Boundaries
+        run: npm run audit:api-boundaries
+
       - name: Type Check
         run: npm run type-check -- --pretty false
 
