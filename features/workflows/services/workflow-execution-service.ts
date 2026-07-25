@@ -3,7 +3,7 @@ import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-ser
 import { addTagToTicket } from "@/features/tags/services/tag-service";
 import {
   ensureDefaultOrganization,
-  ensureLegacyOrganizationForUser,
+  isLegacyOrganization,
 } from "@/features/organizations/services/organization-service";
 
 type WorkflowAction = {
@@ -99,7 +99,7 @@ async function executeAction(input: {
   if (action.type === "change-status") {
     await prisma.ticket.update({
       where: { id: ticket.id },
-      data: { organizationId, status: action.value },
+      data: { status: action.value },
     });
     return { message: `Changed status to ${action.value}` };
   }
@@ -110,18 +110,28 @@ async function executeAction(input: {
         status: "active",
         OR: [{ email: action.value }, { name: action.value }],
       },
+      select: { id: true, name: true, email: true },
     });
 
     if (!user) throw new Error(`Assignee ${action.value} was not found`);
-    const membership = await ensureLegacyOrganizationForUser(user);
-    if (membership.organizationId !== organizationId) {
+
+    const membership = await prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: user.id,
+        },
+      },
+      select: { status: true },
+    });
+
+    if (membership?.status !== "active") {
       throw new Error(`Assignee ${action.value} is not in this organization`);
     }
 
     await prisma.ticket.update({
       where: { id: ticket.id },
       data: {
-        organizationId,
         assigneeName: user.name,
         assigneeEmail: user.email,
       },
@@ -131,6 +141,7 @@ async function executeAction(input: {
 
   if (action.type === "generate-draft") {
     const result = await generateAiDraftReply({
+      organizationId,
       subject: ticket.subject,
       customerName: ticket.customer.name,
       customerMessage: ticket.messages[0]?.body ?? "",
@@ -146,7 +157,7 @@ async function executeAction(input: {
     return { message: "Generated AI draft", draftId: draft.id };
   }
 
-  await addTagToTicket(ticket.id, action.value);
+  await addTagToTicket(ticket.id, action.value, organizationId);
   return { message: `Added tag ${action.value}` };
 }
 
@@ -162,8 +173,22 @@ export async function executeWorkflowRules(
     return { executed: false, message: "Skipped to prevent loop." };
   }
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
+  const requestedOrganizationId = context?.organizationId;
+  const requestedOrganizationIsLegacy = requestedOrganizationId
+    ? await isLegacyOrganization(requestedOrganizationId)
+    : false;
+  const ticket = await prisma.ticket.findFirst({
+    where: requestedOrganizationId
+      ? requestedOrganizationIsLegacy
+        ? {
+            id: ticketId,
+            OR: [
+              { organizationId: requestedOrganizationId },
+              { organizationId: null },
+            ],
+          }
+        : { id: ticketId, organizationId: requestedOrganizationId }
+      : { id: ticketId },
     include: {
       customer: true,
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -172,11 +197,25 @@ export async function executeWorkflowRules(
 
   if (!ticket) return { executed: false, message: "Ticket not found." };
 
-  const defaultOrganization = await ensureDefaultOrganization();
+  const defaultOrganization = ticket.organizationId
+    ? null
+    : await ensureDefaultOrganization();
   const organizationId =
-    context?.organizationId || ticket.organizationId || defaultOrganization.id;
+    requestedOrganizationId || ticket.organizationId || defaultOrganization?.id;
 
-  if (ticket.organizationId !== organizationId) {
+  if (!organizationId) {
+    return { executed: false, message: "Ticket organization not found." };
+  }
+
+  const organizationIsLegacy = requestedOrganizationId
+    ? requestedOrganizationIsLegacy
+    : await isLegacyOrganization(organizationId);
+
+  if (!ticket.organizationId) {
+    if (!organizationIsLegacy) {
+      return { executed: false, message: "Ticket not found." };
+    }
+
     await prisma.ticket.update({
       where: { id: ticket.id },
       data: { organizationId },
@@ -184,10 +223,12 @@ export async function executeWorkflowRules(
   }
 
   const rules = await prisma.workflowRule.findMany({
-    where: {
-      isActive: true,
-      OR: [{ organizationId }, { organizationId: null }],
-    },
+    where: organizationIsLegacy
+      ? {
+          isActive: true,
+          OR: [{ organizationId }, { organizationId: null }],
+        }
+      : { isActive: true, organizationId },
   });
 
   const executedRules: string[] = [];

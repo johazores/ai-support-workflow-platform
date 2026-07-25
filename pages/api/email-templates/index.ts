@@ -1,46 +1,39 @@
-import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import {
-  listEmailTemplates,
   createEmailTemplate,
+  listEmailTemplates,
 } from "@/features/email/services/email-template-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+} from "@/lib/tenant-api-route";
 
 const createSchema = z.object({
-  name: z.string().min(1).max(100),
-  subject: z.string().min(1).max(200),
-  body: z.string().min(1).max(10000),
+  name: z.string().trim().min(1).max(100),
+  subject: z.string().trim().min(1).max(200),
+  body: z.string().min(1).max(10_000),
 });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const permission =
-    req.method === "GET" ? "email-logs:read" : "email-settings:manage";
-  const auth = await requireTenantApiPermission(req, res, permission);
-  if (!auth.ok) return;
+export default createTenantApiRoute({
+  GET: tenantApiRoute({
+    permission: "email-logs:read",
+    handle: async ({ res, user }) => {
+      const templates = await listEmailTemplates(user.organizationId);
+      res.status(200).json({ data: templates });
+    },
+    unexpectedErrorMessage: "Failed to list email templates",
+  }),
 
-  if (req.method === "GET") {
-    const templates = await listEmailTemplates(auth.user.organizationId);
-    return res.status(200).json({ data: templates });
-  }
-
-  if (req.method === "POST") {
-    const parsed = createSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res
-        .status(400)
-        .json({ message: "Invalid input", errors: parsed.error.flatten() });
-    }
-
-    const template = await createEmailTemplate({
-      ...parsed.data,
-      organizationId: auth.user.organizationId,
-    });
-    return res.status(201).json({ data: template });
-  }
-
-  res.setHeader("Allow", ["GET", "POST"]);
-  return res.status(405).json({ message: "Method not allowed" });
-}
+  POST: tenantApiRoute({
+    permission: "email-settings:manage",
+    schema: createSchema,
+    handle: async ({ res, user, input }) => {
+      const template = await createEmailTemplate({
+        organizationId: user.organizationId,
+        ...input,
+      });
+      res.status(201).json({ data: template });
+    },
+    unexpectedErrorMessage: "Failed to create email template",
+  }),
+});

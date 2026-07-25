@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+import { isLegacyOrganization } from "@/features/organizations/services/organization-service";
 import { prisma } from "@/lib/prisma";
 
 export type TicketVolumePoint = {
@@ -24,29 +26,41 @@ export type AnalyticsData = {
   priorityBreakdown: PriorityBreakdown[];
 };
 
-export async function getAnalytics(days = 30): Promise<AnalyticsData> {
+async function ticketTenantWhere(
+  organizationId: string,
+): Promise<Prisma.TicketWhereInput> {
+  return (await isLegacyOrganization(organizationId))
+    ? { OR: [{ organizationId }, { organizationId: null }] }
+    : { organizationId };
+}
+
+export async function getAnalytics(
+  organizationId: string,
+  days = 30,
+): Promise<AnalyticsData> {
   const since = new Date();
   since.setDate(since.getDate() - days);
+  const tenantWhere = await ticketTenantWhere(organizationId);
 
   const [totalTickets, openTickets, tickets, allTickets] = await Promise.all([
-    prisma.ticket.count(),
-    prisma.ticket.count({ where: { status: "open" } }),
+    prisma.ticket.count({ where: tenantWhere }),
+    prisma.ticket.count({ where: { ...tenantWhere, status: "open" } }),
     prisma.ticket.findMany({
-      where: { createdAt: { gte: since } },
+      where: { ...tenantWhere, createdAt: { gte: since } },
       select: { createdAt: true },
     }),
     prisma.ticket.findMany({
+      where: tenantWhere,
       select: { status: true, priority: true },
     }),
   ]);
 
-  // Build daily volume for the period
   const volumeMap = new Map<string, number>();
 
   for (let i = 0; i < days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - (days - 1 - i));
-    volumeMap.set(d.toISOString().slice(0, 10), 0);
+    const date = new Date();
+    date.setDate(date.getDate() - (days - 1 - i));
+    volumeMap.set(date.toISOString().slice(0, 10), 0);
   }
 
   for (const ticket of tickets) {
@@ -61,31 +75,35 @@ export async function getAnalytics(days = 30): Promise<AnalyticsData> {
     ([date, count]) => ({ date, count }),
   );
 
-  // Status breakdown
   const statusCounts = new Map<string, number>();
 
-  for (const t of allTickets) {
-    statusCounts.set(t.status, (statusCounts.get(t.status) ?? 0) + 1);
+  for (const ticket of allTickets) {
+    statusCounts.set(
+      ticket.status,
+      (statusCounts.get(ticket.status) ?? 0) + 1,
+    );
   }
 
   const statusBreakdown: StatusBreakdown[] = Array.from(
     statusCounts.entries(),
   ).map(([status, count]) => ({ status, count }));
 
-  // Priority breakdown
   const priorityCounts = new Map<string, number>();
 
-  for (const t of allTickets) {
-    priorityCounts.set(t.priority, (priorityCounts.get(t.priority) ?? 0) + 1);
+  for (const ticket of allTickets) {
+    priorityCounts.set(
+      ticket.priority,
+      (priorityCounts.get(ticket.priority) ?? 0) + 1,
+    );
   }
 
   const priorityBreakdown: PriorityBreakdown[] = Array.from(
     priorityCounts.entries(),
   ).map(([priority, count]) => ({ priority, count }));
 
-  // Average first response time (time from ticket creation to first non-customer message)
   const ticketsWithMessages = await prisma.ticket.findMany({
     where: {
+      ...tenantWhere,
       messages: {
         some: { author: { not: "customer" } },
       },
@@ -105,12 +123,13 @@ export async function getAnalytics(days = 30): Promise<AnalyticsData> {
   let avgResponseTimeMinutes: number | null = null;
 
   if (ticketsWithMessages.length > 0) {
-    const totalMinutes = ticketsWithMessages.reduce((sum, t) => {
-      const firstResponse = t.messages[0]?.createdAt;
+    const totalMinutes = ticketsWithMessages.reduce((sum, ticket) => {
+      const firstResponse = ticket.messages[0]?.createdAt;
 
       if (!firstResponse) return sum;
 
-      const diff = (firstResponse.getTime() - t.createdAt.getTime()) / 60_000;
+      const diff =
+        (firstResponse.getTime() - ticket.createdAt.getTime()) / 60_000;
 
       return sum + diff;
     }, 0);
