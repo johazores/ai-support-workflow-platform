@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   activityCreate: vi.fn(),
   dispatchWorkflows: vi.fn(),
-  broadcast: vi.fn(),
+  publishTicketEvent: vi.fn(),
 }));
 
 vi.mock("@/features/organizations/services/organization-service", () => ({
@@ -25,8 +25,8 @@ vi.mock("@/features/workflows/services/workflow-event-service", () => ({
   dispatchTicketUpdatedWorkflows: mocks.dispatchWorkflows,
 }));
 
-vi.mock("@/pages/api/tickets/[ticket-id]/events", () => ({
-  broadcastTicketUpdate: mocks.broadcast,
+vi.mock("@/features/tickets/services/ticket-event-bus", () => ({
+  publishTicketEvent: mocks.publishTicketEvent,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -115,6 +115,11 @@ describe("ticket service tenant mutation boundaries", () => {
       ticketId: "ticket-1",
       eventId: "activity-1",
     });
+    expect(mocks.publishTicketEvent).toHaveBeenCalledWith(
+      "ticket-1",
+      "status-changed",
+      { status: "pending" },
+    );
   });
 
   it("rejects assignment when the target user is not an active tenant member", async () => {
@@ -128,7 +133,6 @@ describe("ticket service tenant mutation boundaries", () => {
         assigneeEmail: "agent@example.com",
       }),
     ).rejects.toThrow("Assignee is not a member of this organization");
-
     expect(mocks.ticketUpdate).not.toHaveBeenCalled();
     expect(mocks.dispatchWorkflows).not.toHaveBeenCalled();
   });
