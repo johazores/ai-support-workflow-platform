@@ -17,6 +17,10 @@ const migratedRoutes = [
   "pages/api/sla-policies/[id].ts",
   "pages/api/tickets/[ticket-id]/sla.ts",
   "pages/api/tickets/bulk.ts",
+  "pages/api/customers/index.ts",
+  "pages/api/customers/[id].ts",
+  "pages/api/saved-replies/index.ts",
+  "pages/api/saved-replies/[id].ts",
 ] as const;
 
 describe("protected tenant API migration batch", () => {
