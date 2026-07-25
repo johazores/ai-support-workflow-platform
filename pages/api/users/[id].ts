@@ -1,108 +1,90 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
 import { z } from "zod";
 import {
   getUserById,
   removeUserFromOrganization,
   updateUserRole,
 } from "@/features/auth/services/user-management-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
 const updateRoleSchema = z.object({
   role: z.enum(["admin", "supervisor", "agent"]),
 });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const auth = await requireTenantApiPermission(req, res, "users:manage");
-  if (!auth.ok) return;
-
+function userIdFrom(req: NextApiRequest) {
   const { id } = req.query;
   if (typeof id !== "string") {
-    return res.status(400).json({ message: "Invalid user ID" });
+    throw new TenantApiError(400, "Invalid user ID");
+  }
+  return id;
+}
+
+function mapUserMutationError(error: unknown) {
+  if (!(error instanceof Error)) return null;
+
+  if (error.message === "User not found") {
+    return { status: 404, message: error.message };
+  }
+  if (error.message === "Organization must keep at least one active admin") {
+    return { status: 409, message: error.message };
   }
 
-  if (req.method === "GET") {
-    const user = await getUserById(auth.user.organizationId, id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+  return null;
+}
 
-    return res.status(200).json({ data: user });
-  }
-
-  if (req.method === "PATCH") {
-    const result = updateRoleSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({
-        message: "Invalid request body",
-        errors: result.error.flatten(),
-      });
-    }
-
-    if (id === auth.user.id) {
-      return res.status(400).json({ message: "Cannot change your own role" });
-    }
-
-    try {
-      const user = await updateUserRole({
-        organizationId: auth.user.organizationId,
-        actorUserId: auth.user.id,
-        id,
-        role: result.data.role,
-      });
-      return res.status(200).json({ data: user });
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === "User not found") {
-          return res.status(404).json({ message: error.message });
-        }
-
-        if (
-          error.message === "Organization must keep at least one active admin"
-        ) {
-          return res.status(409).json({ message: error.message });
-        }
+export default createTenantApiRoute({
+  GET: tenantApiRoute({
+    permission: "users:manage",
+    handle: async ({ req, res, user }) => {
+      const id = userIdFrom(req);
+      const targetUser = await getUserById(user.organizationId, id);
+      if (!targetUser) throw new TenantApiError(404, "User not found");
+      return res.status(200).json({ data: targetUser });
+    },
+    unexpectedErrorMessage: "Failed to load user",
+  }),
+  PATCH: tenantApiRoute({
+    permission: "users:manage",
+    schema: updateRoleSchema,
+    rateLimit: "sensitive",
+    mapError: mapUserMutationError,
+    handle: async ({ req, res, user, input }) => {
+      const id = userIdFrom(req);
+      if (id === user.id) {
+        throw new TenantApiError(400, "Cannot change your own role");
       }
 
-      console.error("Failed to update organization user", error);
-      return res.status(500).json({ message: "Failed to update user" });
-    }
-  }
+      const updatedUser = await updateUserRole({
+        organizationId: user.organizationId,
+        actorUserId: user.id,
+        id,
+        role: input.role,
+      });
+      return res.status(200).json({ data: updatedUser });
+    },
+    unexpectedErrorMessage: "Failed to update user",
+  }),
+  DELETE: tenantApiRoute({
+    permission: "users:manage",
+    rateLimit: "sensitive",
+    mapError: mapUserMutationError,
+    handle: async ({ req, res, user }) => {
+      const id = userIdFrom(req);
+      if (id === user.id) {
+        throw new TenantApiError(400, "Cannot remove your own account");
+      }
 
-  if (req.method === "DELETE") {
-    if (id === auth.user.id) {
-      return res
-        .status(400)
-        .json({ message: "Cannot remove your own account" });
-    }
-
-    try {
       await removeUserFromOrganization({
-        organizationId: auth.user.organizationId,
-        actorUserId: auth.user.id,
+        organizationId: user.organizationId,
+        actorUserId: user.id,
         id,
       });
       return res.status(204).end();
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === "User not found") {
-          return res.status(404).json({ message: error.message });
-        }
-
-        if (
-          error.message === "Organization must keep at least one active admin"
-        ) {
-          return res.status(409).json({ message: error.message });
-        }
-      }
-
-      console.error("Failed to remove organization user", error);
-      return res.status(500).json({ message: "Failed to remove user" });
-    }
-  }
-
-  res.setHeader("Allow", ["GET", "PATCH", "DELETE"]);
-  return res.status(405).json({ message: "Method not allowed" });
-}
+    },
+    unexpectedErrorMessage: "Failed to remove user",
+  }),
+});

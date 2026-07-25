@@ -11,6 +11,8 @@ const migratedRoutes = [
   "pages/api/notifications/index.ts",
   "pages/api/csat/[ticket-id].ts",
   "pages/api/csat/stats.ts",
+  "pages/api/users/index.ts",
+  "pages/api/users/[id].ts",
 ] as const;
 
 describe("protected tenant API migration batch", () => {
@@ -21,5 +23,15 @@ describe("protected tenant API migration batch", () => {
     expect(source).not.toContain("requireTenantApiPermission(");
     expect(source).not.toContain("requireApiPermission(");
     expect(source).not.toContain("parseSessionValue(");
+  });
+
+  it("keeps direct password-based team creation development-gated", () => {
+    const source = readFileSync(
+      join(process.cwd(), "pages/api/users/index.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("isLegacyProductAuthEnabled()");
+    expect(source).toContain("Use organization invitations");
   });
 });
