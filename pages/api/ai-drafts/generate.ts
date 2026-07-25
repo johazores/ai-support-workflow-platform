@@ -1,7 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { generateAiDraftReply } from "@/features/ai-drafts/services/ai-draft-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import { createTenantApiRoute, tenantApiRoute } from "@/lib/tenant-api-route";
 
 const generateDraftSchema = z.object({
   subject: z.string().trim().min(1).max(500),
@@ -12,40 +11,24 @@ const generateDraftSchema = z.object({
     .optional(),
 });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
-    return res.status(405).json({ message: "Method not allowed" });
-  }
-
-  const auth = await requireTenantApiPermission(req, res, "ai:generate");
-  if (!auth.ok) return;
-
-  const result = generateDraftSchema.safeParse(req.body);
-  if (!result.success) {
-    return res.status(400).json({
-      message: "Invalid request body",
-      errors: result.error.flatten(),
-    });
-  }
-
-  try {
-    const draft = await generateAiDraftReply({
-      ...result.data,
-      organizationId: auth.user.organizationId,
-    });
-
-    return res.status(200).json({ data: draft });
-  } catch (error) {
-    console.error("Failed to generate AI draft", error);
-    return res.status(502).json({
+export default createTenantApiRoute({
+  POST: tenantApiRoute({
+    permission: "ai:generate",
+    schema: generateDraftSchema,
+    rateLimit: "sensitive",
+    mapError: (error) => ({
+      status: 502,
       message:
         error instanceof Error
           ? error.message
           : "No configured AI provider completed the request",
-    });
-  }
-}
+    }),
+    handle: async ({ res, user, input }) => {
+      const draft = await generateAiDraftReply({
+        ...input,
+        organizationId: user.organizationId,
+      });
+      return res.status(200).json({ data: draft });
+    },
+  }),
+});

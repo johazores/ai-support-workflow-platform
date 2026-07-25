@@ -38,13 +38,18 @@ Additional audit/security hooks should be added to this shared boundary instead 
 - `/api/workflow-definitions/[id]/versions`
 - `/api/workflow-definitions/options`
 
-### Core ticket mutations
+### Core ticket and AI operations
 
-- ticket status
-- ticket priority
-- ticket assignment
-- ticket tags
+- ticket collection reads
+- ticket status, priority, assignment, and tag mutations
 - bulk ticket status, priority, and assignment changes
+- internal notes
+- manual replies
+- AI draft generation
+- AI draft persistence
+- AI draft send
+
+Legacy null-owned tickets used by draft-save and internal-note flows are accessible only through the deterministic legacy workspace.
 
 ### Reporting and email administration
 
@@ -80,7 +85,8 @@ Additional audit/security hooks should be added to this shared boundary instead 
 
 Continue by domain rather than performing a blind repository rewrite:
 
-1. AI/ticket action APIs, audit/admin reads, and remaining legacy workflow-rule endpoints;
-2. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
+1. tenant admin/config reads and mutations such as tags and mailbox configuration;
+2. remaining legacy workflow-rule endpoints;
+3. final source inventory proving every protected product route either uses `createTenantApiRoute()` or has a documented dedicated boundary.
 
 Do not convert a route until its current service contract, HTTP verbs, and domain-specific error behavior have been reviewed. Preserving working client behavior is more important than mechanically replacing middleware calls.

@@ -1,47 +1,41 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
 import { z } from "zod";
 import { sendManualReply } from "@/features/tickets/services/reply-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
 const sendReplySchema = z.object({
   body: z.string().trim().min(1).max(50_000),
 });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
-    return res.status(405).json({ message: "Method not allowed" });
-  }
-
-  const auth = await requireTenantApiPermission(req, res, "tickets:assign");
-  if (!auth.ok) return;
-
+function ticketIdFrom(req: NextApiRequest) {
   const ticketId = req.query["ticket-id"];
   if (typeof ticketId !== "string") {
-    return res.status(400).json({ message: "Invalid ticket id" });
+    throw new TenantApiError(400, "Invalid ticket id");
   }
-
-  const result = sendReplySchema.safeParse(req.body);
-  if (!result.success) {
-    return res.status(400).json({
-      message: "Invalid request body",
-      errors: result.error.flatten(),
-    });
-  }
-
-  try {
-    const message = await sendManualReply({
-      organizationId: auth.user.organizationId,
-      ticketId,
-      body: result.data.body,
-    });
-
-    return res.status(201).json({ data: message });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to send reply";
-    return res.status(message === "Ticket not found" ? 404 : 500).json({ message });
-  }
+  return ticketId;
 }
+
+export default createTenantApiRoute({
+  POST: tenantApiRoute({
+    permission: "tickets:assign",
+    schema: sendReplySchema,
+    rateLimit: "sensitive",
+    mapError: (error) =>
+      error instanceof Error && error.message === "Ticket not found"
+        ? { status: 404, message: error.message }
+        : null,
+    handle: async ({ req, res, user, input }) => {
+      const message = await sendManualReply({
+        organizationId: user.organizationId,
+        ticketId: ticketIdFrom(req),
+        body: input.body,
+      });
+      return res.status(201).json({ data: message });
+    },
+    unexpectedErrorMessage: "Failed to send reply",
+  }),
+});
