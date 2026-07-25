@@ -1,32 +1,30 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import type { NextApiRequest } from "next";
 import { getCustomerWithTickets } from "@/features/customers/services/customer-service";
+import {
+  createTenantApiRoute,
+  tenantApiRoute,
+  TenantApiError,
+} from "@/lib/tenant-api-route";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", ["GET"]);
-    return res.status(405).json({ message: "Method not allowed" });
-  }
-
-  const auth = await requireTenantApiPermission(req, res, "tickets:read");
-  if (!auth.ok) return;
-
+function customerIdFrom(req: NextApiRequest) {
   const id = req.query.id;
   if (typeof id !== "string") {
-    return res.status(400).json({ message: "Invalid customer ID" });
+    throw new TenantApiError(400, "Invalid customer ID");
   }
-
-  const customer = await getCustomerWithTickets(
-    auth.user.organizationId,
-    id,
-  );
-
-  if (!customer) {
-    return res.status(404).json({ message: "Customer not found" });
-  }
-
-  return res.status(200).json({ data: customer });
+  return id;
 }
+
+export default createTenantApiRoute({
+  GET: tenantApiRoute({
+    permission: "tickets:read",
+    handle: async ({ req, res, user }) => {
+      const customer = await getCustomerWithTickets(
+        user.organizationId,
+        customerIdFrom(req),
+      );
+      if (!customer) throw new TenantApiError(404, "Customer not found");
+      return res.status(200).json({ data: customer });
+    },
+    unexpectedErrorMessage: "Failed to load customer",
+  }),
+});
