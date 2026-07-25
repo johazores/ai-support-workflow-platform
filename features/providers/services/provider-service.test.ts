@@ -62,17 +62,7 @@ function provider(overrides: Record<string, unknown> = {}) {
 describe("provider runtime management", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.providerUpsert.mockImplementation(async ({ create, update }: any) => ({
-      id: "provider-1",
-      key: create?.key ?? "openai",
-      name: update?.name ?? create?.name ?? "OpenAI",
-      category: update?.category ?? create?.category ?? "ai",
-      isEnabled: update?.isEnabled ?? create?.isEnabled ?? false,
-      priority: update?.priority ?? create?.priority ?? 100,
-      defaultModel: update?.defaultModel ?? create?.defaultModel ?? null,
-      baseUrl: update?.baseUrl ?? create?.baseUrl ?? null,
-      configuration: update?.configuration ?? create?.configuration ?? null,
-    }));
+    mocks.providerUpsert.mockResolvedValue(provider());
     mocks.providerFindUnique.mockResolvedValue(null);
     mocks.providerFindMany.mockResolvedValue([]);
     mocks.credentialFindMany.mockResolvedValue([]);
