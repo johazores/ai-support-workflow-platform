@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { Card } from "@/components/ui/card";
 import { requireSupervisor } from "@/features/auth/services/auth-guard-service";
+import { WorkflowExecutionCancelButton } from "@/features/workflows/components/workflow-execution-cancel-button";
 import { getWorkflowExecution } from "@/features/workflows/services/workflow-execution-query-service";
 
 type PageProps = {
@@ -50,10 +51,40 @@ export default async function WorkflowExecutionDetailPage({
                 {execution.id}
               </p>
             </div>
-            <span className="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-slate-900">
-              {execution.status}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <WorkflowExecutionCancelButton
+                executionId={execution.id}
+                status={execution.status}
+              />
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-slate-900">
+                {execution.status}
+              </span>
+            </div>
           </div>
+
+          {execution.status === "queued" && (
+            <Card className="mb-6 border border-sky-200 bg-sky-50 p-5 ring-0 dark:border-sky-900 dark:bg-sky-950/30">
+              <h2 className="font-semibold text-sky-800 dark:text-sky-300">
+                Waiting for a workflow worker
+              </h2>
+              <p className="mt-2 text-sm text-sky-700 dark:text-sky-400">
+                This execution is safely queued and will begin when a worker
+                claims it.
+              </p>
+            </Card>
+          )}
+
+          {execution.status === "cancelling" && (
+            <Card className="mb-6 border border-amber-200 bg-amber-50 p-5 ring-0 dark:border-amber-900 dark:bg-amber-950/30">
+              <h2 className="font-semibold text-amber-800 dark:text-amber-300">
+                Cancellation requested
+              </h2>
+              <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+                The worker will stop before the next workflow node and mark the
+                execution cancelled.
+              </p>
+            </Card>
+          )}
 
           {execution.error && (
             <Card className="mb-6 border border-red-200 bg-red-50 p-5 ring-0 dark:border-red-900 dark:bg-red-950/30">
@@ -75,9 +106,13 @@ export default async function WorkflowExecutionDetailPage({
                       Step {index + 1}
                     </p>
                     <h2 className="mt-1 font-semibold text-slate-950 dark:text-white">
-                      {step.nodeType}
+                      {step.nodeType === "queue" ? "Queue" : step.nodeType}
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">{step.nodeId}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {step.nodeType === "queue"
+                        ? "Durable worker scheduling and lease"
+                        : step.nodeId}
+                    </p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     {step.status}
