@@ -49,6 +49,27 @@ model OrganizationMember {
   @@index([organizationId, status])
 }
 
+model OrganizationInvitation {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId    String    @db.ObjectId
+  email             String
+  role              String    @default("agent")
+  status            String    @default("pending")
+  clerkInvitationId String?
+  invitedByUserId   String    @db.ObjectId
+  acceptedByUserId  String?   @db.ObjectId
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, email, status])
+  @@index([email, status, expiresAt])
+  @@index([clerkInvitationId])
+}
+
 model RootAdmin {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   username           String    @unique
