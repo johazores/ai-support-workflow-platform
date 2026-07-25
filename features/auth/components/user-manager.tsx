@@ -4,11 +4,9 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import {
-  createUser,
   deleteUser,
   fetchUsers,
   updateUserRole,
@@ -29,14 +27,8 @@ export function UserManager() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<User | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("agent");
-  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     fetchUsers()
@@ -44,32 +36,6 @@ export function UserManager() {
       .catch(() => toast("Failed to load organization members", "error"))
       .finally(() => setLoading(false));
   }, [toast]);
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setIsCreating(true);
-
-    try {
-      const user = await createUser({ name, email, password, role });
-      setUsers((previous) => [
-        user,
-        ...previous.filter((item) => item.id !== user.id),
-      ]);
-      setShowForm(false);
-      setName("");
-      setEmail("");
-      setPassword("");
-      setRole("agent");
-      toast("Member added successfully", "success");
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Failed to add member",
-        "error",
-      );
-    } finally {
-      setIsCreating(false);
-    }
-  }
 
   async function handleRoleChange(userId: string, newRole: string) {
     try {
@@ -107,82 +73,33 @@ export function UserManager() {
     }
   }
 
-  if (loading) {
-    return (
-      <p className="animate-pulse text-sm text-slate-500">
-        Loading organization members...
-      </p>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {users.length} {users.length === 1 ? "member" : "members"}
-        </p>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "Add Member"}
-        </Button>
+    <section className="space-y-4">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
+            Current members
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Manage roles or remove access for people already in this organization.
+          </p>
+        </div>
+        {!loading && (
+          <p className="shrink-0 text-sm text-slate-500 dark:text-slate-400">
+            {users.length} {users.length === 1 ? "member" : "members"}
+          </p>
+        )}
       </div>
 
-      {showForm && (
-        <form
-          onSubmit={handleCreate}
-          className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700"
-        >
-          <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Add Organization Member
-          </h3>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="Name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-              fullWidth
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              fullWidth
-            />
-            <Input
-              label="Temporary password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              helperText="Used only when a new local account must be created. Existing identities keep their credentials."
-              fullWidth
-            />
-            <Select
-              label="Role"
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-              options={roles.map((item) => ({
-                value: item,
-                label: item.charAt(0).toUpperCase() + item.slice(1),
-              }))}
-              fullWidth
-            />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button type="submit" isLoading={isCreating}>
-              Add Member
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {users.length === 0 ? (
+      {loading ? (
+        <p className="animate-pulse text-sm text-slate-500">
+          Loading organization members...
+        </p>
+      ) : users.length === 0 ? (
         <EmptyState
           icon="file"
           title="No organization members yet"
-          description="Add a member to start collaborating in this workspace."
+          description="Invite a member above to start collaborating in this workspace."
         />
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
@@ -200,7 +117,7 @@ export function UserManager() {
                     Role
                   </th>
                   <th className="px-5 py-3 text-left font-medium text-slate-500 dark:text-slate-400">
-                    Created
+                    Joined
                   </th>
                   <th className="px-5 py-3 text-right font-medium text-slate-500 dark:text-slate-400">
                     Actions
@@ -267,6 +184,6 @@ export function UserManager() {
         Remove <strong>{removeTarget?.name}</strong> from this organization? Their
         global account and memberships in other organizations are not deleted.
       </ConfirmDialog>
-    </div>
+    </section>
   );
 }
