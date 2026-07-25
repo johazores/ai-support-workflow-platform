@@ -1,7 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { bulkUpdateTickets } from "@/features/tickets/services/bulk-ticket-service";
-import { requireTenantApiPermission } from "@/lib/tenant-api-auth";
+import { createTenantApiRoute, tenantApiRoute } from "@/lib/tenant-api-route";
 
 const ticketIdsSchema = z
   .array(z.string().min(1))
@@ -29,57 +28,45 @@ const bulkSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
-    return res.status(405).json({ message: "Method not allowed" });
+function mapBulkError(error: unknown) {
+  if (!(error instanceof Error)) return null;
+
+  if (error.message === "One or more tickets not found") {
+    return { status: 404, message: error.message };
   }
 
-  const auth = await requireTenantApiPermission(req, res, "tickets:write");
-  if (!auth.ok) return;
-
-  const parsed = bulkSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ message: "Invalid input", errors: parsed.error.flatten() });
+  if (
+    error.message === "Assignee not found" ||
+    error.message === "Assignee is not an active organization member"
+  ) {
+    return { status: 400, message: error.message };
   }
 
-  let action;
-  if (parsed.data.action === "change-status") {
-    action = { type: "change-status" as const, value: parsed.data.value };
-  } else if (parsed.data.action === "change-priority") {
-    action = { type: "change-priority" as const, value: parsed.data.value };
-  } else {
-    action = { type: "assign" as const, value: parsed.data.value };
-  }
-
-  try {
-    const result = await bulkUpdateTickets({
-      organizationId: auth.user.organizationId,
-      ticketIds: parsed.data.ticketIds,
-      action,
-    });
-
-    return res.status(200).json({ data: result });
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === "One or more tickets not found") {
-        return res.status(404).json({ message: error.message });
-      }
-
-      if (
-        error.message === "Assignee not found" ||
-        error.message === "Assignee is not an active organization member"
-      ) {
-        return res.status(400).json({ message: error.message });
-      }
-    }
-
-    console.error("Bulk ticket update failed", error);
-    return res.status(500).json({ message: "Bulk ticket update failed" });
-  }
+  return null;
 }
+
+export default createTenantApiRoute({
+  POST: tenantApiRoute({
+    permission: "tickets:write",
+    schema: bulkSchema,
+    rateLimit: "sensitive",
+    mapError: mapBulkError,
+    handle: async ({ res, user, input }) => {
+      const action =
+        input.action === "change-status"
+          ? { type: "change-status" as const, value: input.value }
+          : input.action === "change-priority"
+            ? { type: "change-priority" as const, value: input.value }
+            : { type: "assign" as const, value: input.value };
+
+      const result = await bulkUpdateTickets({
+        organizationId: user.organizationId,
+        ticketIds: input.ticketIds,
+        action,
+      });
+
+      return res.status(200).json({ data: result });
+    },
+    unexpectedErrorMessage: "Bulk ticket update failed",
+  }),
+});
