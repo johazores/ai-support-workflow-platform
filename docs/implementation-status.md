@@ -54,7 +54,8 @@ The SaaS foundation and the tenant/security/workflow increments through the curr
 - Root Admin dashboard, provider management, encrypted environment settings, organization controls, audit logs, and system health
 - AES-256-GCM encryption for provider, SMTP, IMAP, and system secrets
 - Central provider catalog, credential rotation, connection testing, priority, model configuration, usage recording, and failure tracking
-- Database-managed OpenAI and Anthropic configuration with explicit provider failure behavior
+- AI draft adapters for OpenAI, Anthropic, Google Gemini, OpenRouter, Groq, Together AI, and DeepSeek using database-managed credentials/models with temporary environment migration fallbacks
+- Shared prompt handling across AI adapters and actual selected-model reporting in AI/provider usage telemetry
 - Health and readiness endpoints
 - Single cost-conscious GitHub Actions Quality Gate covering Prisma validation, API-boundary audit, TypeScript, ESLint, Prettier, tests, and production build
 - Production operations runbook covering release preparation, deployment, smoke tests, rollback, database backup/restore, credential incidents, workflow incidents, severity handling, and postmortems
@@ -62,14 +63,15 @@ The SaaS foundation and the tenant/security/workflow increments through the curr
 ## Active Implementation Work
 
 - Reconcile `MASTER_IMPLEMENTATION_PLAN.md` phase checkboxes with the merged implementation while keeping partially completed goals open
-- Expand the encrypted provider/integration control plane beyond OpenAI and Anthropic
+- Make database provider priority and explicit enabled/disabled state authoritative in the AI runtime while preserving a safe environment migration path
+- Expand encrypted configuration/runtime adapters for non-AI integrations such as Slack, Discord, Resend, Twilio, GitHub, Redis, and storage
 - Replace synchronous/in-process workflow execution with durable queue/worker execution, retries, delays, cancellation/resume, and operational visibility
 - Replace the current process-local ticket event bus when multi-instance real-time delivery is introduced
 - Continue production-hardening work that is endpoint-specific and therefore not covered by the shared browser API rate limiter, including webhook replay/abuse controls where applicable
 
 ## Remaining Product Work
 
-- Additional AI provider adapters and integration configuration definitions
+- Non-AI integration runtime adapters and configuration definitions beyond the existing connection-test catalog
 - Workflow variables/transformations, delay/webhook/schedule nodes, execution payload redaction, real worker/database integration tests, and builder accessibility/viewport polish
 - Stripe plans, subscriptions, usage entitlements, checkout, billing portal, webhook reconciliation, and customer billing UI
 - Attachment storage and secure upload/download

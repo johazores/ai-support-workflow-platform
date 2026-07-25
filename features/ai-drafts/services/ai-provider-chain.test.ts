@@ -25,17 +25,19 @@ vi.mock("@/lib/prisma", () => ({
 function createMockProvider(
   draft: string,
   shouldFail = false,
+  model?: string,
 ): AiDraftProvider {
   return {
     async generateDraft() {
       if (shouldFail) throw new Error("Provider failed");
-      return { draft };
+      return { draft, ...(model ? { model } : {}) };
     },
   };
 }
 
 describe("AiProviderChain", () => {
   const input = {
+    organizationId: "org-1",
     subject: "Test",
     customerName: "User",
     customerMessage: "Hello",
@@ -100,6 +102,35 @@ describe("AiProviderChain", () => {
 
     const result = await chain.generate(input);
     expect(result.draft).toBe("only-response");
+  });
+
+  it("records the actual model returned by the provider", async () => {
+    prismaMocks.providerFindUnique.mockResolvedValue({ id: "provider-1" });
+    const chain = new AiProviderChain([
+      {
+        name: "primary",
+        model: "database-configured",
+        provider: createMockProvider("response", false, "actual-model-v2"),
+      },
+    ]);
+
+    await chain.generate(input);
+
+    expect(prismaMocks.aiUsageCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        organizationId: "org-1",
+        provider: "primary",
+        model: "actual-model-v2",
+        success: true,
+      }),
+    });
+    expect(prismaMocks.providerUsageCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        providerId: "provider-1",
+        model: "actual-model-v2",
+        success: true,
+      }),
+    });
   });
 
   it("returns a successful draft when telemetry persistence fails", async () => {

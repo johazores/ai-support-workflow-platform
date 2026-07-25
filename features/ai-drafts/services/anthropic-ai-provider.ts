@@ -1,32 +1,12 @@
+import {
+  aiDraftSystemPrompt,
+  buildAiDraftPrompt,
+} from "@/features/ai-drafts/services/ai-draft-prompt";
 import type {
   AiDraftProvider,
   GenerateDraftInput,
 } from "@/features/ai-drafts/types/ai-provider";
 import { getEnabledProviderConfiguration } from "@/features/providers/services/provider-service";
-
-const toneInstructions: Record<string, string> = {
-  professional: "Use a formal, business-appropriate tone.",
-  friendly: "Use a warm, conversational tone while remaining helpful.",
-  concise: "Be extremely brief and to the point. No filler.",
-  empathetic: "Show understanding and empathy for the customer's situation.",
-};
-
-function buildPrompt(input: GenerateDraftInput): string {
-  const tone = input.tone ?? "professional";
-
-  return `Write a customer support reply.
-
-Customer name: ${input.customerName}
-Ticket subject: ${input.subject}
-Customer message: ${input.customerMessage}
-
-Tone: ${toneInstructions[tone] ?? toneInstructions.professional}
-
-Rules:
-- Do not overpromise.
-- Keep it short.
-- Sign as Support Team.`;
-}
 
 export const anthropicProvider: AiDraftProvider = {
   async generateDraft(input: GenerateDraftInput) {
@@ -46,7 +26,7 @@ export const anthropicProvider: AiDraftProvider = {
     const baseUrl =
       configuredProvider?.baseUrl || "https://api.anthropic.com/v1";
 
-    const response = await fetch(`${baseUrl}/messages`, {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -56,9 +36,8 @@ export const anthropicProvider: AiDraftProvider = {
       body: JSON.stringify({
         model,
         max_tokens: 1024,
-        system:
-          "You are a helpful customer support assistant. Write concise, professional replies.",
-        messages: [{ role: "user", content: buildPrompt(input) }],
+        system: aiDraftSystemPrompt,
+        messages: [{ role: "user", content: buildAiDraftPrompt(input) }],
       }),
       signal: AbortSignal.timeout(30_000),
     });
@@ -72,9 +51,9 @@ export const anthropicProvider: AiDraftProvider = {
     const data = (await response.json()) as {
       content: Array<{ type: string; text: string }>;
     };
-    const draft = data.content.find((block) => block.type === "text")?.text;
+    const draft = data.content.find((block) => block.type === "text")?.text?.trim();
 
     if (!draft) throw new Error("Anthropic returned an empty response");
-    return { draft };
+    return { draft, model };
   },
 };

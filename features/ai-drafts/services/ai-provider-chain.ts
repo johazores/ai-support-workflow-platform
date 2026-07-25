@@ -18,6 +18,7 @@ function getErrorMessage(error: unknown): string {
 async function recordProviderUsage(input: {
   request: GenerateDraftInput;
   entry: ProviderEntry;
+  model: string;
   startedAt: number;
   success: boolean;
   errorMessage?: string;
@@ -27,7 +28,7 @@ async function recordProviderUsage(input: {
       data: {
         organizationId: input.request.organizationId,
         provider: input.entry.name,
-        model: input.entry.model,
+        model: input.model,
         success: input.success,
         error: input.errorMessage,
       },
@@ -44,7 +45,7 @@ async function recordProviderUsage(input: {
         organizationId: input.request.organizationId,
         providerId: provider.id,
         operation: "ai.draft.generate",
-        model: input.entry.model,
+        model: input.model,
         latencyMs: Date.now() - input.startedAt,
         success: input.success,
         errorCode: input.errorMessage?.slice(0, 200),
@@ -73,10 +74,12 @@ export class AiProviderChain {
 
       try {
         const result = await entry.provider.generateDraft(input);
+        const model = result.model ?? entry.model;
 
         await recordProviderUsage({
           request: input,
           entry,
+          model,
           startedAt,
           success: true,
         });
@@ -89,6 +92,7 @@ export class AiProviderChain {
         await recordProviderUsage({
           request: input,
           entry,
+          model: entry.model,
           startedAt,
           success: false,
           errorMessage,
