@@ -6,6 +6,7 @@ import {
   parseRootSession,
   revokeRootSession,
 } from "@/features/root-auth/services/root-session-service";
+import { isSameOriginMutation } from "@/lib/request-origin";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,6 +15,10 @@ export default async function handler(
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ message: "Method not allowed" });
+  }
+
+  if (!isSameOriginMutation(req)) {
+    return res.status(403).json({ message: "Invalid request origin" });
   }
 
   const token = getRootTokenFromRequest(req);
