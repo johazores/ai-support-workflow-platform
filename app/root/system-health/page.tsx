@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { RootAdminShell } from "@/components/layout/root-admin-shell";
 import { Card } from "@/components/ui/card";
-import { prisma } from "@/lib/prisma";
 import { requireRootAdmin } from "@/features/root-auth/services/root-auth-guard-service";
+import { getWorkflowQueueHealth } from "@/features/workflows/services/versioned-workflow-runtime";
+import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
   title: "System Health | Root Admin",
@@ -19,7 +20,7 @@ export default async function RootSystemHealthPage() {
     databaseStatus = "unavailable";
   }
 
-  const [failedProviders, failedExecutions, activeRootSessions] =
+  const [failedProviders, failedExecutions, activeRootSessions, queueHealth] =
     await Promise.all([
       prisma.providerCredential.count({
         where: { isActive: true, lastTestStatus: "failed" },
@@ -28,7 +29,31 @@ export default async function RootSystemHealthPage() {
       prisma.rootSession.count({
         where: { revokedAt: null, expiresAt: { gt: new Date() } },
       }),
-    ]).catch(() => [0, 0, 0] as const);
+      getWorkflowQueueHealth(),
+    ]).catch(() => [
+      0,
+      0,
+      0,
+      {
+        queued: 0,
+        running: 0,
+        cancelling: 0,
+        failed: 0,
+        oldestQueuedAt: null,
+      },
+    ] as const);
+
+  const oldestQueuedAge = queueHealth.oldestQueuedAt
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(queueHealth.oldestQueuedAt).getTime()) / 1_000,
+        ),
+      )
+    : null;
+  const queueNeedsAttention =
+    queueHealth.cancelling > 0 ||
+    (oldestQueuedAge !== null && oldestQueuedAge > 120);
 
   const checks = [
     {
@@ -53,6 +78,12 @@ export default async function RootSystemHealthPage() {
       healthy: failedExecutions === 0,
     },
     {
+      label: "Workflow queue",
+      value: queueNeedsAttention ? "attention" : "healthy",
+      detail: `${queueHealth.queued} queued, ${queueHealth.running} running, ${queueHealth.cancelling} cancelling${oldestQueuedAge === null ? "" : `; oldest queued ${oldestQueuedAge}s`}`,
+      healthy: !queueNeedsAttention,
+    },
+    {
       label: "Root sessions",
       value: "active",
       detail: `${activeRootSessions} active session${activeRootSessions === 1 ? "" : "s"}`,
@@ -70,8 +101,8 @@ export default async function RootSystemHealthPage() {
           System Health
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Live database connectivity, provider failures, workflow failures, and
-          Root Admin session visibility.
+          Live database connectivity, provider failures, workflow queue and
+          execution health, and Root Admin session visibility.
         </p>
       </div>
 
@@ -104,7 +135,8 @@ export default async function RootSystemHealthPage() {
         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
           Use <code>/api/health</code> for process liveness and{" "}
           <code>/api/readiness</code> for database readiness checks in hosting
-          or container orchestration.
+          or container orchestration. Run the workflow worker separately with{" "}
+          <code>npm run workflow:worker</code>.
         </p>
       </Card>
     </RootAdminShell>
