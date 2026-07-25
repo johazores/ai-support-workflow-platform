@@ -3,6 +3,7 @@ import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { recordAuditEvent } from "@/features/audit/services/audit-event-service";
 import {
   disableClerkUser,
+  InactiveProductUserError,
   syncClerkIdentity,
 } from "@/features/auth/services/clerk-user-service";
 
@@ -28,23 +29,34 @@ export async function POST(request: NextRequest) {
         event.data.username ||
         primaryEmail.email_address;
 
-      const user = await syncClerkIdentity({
-        clerkUserId: event.data.id,
-        email: primaryEmail.email_address,
-        name,
-      });
+      try {
+        const user = await syncClerkIdentity({
+          clerkUserId: event.data.id,
+          email: primaryEmail.email_address,
+          name,
+        });
 
-      await recordAuditEvent({
-        actorType: "system",
-        userId: user.id,
-        organizationId: user.organizationId,
-        action:
-          event.type === "user.created"
-            ? "clerk.user-created"
-            : "clerk.user-updated",
-        targetType: "User",
-        targetId: user.id,
-      });
+        await recordAuditEvent({
+          actorType: "system",
+          userId: user.id,
+          organizationId: user.organizationId,
+          action:
+            event.type === "user.created"
+              ? "clerk.user-created"
+              : "clerk.user-updated",
+          targetType: "User",
+          targetId: user.id,
+        });
+      } catch (error) {
+        if (!(error instanceof InactiveProductUserError)) throw error;
+
+        // An internal suspension is authoritative. Clerk profile updates are
+        // acknowledged without reactivating the product account or memberships.
+        console.warn(
+          `Ignored Clerk ${event.type} for an inactive internal user`,
+          event.data.id,
+        );
+      }
     }
 
     if (event.type === "user.deleted" && event.data.id) {
