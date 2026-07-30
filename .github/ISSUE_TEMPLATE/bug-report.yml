@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible support platform problem
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: input
+    id: feature
+    attributes:
+      label: Feature area
+      placeholder: email ingestion
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction
+      description: Remove customer data, email content, provider keys, mailbox credentials, and tenant identifiers.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Authentication, tenancy, permission, workflow, or security impact
