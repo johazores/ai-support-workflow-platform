@@ -15,28 +15,23 @@ export const anthropicProvider: AiDraftProvider = {
       throw new Error("Anthropic is disabled");
     }
 
-    const database = runtime.mode === "database" ? runtime : null;
-    const apiKey = database?.credential ?? process.env.ANTHROPIC_API_KEY;
-
-    if (!apiKey) {
+    if (!runtime.credential) {
       throw new Error("Anthropic is not configured");
     }
+    if (!runtime.defaultModel) {
+      throw new Error("Anthropic model is not configured");
+    }
 
-    const model =
-      database?.defaultModel ||
-      process.env.ANTHROPIC_MODEL ||
-      "claude-sonnet-4-20250514";
-    const baseUrl = database?.baseUrl || "https://api.anthropic.com/v1";
-
+    const baseUrl = runtime.baseUrl || "https://api.anthropic.com/v1";
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "x-api-key": runtime.credential,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model,
+        model: runtime.defaultModel,
         max_tokens: 1024,
         system: aiDraftSystemPrompt,
         messages: [{ role: "user", content: buildAiDraftPrompt(input) }],
@@ -56,6 +51,6 @@ export const anthropicProvider: AiDraftProvider = {
     const draft = data.content.find((block) => block.type === "text")?.text?.trim();
 
     if (!draft) throw new Error("Anthropic returned an empty response");
-    return { draft, model };
+    return { draft, model: runtime.defaultModel };
   },
 };
