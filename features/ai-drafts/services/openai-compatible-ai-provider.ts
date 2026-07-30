@@ -15,7 +15,6 @@ type OpenAiCompatibleProviderOptions = {
   key: string;
   displayName: string;
   defaultBaseUrl: string;
-  defaultModel?: string;
   defaultHeaders?: (
     configuration: ProviderConfiguration | null,
   ) => Record<string, string> | undefined;
@@ -41,8 +40,7 @@ export function createOpenAiCompatibleProvider(
         throw new Error(`${options.displayName} is not configured`);
       }
 
-      const model = runtime.defaultModel || options.defaultModel;
-      if (!model) {
+      if (!runtime.defaultModel) {
         throw new Error(`${options.displayName} model is not configured`);
       }
 
@@ -54,7 +52,7 @@ export function createOpenAiCompatibleProvider(
       });
 
       const response = await client.chat.completions.create({
-        model,
+        model: runtime.defaultModel,
         messages: [
           { role: "system", content: aiDraftSystemPrompt },
           { role: "user", content: buildAiDraftPrompt(input) },
@@ -66,7 +64,7 @@ export function createOpenAiCompatibleProvider(
         throw new Error(`${options.displayName} returned an empty response`);
       }
 
-      return { draft, model };
+      return { draft, model: runtime.defaultModel };
     },
   };
 }
