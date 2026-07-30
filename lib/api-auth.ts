@@ -23,7 +23,7 @@ export async function requireApiAuth(
     return { ok: false, user: null };
   }
 
-  if (!isLegacyProductAuthEnabled()) {
+  if (!(await isLegacyProductAuthEnabled())) {
     res.status(401).json({ message: "Product authentication unavailable" });
     return { ok: false, user: null };
   }
