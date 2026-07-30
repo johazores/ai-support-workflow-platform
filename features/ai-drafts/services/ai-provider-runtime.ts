@@ -8,13 +8,12 @@ import { openRouterProvider } from "@/features/ai-drafts/services/openrouter-ai-
 import { togetherAiProvider } from "@/features/ai-drafts/services/together-ai-provider";
 import type { AiDraftProvider } from "@/features/ai-drafts/types/ai-provider";
 import { listAiProviderRuntimePolicies } from "@/features/providers/services/provider-service";
+import { systemSettingKeys } from "@/features/system-settings/services/system-setting-keys";
+import { getBooleanSystemSetting } from "@/features/system-settings/services/system-setting-service";
 
 type RuntimeRegistryEntry = {
   key: string;
   provider: AiDraftProvider;
-  environmentCredentialKeys: string[];
-  environmentModelKey?: string;
-  defaultModel?: string;
 };
 
 export type AiProviderRuntimeEntry = {
@@ -24,62 +23,14 @@ export type AiProviderRuntimeEntry = {
 };
 
 const registry: RuntimeRegistryEntry[] = [
-  {
-    key: "openai",
-    provider: openAiProvider,
-    environmentCredentialKeys: ["OPENAI_API_KEY"],
-    environmentModelKey: "OPENAI_MODEL",
-    defaultModel: "gpt-4.1-mini",
-  },
-  {
-    key: "anthropic",
-    provider: anthropicProvider,
-    environmentCredentialKeys: ["ANTHROPIC_API_KEY"],
-    environmentModelKey: "ANTHROPIC_MODEL",
-    defaultModel: "claude-sonnet-4-20250514",
-  },
-  {
-    key: "google-gemini",
-    provider: googleGeminiProvider,
-    environmentCredentialKeys: ["GEMINI_API_KEY", "GOOGLE_GEMINI_API_KEY"],
-    environmentModelKey: "GEMINI_MODEL",
-    defaultModel: "gemini-3.6-flash",
-  },
-  {
-    key: "openrouter",
-    provider: openRouterProvider,
-    environmentCredentialKeys: ["OPENROUTER_API_KEY"],
-    environmentModelKey: "OPENROUTER_MODEL",
-  },
-  {
-    key: "groq",
-    provider: groqProvider,
-    environmentCredentialKeys: ["GROQ_API_KEY"],
-    environmentModelKey: "GROQ_MODEL",
-    defaultModel: "openai/gpt-oss-20b",
-  },
-  {
-    key: "together-ai",
-    provider: togetherAiProvider,
-    environmentCredentialKeys: ["TOGETHER_API_KEY"],
-    environmentModelKey: "TOGETHER_MODEL",
-  },
-  {
-    key: "deepseek",
-    provider: deepSeekProvider,
-    environmentCredentialKeys: ["DEEPSEEK_API_KEY"],
-    environmentModelKey: "DEEPSEEK_MODEL",
-    defaultModel: "deepseek-v4-flash",
-  },
+  { key: "openai", provider: openAiProvider },
+  { key: "anthropic", provider: anthropicProvider },
+  { key: "google-gemini", provider: googleGeminiProvider },
+  { key: "openrouter", provider: openRouterProvider },
+  { key: "groq", provider: groqProvider },
+  { key: "together-ai", provider: togetherAiProvider },
+  { key: "deepseek", provider: deepSeekProvider },
 ];
-
-function firstEnvironmentValue(keys: string[]) {
-  for (const key of keys) {
-    const value = process.env[key]?.trim();
-    if (value) return value;
-  }
-  return undefined;
-}
 
 export async function resolveAiProviderRuntimeEntries(): Promise<
   AiProviderRuntimeEntry[]
@@ -89,32 +40,15 @@ export async function resolveAiProviderRuntimeEntries(): Promise<
 
   const entries = registry.flatMap((definition, registryIndex) => {
     const policy = policyByKey.get(definition.key);
-    const mode = policy?.mode ?? "environment";
-
-    if (mode === "disabled") return [];
-    if (
-      mode === "environment" &&
-      !firstEnvironmentValue(definition.environmentCredentialKeys)
-    ) {
-      return [];
-    }
-
-    const environmentModel = definition.environmentModelKey
-      ? process.env[definition.environmentModelKey]?.trim()
-      : undefined;
+    if (!policy || policy.mode !== "database") return [];
 
     return [
       {
-        priority: policy?.priority ?? 100,
+        priority: policy.priority,
         registryIndex,
         entry: {
           name: definition.key,
-          model:
-            mode === "database"
-              ? "database-configured"
-              : environmentModel ||
-                definition.defaultModel ||
-                "environment-configured",
+          model: "database-configured",
           provider: definition.provider,
         },
       },
@@ -127,10 +61,11 @@ export async function resolveAiProviderRuntimeEntries(): Promise<
   );
 
   const resolved = entries.map(({ entry }) => entry);
-  if (
+  const allowMock =
     process.env.NODE_ENV !== "production" &&
-    process.env.ALLOW_MOCK_AI === "true"
-  ) {
+    (await getBooleanSystemSetting(systemSettingKeys.allowMockAi, false));
+
+  if (allowMock) {
     resolved.push({ name: "mock", model: "mock-model", provider: mockAiProvider });
   }
 

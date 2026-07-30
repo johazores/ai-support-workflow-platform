@@ -9,7 +9,7 @@ type RootAdminShellProps = {
 const navigation = [
   { href: "/root", label: "Overview" },
   { href: "/root/providers", label: "Providers" },
-  { href: "/root/settings", label: "Environment" },
+  { href: "/root/settings", label: "Runtime Settings" },
   { href: "/root/organizations", label: "Organizations" },
   { href: "/root/system-health", label: "System Health" },
   { href: "/root/audit-logs", label: "Audit Logs" },

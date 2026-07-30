@@ -4,6 +4,7 @@ import { resolveAiProviderRuntimeEntries } from "@/features/ai-drafts/services/a
 const mocks = vi.hoisted(() => ({
   listAiProviderRuntimePolicies: vi.fn(),
   getProviderRuntimeConfiguration: vi.fn(),
+  getBooleanSystemSetting: vi.fn(),
 }));
 
 vi.mock("@/features/providers/services/provider-service", () => ({
@@ -11,35 +12,30 @@ vi.mock("@/features/providers/services/provider-service", () => ({
   getProviderRuntimeConfiguration: mocks.getProviderRuntimeConfiguration,
 }));
 
-const originalNodeEnv = process.env.NODE_ENV;
+vi.mock("@/features/system-settings/services/system-setting-service", () => ({
+  getBooleanSystemSetting: mocks.getBooleanSystemSetting,
+}));
 
-function clearProviderEnvironment() {
-  for (const key of [
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "GEMINI_API_KEY",
-    "GOOGLE_GEMINI_API_KEY",
-    "OPENROUTER_API_KEY",
-    "GROQ_API_KEY",
-    "TOGETHER_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "ALLOW_MOCK_AI",
-  ]) {
-    delete process.env[key];
-  }
-}
+const originalNodeEnv = process.env.NODE_ENV;
 
 describe("resolveAiProviderRuntimeEntries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    clearProviderEnvironment();
-    process.env.NODE_ENV = "test";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "test",
+      configurable: true,
+      writable: true,
+    });
     mocks.listAiProviderRuntimePolicies.mockResolvedValue([]);
+    mocks.getBooleanSystemSetting.mockResolvedValue(false);
   });
 
   afterEach(() => {
-    clearProviderEnvironment();
-    process.env.NODE_ENV = originalNodeEnv;
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: originalNodeEnv,
+      configurable: true,
+      writable: true,
+    });
   });
 
   it("orders database-managed providers by Root Admin priority", async () => {
@@ -58,23 +54,7 @@ describe("resolveAiProviderRuntimeEntries", () => {
     ]);
   });
 
-  it("includes unmanaged environment providers only when a credential exists", async () => {
-    process.env.OPENROUTER_API_KEY = "env-openrouter";
-    process.env.OPENROUTER_MODEL = "env-model";
-    mocks.listAiProviderRuntimePolicies.mockResolvedValue([
-      { key: "openrouter", name: "OpenRouter", priority: 12, mode: "environment" },
-      { key: "together-ai", name: "Together AI", priority: 15, mode: "environment" },
-    ]);
-
-    const entries = await resolveAiProviderRuntimeEntries();
-
-    expect(entries.map((entry) => entry.name)).toEqual(["openrouter"]);
-    expect(entries[0]?.model).toBe("env-model");
-    delete process.env.OPENROUTER_MODEL;
-  });
-
-  it("excludes explicitly disabled providers even when legacy environment keys remain", async () => {
-    process.env.OPENAI_API_KEY = "legacy-key";
+  it("excludes providers disabled by Root Admin", async () => {
     mocks.listAiProviderRuntimePolicies.mockResolvedValue([
       { key: "openai", name: "OpenAI", priority: 1, mode: "disabled" },
     ]);
@@ -86,7 +66,12 @@ describe("resolveAiProviderRuntimeEntries", () => {
     mocks.listAiProviderRuntimePolicies.mockResolvedValue([
       { key: "deepseek", name: "DeepSeek", priority: 100, mode: "database" },
       { key: "openai", name: "OpenAI", priority: 100, mode: "database" },
-      { key: "google-gemini", name: "Google Gemini", priority: 100, mode: "database" },
+      {
+        key: "google-gemini",
+        name: "Google Gemini",
+        priority: 100,
+        mode: "database",
+      },
     ]);
 
     const entries = await resolveAiProviderRuntimeEntries();
@@ -98,11 +83,23 @@ describe("resolveAiProviderRuntimeEntries", () => {
     ]);
   });
 
-  it("appends mock AI only in explicitly enabled non-production mode", async () => {
-    process.env.ALLOW_MOCK_AI = "true";
+  it("appends mock AI when enabled in database outside production", async () => {
+    mocks.getBooleanSystemSetting.mockResolvedValue(true);
 
     const entries = await resolveAiProviderRuntimeEntries();
 
     expect(entries.map((entry) => entry.name)).toEqual(["mock"]);
+  });
+
+  it("never enables mock AI in production", async () => {
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      configurable: true,
+      writable: true,
+    });
+    mocks.getBooleanSystemSetting.mockResolvedValue(true);
+
+    await expect(resolveAiProviderRuntimeEntries()).resolves.toEqual([]);
+    expect(mocks.getBooleanSystemSetting).not.toHaveBeenCalled();
   });
 });

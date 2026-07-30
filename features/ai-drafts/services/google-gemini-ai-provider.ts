@@ -19,24 +19,17 @@ export const googleGeminiProvider: AiDraftProvider = {
       throw new Error("Google Gemini is disabled");
     }
 
-    const database = runtime.mode === "database" ? runtime : null;
-    const apiKey =
-      database?.credential ??
-      process.env.GEMINI_API_KEY?.trim() ??
-      process.env.GOOGLE_GEMINI_API_KEY?.trim();
-
-    if (!apiKey) {
+    if (!runtime.credential) {
       throw new Error("Google Gemini is not configured");
     }
+    if (!runtime.defaultModel) {
+      throw new Error("Google Gemini model is not configured");
+    }
 
-    const model = normalizeModel(
-      database?.defaultModel ||
-        process.env.GEMINI_MODEL?.trim() ||
-        "gemini-3.6-flash",
-    );
+    const model = normalizeModel(runtime.defaultModel);
     const baseUrl =
-      database?.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
-    const url = `${baseUrl.replace(/\/$/, "")}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      runtime.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
+    const url = `${baseUrl.replace(/\/$/, "")}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(runtime.credential)}`;
 
     const response = await fetch(url, {
       method: "POST",

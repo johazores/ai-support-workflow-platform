@@ -5,7 +5,7 @@ import { listSystemSettings } from "@/features/system-settings/services/system-s
 import { requireRootAdmin } from "@/features/root-auth/services/root-auth-guard-service";
 
 export const metadata: Metadata = {
-  title: "Environment | Root Admin",
+  title: "Runtime Settings | Root Admin",
   robots: { index: false, follow: false },
 };
 
@@ -20,12 +20,12 @@ export default async function RootSettingsPage() {
           Configuration
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
-          Environment Management
+          Runtime Settings
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Manage runtime settings through the database. Sensitive values are
-          encrypted with AES-256-GCM and normal read endpoints return masked
-          values only.
+          This database-backed CMS is the source of truth for administrator-managed
+          runtime configuration. Sensitive values are encrypted with AES-256-GCM,
+          and read endpoints return masked values only.
         </p>
       </div>
 

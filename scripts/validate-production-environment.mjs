@@ -19,23 +19,6 @@ function optional(name) {
   return process.env[name]?.trim() ?? "";
 }
 
-function validUrl(name, value, { requireHttps = false } = {}) {
-  if (!value) return;
-
-  try {
-    const url = new URL(value);
-    if (!/^https?:$/.test(url.protocol)) {
-      errors.push(`${name} must use http or https`);
-      return;
-    }
-    if (requireHttps && url.protocol !== "https:") {
-      errors.push(`${name} must use https in production`);
-    }
-  } catch {
-    errors.push(`${name} must be a valid URL`);
-  }
-}
-
 function validateBase64Key(name, value, expectedBytes) {
   if (!value) return;
 
@@ -46,13 +29,6 @@ function validateBase64Key(name, value, expectedBytes) {
     }
   } catch {
     errors.push(`${name} must be valid base64`);
-  }
-}
-
-function forbidTruthy(name) {
-  const value = optional(name).toLowerCase();
-  if (["1", "true", "yes", "on"].includes(value)) {
-    errors.push(`${name} must not be enabled in production`);
   }
 }
 
@@ -75,25 +51,14 @@ required("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
 required("CLERK_SECRET_KEY");
 required("CLERK_WEBHOOK_SIGNING_SECRET");
 required("ROOT_SESSION_SECRET", { minLength: 32 });
-required("WEBHOOK_SECRET", { minLength: 24 });
 
 const encryptionKey = required("CONFIG_ENCRYPTION_KEY");
 validateBase64Key("CONFIG_ENCRYPTION_KEY", encryptionKey, 32);
 
-const appUrl = optional("NEXT_PUBLIC_APP_URL") || optional("APP_URL");
-if (!appUrl) {
-  errors.push("NEXT_PUBLIC_APP_URL or APP_URL is required");
-} else {
-  validUrl("application URL", appUrl, { requireHttps: true });
-}
-
-forbidTruthy("ALLOW_LEGACY_PRODUCT_AUTH");
-forbidTruthy("ALLOW_MOCK_AI");
-
 const sessionSecret = optional("SESSION_SECRET");
 if (sessionSecret) {
   warnings.push(
-    "SESSION_SECRET is present. It is migration-only and should be removed once legacy product sessions are deleted.",
+    "SESSION_SECRET is present. Keep it only while database setting auth.allow_legacy_product_auth is needed for migration.",
   );
 }
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildOpenRouterHeaders,
   createOpenAiCompatibleProvider,
@@ -36,23 +36,25 @@ const input = {
   tone: "empathetic" as const,
 };
 
+function createProvider() {
+  return createOpenAiCompatibleProvider({
+    key: "openrouter",
+    displayName: "OpenRouter",
+    defaultBaseUrl: "https://fallback.example/v1",
+    defaultHeaders: buildOpenRouterHeaders,
+  });
+}
+
 describe("createOpenAiCompatibleProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
-      mode: "environment",
-    });
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
     mocks.chatCreate.mockResolvedValue({
       choices: [{ message: { content: "  We can help with that.  " } }],
     });
   });
 
-  afterEach(() => {
-    delete process.env.TEST_PROVIDER_API_KEY;
-    delete process.env.TEST_PROVIDER_MODEL;
-  });
-
-  it("prefers database-managed credential, model, base URL, and headers", async () => {
+  it("uses database-managed credential, model, base URL, and headers", async () => {
     mocks.getProviderRuntimeConfiguration.mockResolvedValue({
       mode: "database",
       key: "openrouter",
@@ -66,16 +68,7 @@ describe("createOpenAiCompatibleProvider", () => {
       },
     });
 
-    const provider = createOpenAiCompatibleProvider({
-      key: "openrouter",
-      displayName: "OpenRouter",
-      envApiKeys: ["TEST_PROVIDER_API_KEY"],
-      envModel: "TEST_PROVIDER_MODEL",
-      defaultBaseUrl: "https://fallback.example/v1",
-      defaultHeaders: buildOpenRouterHeaders,
-    });
-
-    await expect(provider.generateDraft(input)).resolves.toEqual({
+    await expect(createProvider().generateDraft(input)).resolves.toEqual({
       draft: "We can help with that.",
       model: "db-model",
     });
@@ -92,90 +85,62 @@ describe("createOpenAiCompatibleProvider", () => {
     );
   });
 
-  it("falls back to environment credentials and model for unmanaged migration mode", async () => {
-    process.env.TEST_PROVIDER_API_KEY = "env-secret";
-    process.env.TEST_PROVIDER_MODEL = "env-model";
-
-    const provider = createOpenAiCompatibleProvider({
-      key: "custom",
-      displayName: "Custom Provider",
-      envApiKeys: ["TEST_PROVIDER_API_KEY"],
-      envModel: "TEST_PROVIDER_MODEL",
-      defaultBaseUrl: "https://provider.example/v1",
-    });
-
-    const result = await provider.generateDraft(input);
-
-    expect(result.model).toBe("env-model");
-    expect(mocks.clientOptions).toHaveBeenCalledWith({
-      apiKey: "env-secret",
-      baseURL: "https://provider.example/v1",
-      defaultHeaders: undefined,
-    });
-  });
-
-  it("does not let an environment key reactivate an explicitly disabled provider", async () => {
-    process.env.TEST_PROVIDER_API_KEY = "env-secret";
-    mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
-    const provider = createOpenAiCompatibleProvider({
-      key: "custom",
-      displayName: "Custom Provider",
-      envApiKeys: ["TEST_PROVIDER_API_KEY"],
-      defaultBaseUrl: "https://provider.example/v1",
-      defaultModel: "model-1",
-    });
-
-    await expect(provider.generateDraft(input)).rejects.toThrow(
-      "Custom Provider is disabled",
+  it("rejects providers disabled in Root Admin", async () => {
+    await expect(createProvider().generateDraft(input)).rejects.toThrow(
+      "OpenRouter is disabled",
     );
     expect(mocks.chatCreate).not.toHaveBeenCalled();
   });
 
-  it("requires an explicit model when no safe default exists", async () => {
-    process.env.TEST_PROVIDER_API_KEY = "env-secret";
-    const provider = createOpenAiCompatibleProvider({
-      key: "custom",
-      displayName: "Custom Provider",
-      envApiKeys: ["TEST_PROVIDER_API_KEY"],
-      envModel: "TEST_PROVIDER_MODEL",
-      defaultBaseUrl: "https://provider.example/v1",
+  it("fails clearly when no database credential exists", async () => {
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "database",
+      key: "openrouter",
+      name: "OpenRouter",
+      credential: null,
+      defaultModel: "db-model",
+      baseUrl: null,
+      configuration: null,
     });
 
-    await expect(provider.generateDraft(input)).rejects.toThrow(
-      "Custom Provider model is not configured",
+    await expect(createProvider().generateDraft(input)).rejects.toThrow(
+      "OpenRouter is not configured",
     );
-    expect(mocks.chatCreate).not.toHaveBeenCalled();
   });
 
-  it("fails clearly when no credential exists", async () => {
-    const provider = createOpenAiCompatibleProvider({
-      key: "custom",
-      displayName: "Custom Provider",
-      envApiKeys: ["TEST_PROVIDER_API_KEY"],
-      defaultBaseUrl: "https://provider.example/v1",
-      defaultModel: "model-1",
+  it("requires the model to be configured in Root Admin", async () => {
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "database",
+      key: "openrouter",
+      name: "OpenRouter",
+      credential: "db-secret",
+      defaultModel: null,
+      baseUrl: null,
+      configuration: null,
     });
 
-    await expect(provider.generateDraft(input)).rejects.toThrow(
-      "Custom Provider is not configured",
+    await expect(createProvider().generateDraft(input)).rejects.toThrow(
+      "OpenRouter model is not configured",
     );
+    expect(mocks.chatCreate).not.toHaveBeenCalled();
   });
 
   it("rejects empty provider responses", async () => {
-    process.env.TEST_PROVIDER_API_KEY = "env-secret";
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
+      mode: "database",
+      key: "openrouter",
+      name: "OpenRouter",
+      credential: "db-secret",
+      defaultModel: "db-model",
+      baseUrl: null,
+      configuration: null,
+    });
     mocks.chatCreate.mockResolvedValue({
       choices: [{ message: { content: "   " } }],
     });
-    const provider = createOpenAiCompatibleProvider({
-      key: "custom",
-      displayName: "Custom Provider",
-      envApiKeys: ["TEST_PROVIDER_API_KEY"],
-      defaultBaseUrl: "https://provider.example/v1",
-      defaultModel: "model-1",
-    });
 
-    await expect(provider.generateDraft(input)).rejects.toThrow(
-      "Custom Provider returned an empty response",
+    await expect(createProvider().generateDraft(input)).rejects.toThrow(
+      "OpenRouter returned an empty response",
     );
   });
 });

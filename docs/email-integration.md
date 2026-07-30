@@ -41,7 +41,9 @@ Required payload fields:
 }
 ```
 
-The sender must calculate an HMAC-SHA256 signature over the exact raw request body using `WEBHOOK_SECRET` and send the lowercase hexadecimal digest in `x-webhook-signature`.
+Configure `email.inbound_webhook_secret` as an encrypted value under **Root Admin → Settings**. The sender must calculate an HMAC-SHA256 signature over the exact raw request body using that secret and send the lowercase hexadecimal digest in `x-webhook-signature`.
+
+The route loads the current secret from the database for every request. When the setting is missing, the endpoint fails closed with a service-unavailable response rather than accepting unsigned payloads.
 
 The route disables Next.js body parsing so signature verification uses the original bytes. Payloads larger than 1 MB are rejected. After verification, `mailboxId` is resolved to an active mailbox and therefore to the owning organization before ingestion begins.
 
@@ -63,7 +65,10 @@ A support message is not kept in the conversation when SMTP delivery fails. Save
 ## Security Requirements
 
 - SMTP and IMAP secrets remain encrypted at rest.
+- The inbound webhook signing secret remains encrypted at rest as a Root Admin system setting.
 - IMAP TLS certificate verification must not be disabled.
 - Webhook signatures must be verified before JSON parsing or tenant resolution.
 - Cross-organization mailbox, message, ticket, template, notification, and delivery-log access must return no data or a not-found/forbidden response.
 - Provider retries must be safe because inbound external message IDs are deduplicated per organization.
+
+See [runtime-configuration.md](runtime-configuration.md) for the platform-wide database configuration contract.

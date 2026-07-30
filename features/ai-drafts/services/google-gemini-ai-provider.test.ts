@@ -18,32 +18,32 @@ const input = {
   tone: "friendly" as const,
 };
 
+function configuredRuntime(overrides: Record<string, unknown> = {}) {
+  return {
+    mode: "database",
+    key: "google-gemini",
+    name: "Google Gemini",
+    credential: "db-gemini-key",
+    defaultModel: "models/custom-gemini-model",
+    baseUrl: "https://gemini.example/v1beta/",
+    configuration: null,
+    ...overrides,
+  };
+}
+
 describe("googleGeminiProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
-      mode: "environment",
-    });
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
     vi.stubGlobal("fetch", mocks.fetch);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.GEMINI_API_KEY;
-    delete process.env.GOOGLE_GEMINI_API_KEY;
-    delete process.env.GEMINI_MODEL;
   });
 
   it("uses database configuration and reports the actual model", async () => {
-    mocks.getProviderRuntimeConfiguration.mockResolvedValue({
-      mode: "database",
-      key: "google-gemini",
-      name: "Google Gemini",
-      credential: "db-gemini-key",
-      defaultModel: "models/custom-gemini-model",
-      baseUrl: "https://gemini.example/v1beta/",
-      configuration: null,
-    });
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue(configuredRuntime());
     mocks.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -72,40 +72,37 @@ describe("googleGeminiProvider", () => {
     );
   });
 
-  it("falls back to environment configuration for unmanaged migration mode", async () => {
-    process.env.GEMINI_API_KEY = "env-key";
-    process.env.GEMINI_MODEL = "env-model";
-    mocks.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        candidates: [{ content: { parts: [{ text: "Draft" }] } }],
-      }),
-    });
-
-    const result = await googleGeminiProvider.generateDraft(input);
-
-    expect(result).toEqual({ draft: "Draft", model: "env-model" });
-  });
-
-  it("does not let environment configuration reactivate an explicitly disabled Gemini provider", async () => {
-    process.env.GEMINI_API_KEY = "env-key";
-    mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
-
+  it("rejects a provider disabled in Root Admin", async () => {
     await expect(googleGeminiProvider.generateDraft(input)).rejects.toThrow(
       "Google Gemini is disabled",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it("fails clearly when Gemini is not configured", async () => {
+  it("fails clearly when the database credential is missing", async () => {
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue(
+      configuredRuntime({ credential: null }),
+    );
+
     await expect(googleGeminiProvider.generateDraft(input)).rejects.toThrow(
       "Google Gemini is not configured",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
+  it("requires the model to be configured in Root Admin", async () => {
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue(
+      configuredRuntime({ defaultModel: null }),
+    );
+
+    await expect(googleGeminiProvider.generateDraft(input)).rejects.toThrow(
+      "Google Gemini model is not configured",
+    );
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
   it("surfaces non-success HTTP responses", async () => {
-    process.env.GEMINI_API_KEY = "env-key";
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue(configuredRuntime());
     mocks.fetch.mockResolvedValue({ ok: false, status: 429 });
 
     await expect(googleGeminiProvider.generateDraft(input)).rejects.toThrow(
@@ -114,7 +111,7 @@ describe("googleGeminiProvider", () => {
   });
 
   it("rejects an empty Gemini response", async () => {
-    process.env.GEMINI_API_KEY = "env-key";
+    mocks.getProviderRuntimeConfiguration.mockResolvedValue(configuredRuntime());
     mocks.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ candidates: [{ content: { parts: [] } }] }),
