@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { googleGeminiProvider } from "@/features/ai-drafts/services/google-gemini-ai-provider";
 
 const mocks = vi.hoisted(() => ({
@@ -36,6 +36,10 @@ describe("googleGeminiProvider", () => {
     vi.clearAllMocks();
     mocks.getProviderRuntimeConfiguration.mockResolvedValue({ mode: "disabled" });
     vi.stubGlobal("fetch", mocks.fetch);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("uses database configuration and reports the actual model", async () => {
