@@ -71,25 +71,18 @@ describe("provider runtime management", () => {
     mocks.credentialCreate.mockResolvedValue({ id: "credential-1" });
   });
 
-  it("treats an untouched catalog row as environment migration mode", async () => {
-    mocks.providerFindUnique.mockResolvedValue(provider());
-
+  it("treats missing and disabled providers as disabled", async () => {
     await expect(getProviderRuntimeConfiguration("openai")).resolves.toEqual({
-      mode: "environment",
+      mode: "disabled",
     });
-  });
 
-  it("respects an explicitly managed disabled provider", async () => {
-    mocks.providerFindUnique.mockResolvedValue(
-      provider({ configuration: { runtimeManaged: true } }),
-    );
-
+    mocks.providerFindUnique.mockResolvedValue(provider());
     await expect(getProviderRuntimeConfiguration("openai")).resolves.toEqual({
       mode: "disabled",
     });
   });
 
-  it("infers legacy database management from an active credential", async () => {
+  it("loads enabled provider runtime only from database records", async () => {
     mocks.providerFindUnique.mockResolvedValue(
       provider({ isEnabled: true, defaultModel: "db-model" }),
     );
@@ -109,7 +102,7 @@ describe("provider runtime management", () => {
     });
   });
 
-  it("marks the provider runtime-managed while preserving existing JSON config", async () => {
+  it("preserves provider JSON configuration when saving runtime settings", async () => {
     mocks.providerFindUnique.mockResolvedValue(
       provider({ configuration: { appTitle: "Support Platform" } }),
     );
@@ -131,14 +124,13 @@ describe("provider runtime management", () => {
           configuration: {
             appTitle: "Support Platform",
             httpReferer: "https://support.example.com",
-            runtimeManaged: true,
           },
         }),
       }),
     );
   });
 
-  it("returns AI runtime policies in database priority order with explicit modes", async () => {
+  it("returns AI runtime policies in database priority order", async () => {
     mocks.providerFindMany.mockResolvedValue([
       provider({
         id: "p2",
@@ -146,7 +138,6 @@ describe("provider runtime management", () => {
         name: "Anthropic",
         isEnabled: true,
         priority: 10,
-        configuration: { runtimeManaged: true },
       }),
       provider({
         id: "p1",
@@ -154,12 +145,12 @@ describe("provider runtime management", () => {
         name: "OpenAI",
         isEnabled: false,
         priority: 20,
-        configuration: { runtimeManaged: true },
       }),
       provider({
         id: "p3",
         key: "groq",
         name: "Groq",
+        isEnabled: false,
         priority: 100,
       }),
     ]);
@@ -169,7 +160,7 @@ describe("provider runtime management", () => {
     expect(result).toEqual([
       { key: "anthropic", name: "Anthropic", priority: 10, mode: "database" },
       { key: "openai", name: "OpenAI", priority: 20, mode: "disabled" },
-      { key: "groq", name: "Groq", priority: 100, mode: "environment" },
+      { key: "groq", name: "Groq", priority: 100, mode: "disabled" },
     ]);
   });
 });
