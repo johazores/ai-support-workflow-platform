@@ -4,5 +4,4 @@ export const deepSeekProvider = createOpenAiCompatibleProvider({
   key: "deepseek",
   displayName: "DeepSeek",
   defaultBaseUrl: "https://api.deepseek.com",
-  defaultModel: "deepseek-v4-flash",
 });
