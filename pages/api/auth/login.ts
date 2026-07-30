@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { validateUserLogin } from "@/features/auth/services/auth-service";
+import {
+  isLegacyProductAuthEnabled,
+  legacyProductAuthDisabledMessage,
+} from "@/features/auth/services/legacy-auth-config";
 import { setSessionCookie } from "@/features/auth/services/session-service";
 
 const loginSchema = z.object({
@@ -15,6 +19,12 @@ export default async function handler(
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ message: "Method not allowed" });
+  }
+
+  if (!(await isLegacyProductAuthEnabled())) {
+    return res.status(503).json({
+      message: legacyProductAuthDisabledMessage(),
+    });
   }
 
   const result = loginSchema.safeParse(req.body);
