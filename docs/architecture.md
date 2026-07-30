@@ -1,269 +1,239 @@
 # Architecture
 
-## System Overview
+## System overview
 
-The application follows a **three-layer architecture** within a single Next.js deployment:
+The application uses a layered feature architecture within one Next.js deployment.
 
-```
-┌─────────────────────────────────────────────────────┐
-│                     Client Layer                     │
-│  App Router pages → React components → API client   │
-├─────────────────────────────────────────────────────┤
-│                      API Layer                       │
-│  Pages Router handlers → Zod validation → auth MW   │
-├─────────────────────────────────────────────────────┤
-│                    Service Layer                     │
-│  Business logic → Prisma ORM → MongoDB              │
-└─────────────────────────────────────────────────────┘
-```
-
-**Request flow:** Component → `apiClient()` → API route → auth check → Zod validate → service → Prisma → MongoDB → JSON response → Component state.
-
----
-
-## Directory Structure
-
-| Directory            | Purpose                                          |
-| -------------------- | ------------------------------------------------ |
-| `app/`               | App Router pages (server components, layouts)    |
-| `pages/api/`         | API routes (39 endpoints, Pages Router)          |
-| `features/`          | 14 feature modules (see below)                   |
-| `components/ui/`     | 14 shared UI primitives                          |
-| `components/layout/` | App header, navigation                           |
-| `lib/`               | Shared infrastructure (Prisma, API client, auth) |
-| `prisma/`            | Schema (16 models), seed script                  |
-| `docs/`              | Architecture docs, ADRs, roadmap                 |
-
----
-
-## Feature Module Convention
-
-Each of the 14 feature modules under `features/` follows a consistent structure:
-
-```
-features/<module>/
-  components/    → React UI components
-  services/      → Server-side business logic + client-side API calls
-  types/         → TypeScript interfaces
-  utils/         → Pure functions + tests
+```text
+Browser and server-rendered pages
+        ↓
+App Router pages and components
+        ↓
+Typed API client
+        ↓
+Pages Router API handlers
+        ↓
+Authentication, tenant context, permissions, and validation
+        ↓
+Feature services
+        ↓
+Prisma and external providers
+        ↓
+MongoDB, Clerk, AI providers, SMTP, and IMAP
 ```
 
-**Feature modules:** ai-drafts, analytics, audit, auth, csat, customers, email, email-logs, notifications, saved-replies, sla, tags, tickets, workflows.
+The Root Admin control plane shares the deployment but keeps authentication, authorization, routes, and responsibilities separate from the product-user application.
 
-This convention enforces separation of concerns: components never import Prisma, services never render JSX, and types are scoped to their domain.
+## Directory structure
 
----
-
-## API Route Pattern
-
-Every API route follows a four-step pattern:
-
-```typescript
-export default async function handler(req, res) {
-  // 1. Method guard
-  if (req.method !== "POST")
-    return res.status(405).json({ message: "Method not allowed" });
-
-  // 2. Auth + RBAC
-  const auth = await requireApiPermission(req, res, "tickets:write");
-  if (!auth.ok) return;
-
-  // 3. Zod validation
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success)
-    return res
-      .status(400)
-      .json({ message: "Invalid input", errors: parsed.error.flatten() });
-
-  // 4. Service call → JSON response
-  const result = await someService(parsed.data);
-  return res.status(200).json({ data: result });
-}
+```text
+app/                  product and Root Admin pages
+pages/api/            product and Root Admin API handlers
+features/             feature-owned components, services, types, and tests
+components/           shared UI and layout components
+lib/                  shared infrastructure, auth, security, and configuration
+prisma/               MongoDB schema and seed data
+docs/                 architecture, operations, security, and roadmap
+scripts/              bootstrap, validation, migration, and audit utilities
 ```
 
-All responses use the `{ data: ... }` wrapper convention. The client `apiClient<T>()` function handles JSON serialization, error extraction, and type safety.
+Feature folders generally use:
 
----
-
-## Authentication & Sessions
-
-- **Login:** bcrypt password verification → JWT creation via `jose` (HS256, 24h expiry)
-- **Storage:** HttpOnly cookie, `SameSite=Strict`, `Secure` in production
-- **Verification:** Every API route calls `requireApiAuth()` or `requireApiPermission()` which decodes and validates the JWT
-- **Page protection:** Server-side auth guards (`requireUser`, `requireSupervisor`, `requirePermission`) redirect unauthorized users
-
-No server-side session storage — tokens are stateless. Trade-off: no forced revocation without a blocklist.
-
----
-
-## Role-Based Access Control (RBAC)
-
-Three roles with 12 granular permissions:
-
-| Permission        | Admin | Supervisor | Agent |
-| ----------------- | ----- | ---------- | ----- |
-| `tickets:read`    | ✓     | ✓          | ✓     |
-| `tickets:write`   | ✓     | ✓          | ✓     |
-| `tickets:assign`  | ✓     | ✓          |       |
-| `tickets:delete`  | ✓     |            |       |
-| `ai:generate`     | ✓     | ✓          | ✓     |
-| `ai:view-logs`    | ✓     | ✓          |       |
-| `workflows:read`  | ✓     | ✓          |       |
-| `workflows:write` | ✓     |            |       |
-| `users:read`      | ✓     | ✓          |       |
-| `users:write`     | ✓     |            |       |
-| `analytics:read`  | ✓     | ✓          |       |
-| `email-logs:read` | ✓     | ✓          |       |
-
-Permissions are defined in `features/auth/services/role-service.ts` and enforced at both the API layer (middleware) and the UI layer (conditional rendering).
-
----
-
-## AI Provider System
-
-The AI draft generation uses a **provider chain** pattern:
-
-```
-AiProviderChain → [OpenAiProvider, AnthropicProvider, MockAiProvider]
+```text
+features/<feature>/
+  components/         user interface
+  services/           business logic and data access
+  types/              feature contracts
+  utils/              pure helpers where required
+  *.test.ts            colocated focused tests
 ```
 
-Each provider implements the `AiDraftProvider` interface:
+Components do not import Prisma. Services do not render UI. Database and provider details stay behind server-side boundaries.
 
-```typescript
-interface AiDraftProvider {
-  name: string;
-  generateDraft(context: DraftContext): Promise<DraftResult>;
-}
+## API pattern
+
+A protected API route follows this order:
+
+1. validate the HTTP method;
+2. establish product or Root Admin authentication;
+3. resolve tenant context where applicable;
+4. enforce the required permission;
+5. validate request data with Zod;
+6. call a feature service;
+7. return a consistent JSON response;
+8. write audit or operational records when required.
+
+Authentication, tenant scope, and permission enforcement must happen before feature services read or mutate data.
+
+## Authentication boundaries
+
+### Product users
+
+Clerk is the primary product identity provider.
+
+The local database owns:
+
+- application users;
+- organization and tenant membership;
+- roles and permissions;
+- application profile data;
+- feature access and authorization state.
+
+Clerk proves identity. It does not replace application authorization or tenant ownership.
+
+### Root Admin
+
+Root Admin uses an independent authentication and session system.
+
+Root Admin controls:
+
+- provider configuration;
+- runtime settings;
+- platform audit logs;
+- system health;
+- organization administration;
+- bootstrap and operational controls.
+
+Root Admin sessions do not reuse Clerk product sessions or product-user roles.
+
+### Legacy development authentication
+
+Seeded legacy accounts are available only when `auth.allow_legacy_product_auth` is enabled through Root Admin outside production.
+
+Legacy authentication must remain disabled in production.
+
+See [authentication.md](authentication.md) for the complete contract.
+
+## Tenant isolation and authorization
+
+Tenant-owned data is resolved from authenticated application context rather than from public request headers or caller-supplied identifiers alone.
+
+The platform uses role and permission checks at API and server-side page boundaries. UI visibility improves usability but is not considered authorization.
+
+Tenant-sensitive service operations must receive or derive authoritative tenant context and must not use unscoped Prisma access.
+
+## Runtime configuration
+
+The database and Root Admin interface are authoritative for administrator-managed runtime settings.
+
+Environment variables are limited to bootstrap values required before the application can safely read the database, including:
+
+- `DATABASE_URL`;
+- Clerk bootstrap keys;
+- Root Admin session secret;
+- configuration encryption key;
+- explicitly documented migration-only values.
+
+AI keys, models, provider order, feature toggles, mailbox configuration, webhook signing secrets, and other administrator-managed settings belong in encrypted database-backed configuration.
+
+## AI provider architecture
+
+AI draft generation uses a configurable provider chain.
+
+```text
+Draft request
+    ↓
+Provider registry and enabled priority
+    ↓
+Provider adapter
+    ↓
+Success or controlled fallback
+    ↓
+Usage and failure log
 ```
 
-The chain tries providers in order, falling back on failure. All attempts (success and failure) are logged to `AiUsageLog` with provider name, model, token counts, latency, and errors. This enables cost tracking and provider comparison.
+Provider adapters normalize requests and results across supported providers. Each attempt records provider, model, latency, usage, status, and safe error details.
 
-**Tone system:** Agents select from professional, friendly, concise, or empathetic. The tone is passed as a system prompt modifier to the AI provider.
+Mock behavior is development-only and controlled by the database-managed `ai.allow_mock_provider` setting.
 
----
+## Multi-mailbox email architecture
 
-## Multi-Mailbox Email Architecture
+Each tenant-owned mailbox has its own SMTP and IMAP configuration.
 
-The email system supports multiple independent mailboxes, each with its own SMTP and IMAP configuration:
-
-```
-┌──────────────────────────────────────────────────┐
-│                EmailConfig (per mailbox)           │
-│  name, fromAddress (unique), SMTP creds, IMAP creds│
-│  isActive, isDefault                              │
-├──────────────────────────────────────────────────┤
-│                                                    │
-│  Outbound (SMTP)          Inbound (IMAP)          │
-│  ┌──────────────┐         ┌──────────────┐        │
-│  │ sendEmail()  │         │pollAllInboxes│        │
-│  │ + mailboxId  │         │  (parallel)  │        │
-│  └──────┬───────┘         └──────┬───────┘        │
-│         │                        │                 │
-│         ▼                        ▼                 │
-│  Nodemailer transport     IMAP → mailparser        │
-│         │                        │                 │
-│         ▼                        ▼                 │
-│  EmailLog (mailboxId)     processInboundEmail()   │
-│                           → Customer lookup        │
-│                           → Thread via In-Reply-To │
-│                           → Create/update Ticket   │
-│                           → Classify + workflows   │
-└──────────────────────────────────────────────────┘
+```text
+Email configuration
+  ├── outbound SMTP delivery
+  ├── inbound IMAP polling
+  ├── originating mailbox identity
+  ├── encrypted credentials
+  └── delivery and ingestion logs
 ```
 
-### Key design decisions:
+Inbound processing:
 
-- **One config = one mailbox.** Each `EmailConfig` record has its own SMTP and IMAP credentials, enabling departments (support, sales, billing) to have separate email addresses.
-- **`fromAddress` is unique.** Prevents duplicate mailbox registrations.
-- **`isDefault` flag** ensures backward compatibility — `getEmailConfig()` returns the default active mailbox for existing code paths.
-- **Parallel polling.** `pollAllInboxes()` uses `Promise.allSettled()` so one mailbox failure doesn't block others. Each result includes the mailbox name and any error.
-- **Mailbox tracking.** `EmailLog.mailboxId` and `Ticket.mailboxId` trace which mailbox originated each interaction.
-- **Email templates** are global (not per-mailbox), with variable placeholders (`{{customer_name}}`, `{{ticket_subject}}`, etc.) and a live preview editor.
+1. poll active mailboxes in parallel;
+2. parse messages;
+3. resolve the mailbox and tenant;
+4. find or create the customer;
+5. match email threading metadata;
+6. create or update a ticket;
+7. run classification and eligible workflows;
+8. write email and ticket activity records.
 
----
+One mailbox failure must not prevent other mailbox polls. Credentials are encrypted at rest and never returned through normal administrator reads.
 
-## Workflow Engine
+## Workflow engine
 
-Workflows are JSON-based rules with triggers and actions:
+Workflows use structured, versioned definitions rather than arbitrary application code.
 
-```json
-{
-  "trigger": { "field": "subject", "operator": "contains", "value": "billing" },
-  "actions": [
-    { "type": "assign-ticket", "value": "jordan@company.com" },
-    { "type": "change-status", "value": "pending" },
-    { "type": "add-tag", "value": "billing" }
-  ]
-}
-```
+A workflow contains:
 
-**Execution modes:**
+- a trigger;
+- conditions;
+- ordered actions;
+- publication state;
+- a versioned definition.
 
-- **Manual** — agents click "Run Workflow" on a ticket
-- **Automatic** — rules execute on ticket creation (via email ingestion or API)
+Execution creates durable workflow and step records. Idempotency prevents duplicate event processing, while execution inspection supports operational debugging and recovery.
 
-**Loop prevention:** A workflow execution context tracks which rules have already fired, preventing infinite trigger chains.
+Actions must use normal service, tenant, permission, and audit boundaries rather than bypassing them.
 
-**Action types:** `change-status`, `assign-ticket`, `generate-draft`, `add-tag`.
+## Ticket and customer domain
 
----
+Tickets own conversation, status, priority, assignment, mailbox, tags, activity, SLA, and customer context.
 
-## Real-Time Updates
+Ticket services coordinate business rules. Email ingestion, manual agent actions, workflows, and AI assistance all call the same domain boundaries instead of maintaining separate ticket logic.
 
-- **SSE endpoint** (`/api/tickets/events`) streams ticket updates with a 30-second heartbeat
-- **Client hook** (`useTicketEvents`) subscribes to the stream and auto-refreshes ticket data
-- **Notifications** are stored in the database with read/unread state, surfaced via a notification bell in the header
+## Real-time updates
 
----
+Server-sent events provide lightweight ticket update notifications with a heartbeat. Clients use the event as a refresh signal rather than treating the stream as the authoritative data source.
 
-## Database Schema
+Database records remain authoritative for tickets, activities, and notifications.
 
-16 Prisma models backed by MongoDB:
+## Security boundaries
 
-| Model         | Purpose                                   |
-| ------------- | ----------------------------------------- |
-| User          | Support agents and admins                 |
-| Customer      | End users who submit tickets              |
-| Ticket        | Support requests with status and priority |
-| Message       | Conversation messages (replies + notes)   |
-| Draft         | AI-generated draft replies                |
-| WorkflowRule  | Automation rules (triggers + actions)     |
-| ActivityLog   | Audit trail for all ticket events         |
-| AiUsageLog    | AI provider call logging (cost tracking)  |
-| EmailConfig   | Multi-mailbox SMTP/IMAP configurations    |
-| EmailLog      | Outbound email delivery tracking          |
-| EmailTemplate | Reusable email templates with variables   |
-| Notification  | User notifications (read/unread)          |
-| Tag           | Ticket labels                             |
-| SavedReply    | Reusable response templates               |
-| SlaPolicy     | Service level agreement definitions       |
-| CsatRating    | Customer satisfaction scores              |
+- Product and Root Admin authentication are separate.
+- Tenant context is required for tenant-owned records.
+- Provider and mailbox secrets are encrypted.
+- Inbound webhook payloads require signing verification.
+- Server-only credentials never reach browser bundles.
+- Administrator-managed settings remain database-backed.
+- Production validation rejects unsafe bootstrap configuration.
+- Audit logs record sensitive administrative actions without storing raw secrets.
 
----
+## Testing and validation
 
-## Testing Strategy
+The repository uses:
 
-- **Unit tests** (Vitest 4): 42 tests across 7 files covering services, utilities, and middleware
-- **Test targets:** Role permissions, AI provider chain + fallback, mock provider responses, API auth middleware, API client error handling, utility functions, workflow rule matching
-- **CI pipeline** (GitHub Actions): lint → type-check → test → build on every push
+- Vitest for focused unit and service behavior;
+- Prisma schema validation;
+- TypeScript validation;
+- ESLint and Prettier checks;
+- API-boundary auditing;
+- production environment validation;
+- production builds;
+- Docker-based local deployment support.
 
----
+Integration and end-to-end coverage should focus on tenant isolation, authentication boundaries, mailbox ingestion, workflow idempotency, and administrator configuration.
 
-## Infrastructure
+## Extension rules
 
-- **Docker:** Multi-stage Dockerfile with non-root user, Docker Compose with MongoDB
-- **CI:** GitHub Actions workflow running lint, tsc, vitest, and next build
-- **Database indexes:** Defined in Prisma schema for common query patterns (ticket lookups, email log filtering, customer search)
+When adding a feature:
 
----
-
-## Naming Conventions
-
-| Entity     | Convention        | Example                    |
-| ---------- | ----------------- | -------------------------- |
-| Files      | kebab-case        | `email-config-service.ts`  |
-| Components | PascalCase        | `EmailConfigForm`          |
-| Services   | camelCase exports | `getEmailConfigById()`     |
-| API routes | kebab-case paths  | `/api/email-config/[id]`   |
-| Types      | PascalCase        | `MailboxConfig`            |
-| DB fields  | camelCase         | `fromAddress`, `isDefault` |
+1. keep feature ownership under `features/`;
+2. reuse shared infrastructure only when behavior is genuinely shared;
+3. keep provider-specific details behind adapters;
+4. preserve tenant and permission enforcement;
+5. store administrator-managed runtime settings in the database;
+6. add focused tests and update affected documentation;
+7. avoid adding abstractions that only one feature needs.

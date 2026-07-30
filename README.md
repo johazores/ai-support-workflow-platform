@@ -1,10 +1,17 @@
 # AI Support Workflow Platform
 
-A full-stack customer support platform with AI-assisted replies, multi-mailbox email, workflow automation, tenant isolation, and role-based access control.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.0-informational.svg)](package.json)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
 
-The project demonstrates production-focused patterns while keeping the architecture readable: layered services, type-safe APIs, independent Root Admin authentication, encrypted database configuration, dynamic provider resolution, and durable workflow execution records.
+A multi-tenant AI customer support platform with shared inboxes, ticket workflows, provider failover, email integration, and secure root administration.
 
-## Core Features
+The project demonstrates production-focused patterns while keeping the architecture readable: feature-owned services, type-safe APIs, separate authentication boundaries, encrypted database configuration, dynamic provider resolution, and durable workflow execution.
+
+> **Status:** Active development. The repository includes production-oriented foundations, but deployments still require environment validation, secure provider configuration, and operational review.
+
+## Features
 
 ### Inbox and tickets
 
@@ -12,21 +19,22 @@ The project demonstrates production-focused patterns while keeping the architect
 - Status, priority, assignment, tags, internal notes, and activity history
 - Customer ticket history and email-thread metadata
 - Bulk ticket operations and CSAT collection
+- SLA policies, saved replies, analytics, notifications, and audit logs
 
-### AI draft replies
+### AI-assisted replies
 
 - Tone-aware reply generation
-- Database-managed AI provider fallback chain
+- Database-managed provider fallback chain
 - Root Admin control of provider state, priority, credentials, models, and base URLs
 - Automatic failover between enabled providers
-- Usage and failure logging
-- Optional mock provider outside production only
+- Usage, latency, failure, and provider-attempt logging
+- Controlled mock provider outside production only
 
 ### Workflow automation
 
 - Structured triggers and actions
-- Versioned visual workflow definitions
-- Published workflow execution with durable execution and step records
+- Versioned workflow definitions
+- Durable workflow execution and step records
 - Manual and event-driven execution
 - Idempotency and execution inspection
 
@@ -43,16 +51,27 @@ The project demonstrates production-focused patterns while keeping the architect
 
 - Product-user roles and permissions
 - Organization management and tenant boundaries
+- Clerk product authentication
 - Independent Root Admin control plane
 - Database-backed runtime settings
 - Provider management and connection tests
 - Platform audit logs and system health
 
-## Runtime Configuration
+## Authentication model
 
-The Root Admin CMS and the database are the source of truth for administrator-managed runtime configuration.
+The platform keeps three authentication concerns separate:
 
-Environment variables are limited to minimal bootstrap values required before the application can safely read the database:
+- **Product users:** Clerk is the primary identity provider. The local database owns tenant membership, roles, permissions, and application data.
+- **Root Admin:** Independent authentication and sessions protect platform-wide configuration and operations.
+- **Legacy development accounts:** Available only outside production when `auth.allow_legacy_product_auth` is explicitly enabled through Root Admin.
+
+Read [authentication architecture](docs/authentication.md) for the complete contract.
+
+## Runtime configuration
+
+The Root Admin interface and database are authoritative for administrator-managed runtime configuration.
+
+Environment variables are limited to bootstrap values required before the application can safely read the database:
 
 ```env
 DATABASE_URL="mongodb+srv://..."
@@ -63,19 +82,9 @@ ROOT_SESSION_SECRET="generate-a-random-string-at-least-32-chars"
 CONFIG_ENCRYPTION_KEY="base64-encoded-32-byte-key"
 ```
 
-Optional migration and one-time bootstrap values are documented in `.env.example`.
+Do not manage AI keys, models, provider order, mailbox credentials, webhook signing secrets, feature toggles, or administrator-managed URLs through deployment variables. Configure them through Root Admin.
 
-Do not configure AI keys, AI models, webhook signing secrets, feature toggles, provider URLs, or other administrator-managed settings in the deployment environment. Configure them through Root Admin instead.
-
-Important Root Admin system settings:
-
-| Key | Type | Purpose |
-| --- | --- | --- |
-| `email.inbound_webhook_secret` | Encrypted secret | Signs inbound email webhook payloads |
-| `ai.allow_mock_provider` | Boolean | Enables mock AI outside production |
-| `auth.allow_legacy_product_auth` | Boolean | Enables temporary legacy login outside production |
-
-See [docs/runtime-configuration.md](docs/runtime-configuration.md) for the full ownership, security, and migration contract.
+See [runtime configuration](docs/runtime-configuration.md).
 
 ## Technology
 
@@ -86,43 +95,34 @@ See [docs/runtime-configuration.md](docs/runtime-configuration.md) for the full 
 | Database | MongoDB and Prisma 6 |
 | Styling | Tailwind CSS 4 |
 | Validation | Zod 4 |
-| Authentication | Clerk, signed JWT sessions, independent Root Admin sessions |
+| Authentication | Clerk product auth and independent Root Admin sessions |
 | AI | OpenAI-compatible providers, Anthropic, and Gemini |
 | Email | Nodemailer, IMAP, and mailparser |
 | Testing | Vitest 4 |
-| CI | GitHub Actions |
 | Containers | Docker and Docker Compose |
 
-## Project Structure
+## Project structure
 
 ```text
-app/                  Application pages and App Router handlers
-pages/api/            Product and Root Admin API routes
-features/             Feature-owned components, services, types, and tests
-components/           Shared UI and layout components
-lib/                  Shared infrastructure and security helpers
+app/                  application and Root Admin pages
+pages/api/            product and Root Admin API handlers
+features/             feature-owned components, services, types, and tests
+components/           shared UI and layout components
+lib/                  infrastructure, security, authentication, and configuration
 prisma/               MongoDB schema and seed data
-docs/                 Architecture, operations, security, and product plans
-scripts/              Bootstrap, validation, and audit utilities
-.github/workflows/    Cost-conscious CI pipeline
+docs/                 architecture, operations, security, and roadmap
+scripts/              bootstrap, validation, migration, and audit utilities
 ```
 
-Feature folders generally use:
+Read the [architecture guide](docs/architecture.md) for request flow, authentication, tenant isolation, AI providers, email, and workflow execution.
 
-- `components/` for UI
-- `services/` for business logic and data access
-- `types/` for feature-specific contracts
-- colocated tests for critical behavior
-
-## Getting Started
-
-### Requirements
+## Requirements
 
 - Node.js 22 recommended
 - MongoDB local instance or MongoDB Atlas
-- Clerk application for the primary product authentication flow
+- Clerk application for primary product authentication
 
-### Install
+## Installation
 
 ```bash
 git clone https://github.com/johazores/ai-support-workflow-platform.git
@@ -131,7 +131,7 @@ npm install
 cp .env.example .env
 ```
 
-Configure the bootstrap values in `.env`, then initialize the database:
+Initialize the database:
 
 ```bash
 npm run db:setup
@@ -143,7 +143,7 @@ Provision the independent Root Admin account:
 npm run root:bootstrap
 ```
 
-Start the application:
+Start development:
 
 ```bash
 npm run dev
@@ -152,17 +152,13 @@ npm run dev
 After signing in as Root Admin:
 
 1. configure AI integrations under **Providers**;
-2. configure application runtime values under **Runtime Settings**;
-3. test enabled provider connections;
-4. remove temporary bootstrap credentials from the runtime environment when operationally possible.
+2. configure application values under **Runtime Settings**;
+3. configure tenant mailboxes;
+4. test enabled provider connections;
+5. disable temporary development authentication;
+6. remove temporary bootstrap credentials when operationally possible.
 
-Seeded legacy demo accounts remain available only when `auth.allow_legacy_product_auth` is enabled in Root Admin outside production.
-
-| Account | Email | Password | Role |
-| --- | --- | --- | --- |
-| Admin | `alex@company.com` | `admin123` | admin |
-| Supervisor | `sam@company.com` | `super123` | supervisor |
-| Agent | `jordan@company.com` | `support123` | agent |
+Demo account details, when needed, should remain in internal or dedicated demo documentation rather than the public project overview.
 
 ## Validation
 
@@ -184,14 +180,25 @@ NODE_ENV=production node scripts/validate-production-environment.mjs
 
 ## Documentation
 
-- [Runtime configuration](docs/runtime-configuration.md)
+- [Documentation index](docs/index.md)
 - [Architecture](docs/architecture.md)
+- [Authentication](docs/authentication.md)
 - [Architecture decisions](docs/architecture-decisions.md)
+- [Runtime configuration](docs/runtime-configuration.md)
 - [Email integration](docs/email-integration.md)
 - [Production operations](docs/production-operations-runbook.md)
 - [Production environment validation](docs/production-environment-validation.md)
+- [Roadmap](docs/roadmap.md)
+- [Changelog](docs/changelog.md)
+- [Contributing](docs/contributing.md)
+- [Security policy](docs/security.md)
+- [Code of conduct](docs/code-of-conduct.md)
 - [Implementation plan](MASTER_IMPLEMENTATION_PLAN.md)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
 
 ## Author
 
-Johanssen Azores
+Created and maintained by [Johanssen Azores](https://github.com/johazores).
