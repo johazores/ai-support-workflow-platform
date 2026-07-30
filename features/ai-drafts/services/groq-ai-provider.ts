@@ -4,5 +4,4 @@ export const groqProvider = createOpenAiCompatibleProvider({
   key: "groq",
   displayName: "Groq",
   defaultBaseUrl: "https://api.groq.com/openai/v1",
-  defaultModel: "openai/gpt-oss-20b",
 });
