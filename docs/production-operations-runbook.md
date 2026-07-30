@@ -1,6 +1,6 @@
 # Production Operations Runbook
 
-This runbook covers deployment, rollback, backup/restore, and incident response for the AI Support Workflow Platform. It reflects the current architecture: Next.js, Prisma with MongoDB, Clerk product authentication, independent Root Admin sessions, encrypted database-managed integration credentials, tenant-owned support data, and workflow execution records.
+This runbook covers deployment, rollback, backup/restore, and incident response for the AI Support Workflow Platform. It reflects the current architecture: Next.js, Prisma with MongoDB, Clerk product authentication, independent Root Admin sessions, encrypted database-managed runtime configuration, tenant-owned support data, and workflow execution records.
 
 The runbook intentionally does not assume a single hosting vendor. Hosting-specific commands may be added later, but the safety gates below apply to any production deployment.
 
@@ -21,20 +21,21 @@ Never make a production change when the rollback owner, database owner, or encry
 
 ## 2. Bootstrap secrets
 
-The application still requires a small trusted bootstrap outside the database:
+The application requires a small trusted bootstrap outside the database:
 
 - `DATABASE_URL`;
-- Clerk server/publishable/webhook credentials for product authentication;
+- Clerk server, publishable, and webhook credentials required during framework initialization;
 - `ROOT_SESSION_SECRET` and Root Admin bootstrap credentials where bootstrap is still required;
 - `CONFIG_ENCRYPTION_KEY`;
-- signed inbound-email webhook secret;
 - hosting/runtime values required before the application can read database-managed configuration.
 
-The legacy product session secret is development-migration compatibility only and must not be relied upon for production product authentication.
+The legacy `SESSION_SECRET` is development-migration compatibility only and must not be relied upon for production product authentication.
+
+AI credentials, provider models, inbound-email signing, feature toggles, provider URLs, and other administrator-managed settings belong in Root Admin and the database. See [runtime-configuration.md](runtime-configuration.md).
 
 ### Encryption-key warning
 
-`CONFIG_ENCRYPTION_KEY` protects stored provider and mailbox secrets. Losing the key can make encrypted credentials unrecoverable. Replacing it without an intentional rotation/migration process can make existing ciphertext unreadable.
+`CONFIG_ENCRYPTION_KEY` protects stored provider, mailbox, and system-setting secrets. Losing the key can make encrypted credentials unrecoverable. Replacing it without an intentional rotation/migration process can make existing ciphertext unreadable.
 
 Back up encryption-key custody separately from the database. Never store the key inside the same database it decrypts.
 
@@ -44,7 +45,7 @@ Do not deploy a change until all applicable checks are green.
 
 ### Source and review
 
-- Confirm the intended pull request is approved and contains no unrelated files.
+- Confirm the intended pull request contains no unrelated files.
 - Confirm the branch is based on the latest production branch.
 - Confirm there are no unreviewed generated patches, temporary migration workflows, test credentials, or debug-only endpoints.
 - Confirm `MASTER_IMPLEMENTATION_PLAN.md` and architecture documentation match behavior changed by the release.
@@ -57,6 +58,7 @@ Run the repository quality gate from a clean checkout:
 npm ci
 npx prisma generate
 npx prisma validate
+npm run audit:api-boundaries
 npm run type-check -- --pretty false
 npx eslint . --max-warnings 0
 npm run format:check
@@ -84,7 +86,9 @@ Do not treat a database/schema change as automatically reversible.
 - Verify Clerk production keys belong to the production Clerk instance.
 - Verify product callback/sign-in/sign-up URLs use the production domain.
 - Verify Root Admin uses the independent production signing secret.
-- Verify `ALLOW_LEGACY_PRODUCT_AUTH` is unset or false. Production ignores it by design, but it should not be configured as a dependency.
+- Verify `auth.allow_legacy_product_auth` is false or absent in Root Admin. Production rejects legacy product authentication even if the setting is enabled accidentally.
+- Verify `ai.allow_mock_provider` is false or absent in Root Admin. Production rejects mock AI even if the setting is enabled accidentally.
+- Verify `email.inbound_webhook_secret` is configured as an encrypted Root Admin setting before enabling inbound webhook delivery.
 - Verify provider/mailbox credentials are stored encrypted and UI/API responses remain masked.
 - Verify no secret appears in commit diffs, build logs, or deployment logs.
 
@@ -96,9 +100,10 @@ Do not treat a database/schema change as automatically reversible.
 4. Deploy the exact approved commit; never deploy an uncommitted local tree.
 5. Apply required schema/index changes using the project-approved production procedure.
 6. Wait for the application to report healthy before directing all traffic to the new release.
-7. Run the smoke checks below.
-8. Monitor errors, authentication, queue/workflow execution, provider failures, and database latency closely during the post-deploy window.
-9. Record the deployed SHA and deployment timestamp in the release record.
+7. Configure or verify database-managed runtime settings through Root Admin.
+8. Run the smoke checks below.
+9. Monitor errors, authentication, queue/workflow execution, provider failures, and database latency closely during the post-deploy window.
+10. Record the deployed SHA and deployment timestamp in the release record.
 
 ## 5. Required smoke checks
 
@@ -120,6 +125,14 @@ Do not treat a database/schema change as automatically reversible.
 - `/root/login` authenticates independently of Clerk.
 - Root Admin session/logout/revocation behavior works.
 - Product cookies do not authenticate Root Admin routes and Root Admin cookies do not authenticate product routes.
+- Runtime Settings show masked secret values and current non-secret values.
+
+### Providers
+
+- Enabled AI providers have a credential and default model configured.
+- Provider connection tests succeed for intended production providers.
+- Disabled providers do not participate in the fallback chain.
+- Changing priority in Root Admin changes runtime ordering without a deployment.
 
 ### Support workflow
 
@@ -138,6 +151,7 @@ Using a dedicated production test organization where possible:
 - tenant mailbox settings remain masked in responses;
 - SMTP connection/send test succeeds for the production test mailbox;
 - inbound signed webhook or controlled IMAP polling creates/threads a test ticket in the correct organization;
+- rotating `email.inbound_webhook_secret` immediately changes signature verification behavior;
 - duplicate inbound message handling remains idempotent;
 - email delivery logs are tenant-scoped.
 
@@ -236,7 +250,7 @@ Check at minimum:
 - disabled user state;
 - ticket/customer/message counts for sampled organizations;
 - workflow/version/execution relations;
-- provider/mailbox ciphertext can still be decrypted by the intended application key;
+- provider/mailbox/system-setting ciphertext can still be decrypted by the intended application key;
 - audit events remain readable;
 - tenant-specific uniqueness constraints are intact;
 - Clerk identities still map to the correct internal users;
@@ -282,11 +296,18 @@ When an integration secret may be compromised:
 
 - disable the affected provider/credential immediately;
 - rotate at the upstream provider;
-- update the encrypted stored credential;
+- update the encrypted stored credential through Root Admin;
 - revoke the old credential upstream;
 - review audit/provider usage logs for unexpected activity;
 - never expose the old decrypted value during investigation;
 - rotate the application encryption master key only when the master key itself is compromised and only with a tested re-encryption plan.
+
+When a system-setting secret may be compromised:
+
+- rotate the secret at its external sender/provider where applicable;
+- update the encrypted setting through Root Admin;
+- confirm the previous secret is rejected immediately;
+- review audit logs for the configuration change and suspicious usage.
 
 ## 14. Tenant-isolation incident actions
 
