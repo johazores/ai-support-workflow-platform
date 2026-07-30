@@ -47,6 +47,23 @@ export async function getSystemSetting<T = unknown>(
   return setting.value as T;
 }
 
+export async function getBooleanSystemSetting(
+  key: string,
+  defaultValue = false,
+): Promise<boolean> {
+  const value = await getSystemSetting<unknown>(key);
+
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+
+  return defaultValue;
+}
+
 export async function upsertSystemSetting(input: SystemSettingInput) {
   const encryptedValue = input.isSecret
     ? encryptSecret(String(input.value))
