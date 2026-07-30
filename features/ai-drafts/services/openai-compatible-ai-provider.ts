@@ -14,8 +14,6 @@ type ProviderConfiguration = Record<string, unknown>;
 type OpenAiCompatibleProviderOptions = {
   key: string;
   displayName: string;
-  envApiKeys: string[];
-  envModel?: string;
   defaultBaseUrl: string;
   defaultModel?: string;
   defaultHeaders?: (
@@ -29,14 +27,6 @@ function asConfiguration(value: unknown): ProviderConfiguration | null {
     : null;
 }
 
-function firstEnvironmentValue(names: string[]) {
-  for (const name of names) {
-    const value = process.env[name]?.trim();
-    if (value) return value;
-  }
-  return undefined;
-}
-
 export function createOpenAiCompatibleProvider(
   options: OpenAiCompatibleProviderOptions,
 ): AiDraftProvider {
@@ -47,27 +37,19 @@ export function createOpenAiCompatibleProvider(
         throw new Error(`${options.displayName} is disabled`);
       }
 
-      const database = runtime.mode === "database" ? runtime : null;
-      const apiKey =
-        database?.credential ?? firstEnvironmentValue(options.envApiKeys);
-
-      if (!apiKey) {
+      if (!runtime.credential) {
         throw new Error(`${options.displayName} is not configured`);
       }
 
-      const model =
-        database?.defaultModel ||
-        (options.envModel ? process.env[options.envModel]?.trim() : undefined) ||
-        options.defaultModel;
-
+      const model = runtime.defaultModel || options.defaultModel;
       if (!model) {
         throw new Error(`${options.displayName} model is not configured`);
       }
 
-      const configuration = asConfiguration(database?.configuration);
+      const configuration = asConfiguration(runtime.configuration);
       const client = new OpenAI({
-        apiKey,
-        baseURL: database?.baseUrl || options.defaultBaseUrl,
+        apiKey: runtime.credential,
+        baseURL: runtime.baseUrl || options.defaultBaseUrl,
         defaultHeaders: options.defaultHeaders?.(configuration),
       });
 
