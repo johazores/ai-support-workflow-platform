@@ -4,5 +4,4 @@ export const openAiProvider = createOpenAiCompatibleProvider({
   key: "openai",
   displayName: "OpenAI",
   defaultBaseUrl: "https://api.openai.com/v1",
-  defaultModel: "gpt-4.1-mini",
 });
