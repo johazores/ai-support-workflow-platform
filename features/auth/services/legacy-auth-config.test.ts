@@ -1,8 +1,25 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isLegacyProductAuthEnabled } from "@/features/auth/services/legacy-auth-config";
 
+const mocks = vi.hoisted(() => ({
+  getBooleanSystemSetting: vi.fn(),
+}));
+
+vi.mock("@/features/system-settings/services/system-setting-service", () => ({
+  getBooleanSystemSetting: mocks.getBooleanSystemSetting,
+}));
+
 const originalNodeEnv = process.env.NODE_ENV;
-const originalFlag = process.env.ALLOW_LEGACY_PRODUCT_AUTH;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.defineProperty(process.env, "NODE_ENV", {
+    value: "development",
+    configurable: true,
+    writable: true,
+  });
+  mocks.getBooleanSystemSetting.mockResolvedValue(false);
+});
 
 afterEach(() => {
   Object.defineProperty(process.env, "NODE_ENV", {
@@ -10,48 +27,25 @@ afterEach(() => {
     configurable: true,
     writable: true,
   });
-
-  if (originalFlag === undefined) {
-    delete process.env.ALLOW_LEGACY_PRODUCT_AUTH;
-  } else {
-    process.env.ALLOW_LEGACY_PRODUCT_AUTH = originalFlag;
-  }
 });
 
 describe("legacy product auth configuration", () => {
-  it("requires the explicit migration flag in development", () => {
-    Object.defineProperty(process.env, "NODE_ENV", {
-      value: "development",
-      configurable: true,
-      writable: true,
-    });
-    delete process.env.ALLOW_LEGACY_PRODUCT_AUTH;
+  it("loads the migration toggle from database settings", async () => {
+    await expect(isLegacyProductAuthEnabled()).resolves.toBe(false);
 
-    expect(isLegacyProductAuthEnabled()).toBe(false);
-
-    process.env.ALLOW_LEGACY_PRODUCT_AUTH = "true";
-    expect(isLegacyProductAuthEnabled()).toBe(true);
+    mocks.getBooleanSystemSetting.mockResolvedValue(true);
+    await expect(isLegacyProductAuthEnabled()).resolves.toBe(true);
   });
 
-  it("stays disabled in production even if the flag is accidentally set", () => {
+  it("stays disabled in production even when enabled in the database", async () => {
     Object.defineProperty(process.env, "NODE_ENV", {
       value: "production",
       configurable: true,
       writable: true,
     });
-    process.env.ALLOW_LEGACY_PRODUCT_AUTH = "true";
+    mocks.getBooleanSystemSetting.mockResolvedValue(true);
 
-    expect(isLegacyProductAuthEnabled()).toBe(false);
-  });
-
-  it("does not accept truthy-looking values other than the exact flag", () => {
-    Object.defineProperty(process.env, "NODE_ENV", {
-      value: "test",
-      configurable: true,
-      writable: true,
-    });
-    process.env.ALLOW_LEGACY_PRODUCT_AUTH = "1";
-
-    expect(isLegacyProductAuthEnabled()).toBe(false);
+    await expect(isLegacyProductAuthEnabled()).resolves.toBe(false);
+    expect(mocks.getBooleanSystemSetting).not.toHaveBeenCalled();
   });
 });
