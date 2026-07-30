@@ -3,6 +3,8 @@ import { z } from "zod";
 import crypto from "crypto";
 import { getEmailConfigById } from "@/features/email/services/email-config-service";
 import { ensureDefaultOrganization } from "@/features/organizations/services/organization-service";
+import { systemSettingKeys } from "@/features/system-settings/services/system-setting-keys";
+import { getSystemSetting } from "@/features/system-settings/services/system-setting-service";
 import { processInboundEmail } from "@/features/tickets/services/email-ingestion-service";
 
 export const config = {
@@ -23,10 +25,12 @@ const inboundEmailSchema = z.object({
   inReplyTo: z.string().optional(),
 });
 
-function verifySignature(payload: string, signature?: string): boolean {
-  const secret = process.env.WEBHOOK_SECRET;
-
-  if (!secret || !signature) return false;
+function verifySignature(
+  payload: string,
+  signature: string | undefined,
+  secret: string,
+): boolean {
+  if (!signature) return false;
 
   const expected = crypto
     .createHmac("sha256", secret)
@@ -69,13 +73,22 @@ export default async function handler(
   }
 
   try {
+    const webhookSecret = await getSystemSetting<string>(
+      systemSettingKeys.inboundEmailWebhookSecret,
+    );
+    if (!webhookSecret?.trim()) {
+      return res.status(503).json({
+        message: "Inbound email webhook signing is not configured",
+      });
+    }
+
     const rawBody = await readRawBody(req);
     const signatureHeader = req.headers["x-webhook-signature"];
     const signature = Array.isArray(signatureHeader)
       ? signatureHeader[0]
       : signatureHeader;
 
-    if (!verifySignature(rawBody, signature)) {
+    if (!verifySignature(rawBody, signature, webhookSecret)) {
       return res.status(401).json({ message: "Invalid signature" });
     }
 
