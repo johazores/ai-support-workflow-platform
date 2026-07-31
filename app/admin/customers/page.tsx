@@ -1,27 +1,24 @@
 import { requireSupervisor } from "@/features/auth/services/auth-guard-service";
-import { AppHeader } from "@/components/layout/app-header";
 import { CustomerDirectory } from "@/features/customers/components/customer-directory";
 
 export default async function CustomersPage() {
-  const user = await requireSupervisor();
+  await requireSupervisor();
 
   return (
-    <>
-      <AppHeader user={user} />
-      <main className="min-h-screen bg-slate-50 px-6 py-10 dark:bg-slate-900">
-        <section className="mx-auto max-w-6xl">
-          <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Admin
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
-              Customer Directory
-            </h1>
-          </div>
+    <section className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+          Customer context
+        </p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          Customer directory
+        </h2>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Browse customer profiles, ticket history, and support activity.
+        </p>
+      </div>
 
-          <CustomerDirectory />
-        </section>
-      </main>
-    </>
+      <CustomerDirectory />
+    </section>
   );
 }
