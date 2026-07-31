@@ -2,15 +2,20 @@ import { AnalyticsDashboard } from "@/features/analytics/components/analytics-da
 
 export default function AnalyticsPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Analytics</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Ticket volume, response times, and breakdown by status and priority.
+    <section className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+          Reporting
+        </p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          Analytics
+        </h2>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Track ticket volume, first-response time, status, and priority trends.
         </p>
       </div>
 
       <AnalyticsDashboard />
-    </div>
+    </section>
   );
 }

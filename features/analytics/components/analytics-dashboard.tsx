@@ -16,10 +16,12 @@ type AnalyticsData = {
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <Card>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
+        {value}
+      </p>
     </Card>
   );
 }
@@ -33,26 +35,27 @@ function BarChart({
   labelKey: string;
   valueKey: string;
 }) {
-  const max = Math.max(...data.map((d) => (d[valueKey] as number) || 0), 1);
+  const max = Math.max(...data.map((item) => (item[valueKey] as number) || 0), 1);
 
   return (
-    <div className="space-y-1.5">
-      {data.map((item, i) => {
+    <div className="space-y-3">
+      {data.map((item) => {
+        const label = String(item[labelKey]);
         const value = (item[valueKey] as number) || 0;
-        const pct = (value / max) * 100;
+        const percentage = (value / max) * 100;
 
         return (
-          <div key={i} className="flex items-center gap-2 text-xs">
-            <span className="w-20 truncate text-slate-600">
-              {String(item[labelKey])}
+          <div key={label} className="grid grid-cols-[5rem_1fr_2rem] items-center gap-3 text-xs">
+            <span className="truncate capitalize text-slate-600 dark:text-slate-400">
+              {label}
             </span>
-            <div className="flex-1">
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <div
-                className="h-4 rounded bg-blue-500"
-                style={{ width: `${Math.max(pct, 2)}%` }}
+                className="h-full rounded-full bg-teal-500 dark:bg-teal-400"
+                style={{ width: `${Math.max(percentage, 2)}%` }}
               />
             </div>
-            <span className="w-6 text-right font-medium text-slate-700">
+            <span className="text-right font-medium text-slate-700 dark:text-slate-300">
               {value}
             </span>
           </div>
@@ -63,26 +66,27 @@ function BarChart({
 }
 
 function VolumeChart({ data }: { data: AnalyticsData["ticketVolume"] }) {
-  const max = Math.max(...data.map((d) => d.count), 1);
-  const barWidth = Math.max(100 / data.length, 2);
+  const max = Math.max(...data.map((point) => point.count), 1);
 
   return (
-    <div className="flex h-32 items-end gap-px">
+    <div
+      className="flex h-48 items-end gap-1.5 sm:gap-2"
+      role="img"
+      aria-label="Ticket volume for the last 30 days"
+    >
       {data.map((point) => {
-        const pct = (point.count / max) * 100;
+        const percentage = (point.count / max) * 100;
 
         return (
-          <div
-            key={point.date}
-            className="group relative flex-1"
-            style={{ minWidth: `${barWidth}%` }}
-          >
-            <div
-              className="w-full rounded-t bg-blue-400 transition-colors group-hover:bg-blue-600"
-              style={{ height: `${Math.max(pct, 2)}%` }}
-            />
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-white group-hover:block">
+          <div key={point.date} className="group relative flex h-full min-w-0 flex-1 items-end">
+            <div className="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-950 px-2 py-1 text-[10px] text-white shadow-lg group-hover:block dark:bg-white dark:text-slate-950">
               {point.date}: {point.count}
+            </div>
+            <div className="flex h-full w-full items-end rounded-md bg-slate-100 p-0.5 dark:bg-slate-800">
+              <div
+                className="w-full rounded bg-slate-800 transition-colors group-hover:bg-teal-500 dark:bg-slate-300 dark:group-hover:bg-teal-400"
+                style={{ height: `${Math.max(percentage, 2)}%` }}
+              />
             </div>
           </div>
         );
@@ -97,49 +101,60 @@ export function AnalyticsDashboard() {
 
   useEffect(() => {
     apiClient<{ data: AnalyticsData }>("/api/analytics")
-      .then((res) => setData(res.data))
+      .then((response) => setData(response.data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
     return (
-      <p className="animate-pulse text-sm text-slate-500">
-        Loading analytics...
-      </p>
+      <div className="grid gap-4 sm:grid-cols-3" aria-label="Loading analytics">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="skeleton-shimmer h-28 rounded-2xl" />
+        ))}
+      </div>
     );
   }
 
   if (!data) {
-    return <p className="text-sm text-slate-500">Failed to load analytics.</p>;
+    return (
+      <Card className="py-10 text-center text-sm text-slate-500">
+        Analytics could not be loaded. Refresh the page to try again.
+      </Card>
+    );
   }
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total Tickets" value={data.totalTickets} />
-        <StatCard label="Open Tickets" value={data.openTickets} />
+        <StatCard label="Total tickets" value={data.totalTickets} />
+        <StatCard label="Open tickets" value={data.openTickets} />
         <StatCard
-          label="Avg Response Time"
+          label="Average response"
           value={
             data.avgResponseTimeMinutes !== null
               ? `${data.avgResponseTimeMinutes}m`
-              : "N/A"
+              : "No data"
           }
         />
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-slate-900">
-          Ticket Volume (30 days)
-        </h3>
+        <div className="mb-5">
+          <h3 className="font-semibold text-slate-950 dark:text-white">
+            Ticket volume
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            New tickets during the last 30 days
+          </p>
+        </div>
         <VolumeChart data={data.ticketVolume} />
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">
-            By Status
+          <h3 className="mb-4 font-semibold text-slate-950 dark:text-white">
+            Tickets by status
           </h3>
           <BarChart
             data={data.statusBreakdown}
@@ -149,8 +164,8 @@ export function AnalyticsDashboard() {
         </Card>
 
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">
-            By Priority
+          <h3 className="mb-4 font-semibold text-slate-950 dark:text-white">
+            Tickets by priority
           </h3>
           <BarChart
             data={data.priorityBreakdown}
